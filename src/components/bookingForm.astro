@@ -57,12 +57,12 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
   data-account-details={JSON.stringify(accountDetails)}
 >
   <div class="booking-form__header">
-    <p class="booking-form__eyebrow">{customBooking ? "Custom Booking" : "Booking Request"}</p>
+    <p class="booking-form__eyebrow">{customBooking ? "Custom Booking" : "Reservation"}</p>
     <h2>{customBooking ? "Build Your Own Woodberry Request" : "Plan Your Woodberry Booking"}</h2>
     <p>
       {customBooking
         ? "Choose your preferred schedule, available venue, and custom items or services. Final pricing will be reviewed by Woodberry staff."
-        : "Share the details for your celebration, choose a package and any optional extras, then review everything before submitting your request."}
+        : "Share the details for your celebration, choose a package and any optional extras, then review everything before creating your reservation."}
     </p>
   </div>
 
@@ -128,17 +128,6 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         Client Details
       </h3>
       <p class="booking-step__intro">{customBooking ? "Tell us who to contact about this custom booking request and where to send updates." : "Tell us who to contact about this reservation and where to send updates."}</p>
-      <label class="account-details-option" for="useAccountDetails">
-        <input
-          type="checkbox"
-          id="useAccountDetails"
-          class="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
-        />
-        <span>
-          <strong>Use my account details</strong>
-          <small>Fill available contact details from your signed-in account. You can review and edit them before submitting.</small>
-        </span>
-      </label>
       <div>
         <label
           for="fullName"
@@ -590,8 +579,8 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         )}
       </div>
       <div class="booking-review-reminder" role="note">
-        <strong>Your request is not submitted yet.</strong>
-        <span>The next screen shows every booking detail and optional selection for one final check.</span>
+        <strong>{customBooking ? "Your custom booking request is not submitted yet." : "Your reservation is not created yet."}</strong>
+        <span>The next screen shows every {customBooking ? "booking" : "reservation"} detail and optional selection for one final check.</span>
       </div>
     </section>
 
@@ -1044,7 +1033,6 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
   var eventTypeInput = document.getElementById("eventType");
   var customEventTypeInput = document.getElementById("customEventType");
   var customEventTypeField = document.getElementById("customEventTypeField");
-  var useAccountDetailsInput = document.getElementById("useAccountDetails");
   var termsAcceptedInput = document.getElementById("termsAccepted");
   var addressInput = document.getElementById("address");
   var catererInput = document.getElementById("caterer");
@@ -1228,7 +1216,6 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
   }
 
   function fillAccountDetails() {
-    if (!useAccountDetailsInput?.checked) return;
     [
       ["fullName", accountDetails.fullName],
       ["email", accountDetails.email],
@@ -1236,7 +1223,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
       ["address", accountDetails.address],
     ].forEach(function (entry) {
       var input = document.getElementById(entry[0]);
-      if (input && typeof entry[1] === "string" && entry[1].trim()) {
+      if (input && !input.value.trim() && typeof entry[1] === "string" && entry[1].trim()) {
         input.value = entry[1].trim();
         input.setCustomValidity("");
       }
@@ -1628,9 +1615,11 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
     var lockouts = getPackageLockouts(defaults);
 
     if (isMultiDayInput) {
+      var packageControlsMultiDay = defaults.isMultiDay?.locked === true;
       isMultiDayInput.checked = defaults.isMultiDay?.selected === true;
-      isMultiDayInput.disabled = defaults.isMultiDay?.locked === true;
-      document.getElementById("multiDayPackageLock")?.classList.toggle("hidden", defaults.isMultiDay?.locked !== true);
+      isMultiDayInput.disabled = packageControlsMultiDay;
+      isMultiDayInput.closest(".date-mode-option")?.classList.toggle("hidden", packageControlsMultiDay);
+      document.getElementById("multiDayPackageLock")?.classList.toggle("hidden", true);
     }
     if (eventTypeInput) {
       syncPackageEventTypeOptions(selectedPackage);
@@ -2334,7 +2323,6 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
     await validateSelectedAvailability(true, false);
   });
   eventTypeInput.addEventListener("change", syncCustomEventType);
-  useAccountDetailsInput.addEventListener("change", fillAccountDetails);
   document.getElementById("guests").addEventListener("input", function () {
     validatePackagePax(false);
     calculateNights();
@@ -2888,7 +2876,9 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
       }
     } catch (err) {
       if (confirmationError) {
-        confirmationError.textContent = "We could not submit your request. Please check your connection and try again; your summary is still available.";
+        confirmationError.textContent = isCustomBooking
+          ? "We could not submit your custom booking request. Please check your connection and try again; your summary is still available."
+          : "We could not create your reservation. Please check your connection and try again; your summary is still available.";
         confirmationError.classList.remove("hidden");
       }
     } finally {
@@ -2904,6 +2894,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
   renderPackageOptions();
   renderRateOptions();
   if (isCustomBooking) setCustomVenueOptions([], "Choose a booking date to see available venues");
+  fillAccountDetails();
   applySelectedPackage();
   attachFriendlyValidation();
   syncCaterer();
