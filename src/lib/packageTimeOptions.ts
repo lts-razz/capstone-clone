@@ -3,6 +3,16 @@ export type PackageTimeOptions =
   | { mode: "duration"; hours: number }
   | { mode: "range_duration"; from_time: string; to_time: string; hours: number };
 
+export type PackageTimeOptionChoice = {
+  key: string;
+  label: string;
+  description: string;
+  startsAt?: string;
+  endsAt?: string;
+  hours?: number;
+  isFixedSchedule: boolean;
+};
+
 const TIME_VALUE_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_TIME_LOCAL_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.\d{1,3})?)?$/;
@@ -75,6 +85,54 @@ function parseLocalDateTimeToMinutes(value: string) {
 function formatHours(hours: number) {
   const value = Number.isInteger(hours) ? String(hours) : String(hours).replace(/\.0+$/, "");
   return `${value} ${hours === 1 ? "hour" : "hours"}`;
+}
+
+function formatDisplayTime(value: string) {
+  const minutes = timeValueToMinutes(value);
+  if (minutes === null) return value;
+  const date = new Date(Date.UTC(2024, 0, 1, Math.floor(minutes / 60), minutes % 60));
+  return new Intl.DateTimeFormat("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  }).format(date);
+}
+
+export function getPackageTimeOptionChoices(value: unknown): PackageTimeOptionChoice[] {
+  const options = normalizePackageTimeOptions(value);
+  if (!options) return [];
+
+  if (options.mode === "fixed_range") {
+    return [{
+      key: "fixed_range",
+      label: `${formatDisplayTime(options.from_time)}-${formatDisplayTime(options.to_time)}`,
+      description: "Package-defined schedule",
+      startsAt: options.from_time,
+      endsAt: options.to_time,
+      isFixedSchedule: true,
+    }];
+  }
+
+  if (options.mode === "duration") {
+    return [{
+      key: "duration",
+      label: formatHours(options.hours),
+      description: "Choose a start and end time matching this duration",
+      hours: options.hours,
+      isFixedSchedule: false,
+    }];
+  }
+
+  return [{
+    key: "range_duration",
+    label: `${formatDisplayTime(options.from_time)}-${formatDisplayTime(options.to_time)}`,
+    description: `Choose exactly ${formatHours(options.hours)} within this window`,
+    startsAt: options.from_time,
+    endsAt: options.to_time,
+    hours: options.hours,
+    isFixedSchedule: false,
+  }];
 }
 
 function fitsConfiguredTimeRange(
