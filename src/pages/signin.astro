@@ -1,0 +1,157 @@
+---
+import ShowButton from '../components/showButton.astro';
+import Layout from '../layouts/Layout.astro';
+import { clearSessionCookies, getSafeInternalRedirect, isEmailVerified } from '../lib/auth';
+import { getDashboardPathForRole, getUserRole } from '../lib/adminGuard';
+export const prerender = false;
+
+const { cookies, url } = Astro;
+const redirectPath = getSafeInternalRedirect(url.searchParams.get('redirect'));
+const roleInfo = await getUserRole(cookies);
+const currentUser = roleInfo.user;
+if (currentUser && roleInfo.role !== 'none' && isEmailVerified(currentUser)) {
+  const destination = redirectPath === '/dashboard'
+    ? getDashboardPathForRole(roleInfo.role)
+    : redirectPath;
+  return Astro.redirect(destination);
+}
+if (currentUser) clearSessionCookies(cookies);
+
+const errorMsg = url.searchParams.get('error');
+const successMsg = url.searchParams.get('message');
+const isUnverified = url.searchParams.get('unverified') === '1';
+const unverifiedEmail = url.searchParams.get('email') ?? '';
+---
+
+<Layout title="Sign in">
+  <section class="auth-page" aria-labelledby="signin-title">
+    <div class="auth-shell">
+      <div class="auth-brand-panel auth-brand-panel--logo-free auth-brand-panel--signin">
+        <div class="auth-brand-copy">
+          <p class="auth-brand-eyebrow">Welcome to Woodberry</p>
+          <h2 class="auth-brand-title">Woodberry Resorts and Events Place</h2>
+          <p class="auth-brand-subtitle">
+            Your relaxing escape for memorable stays, celebrations, and gatherings.
+          </p>
+        </div>
+      </div>
+
+      <div id="formBox" class="auth-card">
+        <header class="auth-card-header">
+          <div class="auth-card-topline">
+            <p class="auth-card-eyebrow">Welcome back</p>
+            <a href="/" class="auth-back">Back to home</a>
+          </div>
+          <h1 id="signin-title">Sign in</h1>
+          <p class="auth-intro">Access your account to view and manage your Woodberry reservations.</p>
+        </header>
+
+        {errorMsg && (
+          <div class="auth-notice auth-notice--error" role="alert">
+            {errorMsg}
+          </div>
+        )}
+
+        {successMsg && (
+          <div class="auth-notice auth-notice--success" role="status">
+            {successMsg}
+          </div>
+        )}
+
+        {isUnverified && (
+          <div class="auth-notice auth-notice--warning" role="status">
+            Please verify your email before signing in. You can resend the verification email below.
+          </div>
+        )}
+
+        <form action="/api/auth/signin" method="post" class="auth-form">
+          <input type="hidden" name="redirect" value={redirectPath} />
+          <div class="auth-field">
+            <label for="email">Email address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              inputmode="email"
+              required
+              value={unverifiedEmail}
+              class="auth-input"
+            />
+          </div>
+          <div class="auth-field">
+            <div class="auth-label-row">
+              <label for="password">Password</label>
+              <a href="/forgot-password" class="auth-link">Forgot password?</a>
+            </div>
+            <div class="auth-password-field">
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                class="auth-input"
+              />
+              <ShowButton />
+            </div>
+          </div>
+          <button type="submit" class="auth-submit">Sign in</button>
+        </form>
+
+        <div class="auth-resend">
+          <span>Didn't receive the email? </span>
+          <button id="resendVerification" type="button" class="auth-link">Resend verification email</button>
+          <div id="resendNotice" class="hidden auth-notice" role="status" aria-live="polite"></div>
+        </div>
+        <p class="auth-footer">
+          New here?
+          <a href={`/signup?redirect=${encodeURIComponent(redirectPath)}`} class="auth-link">Create an account</a>
+        </p>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  import { startResendCooldown } from '../lib/resendVerification';
+
+  const resendButton = document.getElementById('resendVerification') as HTMLButtonElement | null;
+  const emailInput = document.getElementById('email') as HTMLInputElement | null;
+  const resendNotice = document.getElementById('resendNotice');
+
+  function showResendNotice(message: string, success: boolean) {
+    if (!resendNotice) return;
+    resendNotice.textContent = message;
+    resendNotice.className = 'auth-notice mt-3 '
+      + (success ? 'auth-notice--success' : 'auth-notice--error');
+  }
+
+  resendButton?.addEventListener('click', async () => {
+    const email = emailInput?.value.trim() ?? '';
+    if (!email) {
+      showResendNotice('Enter your email address first.', false);
+      return;
+    }
+
+    resendButton.disabled = true;
+    let cooldownStarted = false;
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json().catch(() => ({}));
+      showResendNotice(data.message ?? data.error ?? 'Unable to resend verification email.', response.ok);
+      if (response.ok) {
+        startResendCooldown(resendButton);
+        cooldownStarted = true;
+      }
+    } catch {
+      showResendNotice('Unable to resend verification email. Please try again.', false);
+    } finally {
+      if (!cooldownStarted) resendButton.disabled = false;
+    }
+  });
+</script>

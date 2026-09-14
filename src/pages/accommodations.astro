@@ -1,0 +1,717 @@
+---
+import Footer from '../components/Footer.astro';
+import PublicPageHero from '../components/PublicPageHero.astro';
+import { roomImage, woodberryRooms } from '../data/woodberryRooms';
+import Layout from '../layouts/Layout.astro';
+
+const roomNavItems = woodberryRooms.map((room) => ({
+  href: `#${room.id}`,
+  label: room.name,
+}));
+---
+
+<Layout
+  title="Accommodations"
+  description="Explore the rooms and guest accommodations at Woodberry Resorts and Events Place."
+>
+  <div class="wb-page-surface">
+    <PublicPageHero
+      headingId="accommodations-title"
+      title="Accommodations"
+      description="Guest rooms remain the heart of Woodberry accommodations: comfortable spaces for resting between celebrations, staying close to family, or extending a Woodberry visit."
+      image={roomImage('Room 6', 'Room 6 Main Bed.jpg')}
+      imageAlt="Woodberry resort room prepared for guests"
+      compact
+    >
+      <a slot="actions" href="#rooms" class="public-page-hero__link public-page-hero__link--primary">
+        Explore rooms
+      </a>
+      <a slot="actions" href="/events_and_booking/events" class="public-page-hero__link public-page-hero__link--secondary">
+        Book a stay
+      </a>
+    </PublicPageHero>
+
+    <section id="rooms" class="accommodations-rooms" aria-labelledby="rooms-title">
+      <div class="accommodations-rooms__inner">
+        <div class="accommodations-room-intro">
+          <div>
+            <p class="accommodations-eyebrow">Guest Rooms</p>
+            <h2 id="rooms-title">Choose the room that fits your stay</h2>
+          </div>
+          <p>
+            Browse each Woodberry room before adding accommodations to your booking request. Every room is arranged for comfort, privacy, and easy access to the resort's event spaces.
+          </p>
+        </div>
+
+        <nav class="room-anchor-nav" aria-label="Room navigation">
+          {roomNavItems.map((room) => (
+            <a href={room.href}>{room.label}</a>
+          ))}
+        </nav>
+
+        <div class="accommodations-room-note" aria-label="Room stay details">
+          <div>
+            <p class="accommodations-eyebrow">Room-Focused Stay</p>
+            <h3>Settle in near the celebration</h3>
+          </div>
+          <p>
+            These rooms are designed as practical guest retreats for event days, poolside gatherings, and staycation bookings, keeping the most restful part of the visit close to the action.
+          </p>
+        </div>
+
+        <div class="room-section-list">
+          {woodberryRooms.map((room, index) => (
+            <article
+              id={room.id}
+              class:list={['room-showcase', { 'room-showcase--reverse': index % 2 === 1 }]}
+              aria-labelledby={`${room.id}-title`}
+            >
+              <div class="room-showcase__media" aria-label={`${room.name} photos`}>
+                <figure class="room-showcase__hero-image">
+                  <img src={room.images[0].src} alt={room.images[0].alt} loading="lazy" decoding="async" />
+                </figure>
+                {room.images.length > 1 && (
+                  <div class="room-showcase__gallery">
+                    {room.images.slice(1).map((image) => (
+                      <figure>
+                        <img src={image.src} alt={image.alt} loading="lazy" decoding="async" />
+                      </figure>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div class="room-showcase__content">
+                <div class="room-showcase__header">
+                  <span class="room-showcase__number">{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <p class="room-showcase__eyebrow">{room.bestFor}</p>
+                    <h3 id={`${room.id}-title`} class="room-showcase__title">{room.name}</h3>
+                  </div>
+                </div>
+                <p class="room-showcase__summary">{room.summary}</p>
+                <p class="room-showcase__description">{room.description}</p>
+
+                <div class="room-showcase__details" aria-label={`${room.name} details`}>
+                  <span>{room.capacity}</span>
+                  <span>12-hour room rate applies in booking</span>
+                  <span>Extra time may be requested</span>
+                </div>
+
+                <ul class="room-showcase__features">
+                  {room.features.map((feature) => (
+                    <li>{feature}</li>
+                  ))}
+                </ul>
+
+                <div class="room-showcase__actions">
+                  <a href="/events_and_booking/events" class="room-showcase__book-link">Add to booking request</a>
+                  <a href="#rooms" class="room-showcase__text-link">Back to rooms</a>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  </div>
+  <Footer slot="footer" />
+</Layout>
+
+<style>
+  .accommodations-rooms {
+    scroll-margin-top: calc(var(--site-header-height) + 1rem);
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+    padding: clamp(3rem, 7vw, 6rem) clamp(0.9rem, 4vw, 3rem);
+    background:
+      linear-gradient(180deg, var(--wb-surface) 0%, var(--wb-surface-soft) 48%, var(--wb-surface) 100%);
+  }
+
+  .accommodations-rooms__inner {
+    width: min(100%, 76rem);
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .accommodations-room-intro {
+    display: grid;
+    min-width: 0;
+    align-items: end;
+    gap: clamp(1rem, 4vw, 3rem);
+    grid-template-columns: minmax(0, 0.95fr) minmax(18rem, 0.78fr);
+  }
+
+  .accommodations-eyebrow {
+    margin: 0 0 0.55rem;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .accommodations-room-intro h2,
+  .accommodations-room-note h3 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    letter-spacing: 0;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  .accommodations-room-intro h2 {
+    max-width: 45rem;
+    font-size: clamp(2rem, 5vw, 4rem);
+  }
+
+  .accommodations-room-intro > p,
+  .accommodations-room-note > p {
+    min-width: 0;
+    margin: 0;
+    color: var(--wb-muted);
+    line-height: 1.75;
+  }
+
+  .room-anchor-nav {
+    position: sticky;
+    z-index: 3;
+    top: calc(var(--site-header-height) + 0.75rem);
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    gap: 0.55rem;
+    margin: clamp(1.5rem, 4vw, 2.35rem) 0;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 76%, transparent);
+    border-radius: var(--wb-radius-md);
+    background: color-mix(in srgb, var(--wb-surface-raised) 92%, transparent);
+    box-shadow: var(--wb-shadow-sm);
+    padding: 0.65rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    backdrop-filter: blur(16px);
+  }
+
+  .room-anchor-nav a {
+    display: inline-flex;
+    min-height: 2.65rem;
+    align-items: center;
+    justify-content: center;
+    flex: 1 0 max-content;
+    border: 1px solid transparent;
+    border-radius: var(--wb-radius-sm);
+    color: var(--wb-link);
+    font-size: 0.82rem;
+    font-weight: 900;
+    padding: 0.7rem 0.9rem;
+    text-decoration: none;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .room-anchor-nav a:hover,
+  .room-anchor-nav a:focus-visible {
+    border-color: color-mix(in srgb, var(--wb-green) 38%, var(--wb-border));
+    background: var(--wb-green-soft);
+    color: var(--wb-link-hover);
+    transform: translateY(-1px);
+  }
+
+  .accommodations-room-note {
+    display: grid;
+    min-width: 0;
+    align-items: center;
+    gap: clamp(1rem, 3vw, 2rem);
+    grid-template-columns: minmax(0, 0.75fr) minmax(18rem, 1fr);
+    margin-bottom: clamp(1.5rem, 4vw, 2.35rem);
+    border: 1px solid color-mix(in srgb, var(--wb-border) 76%, transparent);
+    border-radius: var(--wb-radius-md);
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--wb-green-soft) 58%, transparent), transparent 52%),
+      var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    padding: clamp(1.1rem, 3vw, 1.6rem);
+  }
+
+  .accommodations-room-note h3 {
+    font-size: clamp(1.35rem, 3vw, 2rem);
+  }
+
+  .room-section-list {
+    display: grid;
+    min-width: 0;
+    gap: clamp(1.25rem, 3vw, 2.2rem);
+  }
+
+  .room-showcase {
+    scroll-margin-top: calc(var(--site-header-height) + 6rem);
+    display: grid;
+    min-width: 0;
+    max-width: 100%;
+    align-items: stretch;
+    gap: 0;
+    grid-template-columns: minmax(0, 1.18fr) minmax(21rem, 0.82fr);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 82%, transparent);
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(244, 241, 232, 0.94)),
+      var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-md);
+    color: var(--wb-text);
+  }
+
+  .room-showcase--reverse {
+    grid-template-columns: minmax(21rem, 0.82fr) minmax(0, 1.18fr);
+  }
+
+  .room-showcase--reverse .room-showcase__media {
+    grid-column: 2;
+  }
+
+  .room-showcase--reverse .room-showcase__content {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .room-showcase__media {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 0.65rem;
+    min-height: 100%;
+    padding: clamp(0.7rem, 1.5vw, 1rem);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--wb-green-dark) 10%, transparent), transparent),
+      color-mix(in srgb, var(--wb-green-soft) 54%, var(--wb-surface-raised));
+  }
+
+  .room-showcase__hero-image,
+  .room-showcase__gallery figure {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 62%, transparent);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-soft);
+    margin: 0;
+  }
+
+  .room-showcase__hero-image {
+    min-height: clamp(21rem, 38vw, 31rem);
+  }
+
+  .room-showcase__hero-image img,
+  .room-showcase__gallery img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .room-showcase__gallery {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.75rem), 1fr));
+  }
+
+  .room-showcase__gallery figure {
+    min-height: 8.75rem;
+  }
+
+  .room-showcase__content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.35rem, 3vw, 2.6rem);
+  }
+
+  .room-showcase__header {
+    display: grid;
+    align-items: start;
+    gap: 0.85rem;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .room-showcase__number {
+    display: grid;
+    width: 2.65rem;
+    height: 2.65rem;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--wb-warm) 46%, var(--wb-border));
+    border-radius: 999px;
+    background: var(--wb-warm-soft);
+    color: var(--wb-earth);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+  }
+
+  .room-showcase__eyebrow {
+    margin: 0;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .room-showcase__title {
+    margin: 0.28rem 0 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.9rem, 4vw, 3.25rem);
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.02;
+  }
+
+  .room-showcase__summary {
+    margin: 0.95rem 0 0;
+    color: var(--wb-earth);
+    font-size: clamp(1rem, 1.5vw, 1.16rem);
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .room-showcase__description {
+    margin: 0.85rem 0 0;
+    color: var(--wb-muted);
+    line-height: 1.75;
+  }
+
+  .room-showcase__details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.1rem;
+  }
+
+  .room-showcase__details span {
+    border: 1px solid color-mix(in srgb, var(--wb-warm) 34%, var(--wb-border));
+    border-radius: 999px;
+    background: var(--wb-warm-soft);
+    color: var(--wb-earth);
+    font-size: 0.78rem;
+    font-weight: 850;
+    padding: 0.43rem 0.68rem;
+  }
+
+  .room-showcase__features {
+    display: grid;
+    gap: 0.55rem;
+    margin: 1.2rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .room-showcase__features li {
+    position: relative;
+    color: var(--wb-text);
+    font-size: 0.94rem;
+    line-height: 1.55;
+    padding-left: 1.35rem;
+  }
+
+  .room-showcase__features li::before {
+    position: absolute;
+    top: 0.58rem;
+    left: 0;
+    width: 0.52rem;
+    height: 0.52rem;
+    border: 2px solid color-mix(in srgb, var(--wb-surface-raised) 80%, transparent);
+    border-radius: 999px;
+    background: var(--wb-green);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--wb-green) 32%, transparent);
+    content: "";
+  }
+
+  .room-showcase__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.4rem;
+    flex-wrap: wrap;
+  }
+
+  .room-showcase__book-link,
+  .room-showcase__text-link {
+    display: inline-flex;
+    min-height: 2.8rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--wb-radius-sm);
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .room-showcase__book-link {
+    border: 1px solid var(--wb-action);
+    background: var(--wb-action);
+    box-shadow: 0 10px 20px rgba(21, 122, 69, 0.14);
+    color: var(--wb-on-action);
+    padding: 0.75rem 1rem;
+  }
+
+  .room-showcase__book-link:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .room-showcase__text-link {
+    color: var(--wb-link);
+    padding: 0.75rem 0.35rem;
+  }
+
+  .room-showcase__text-link:hover {
+    color: var(--wb-link-hover);
+  }
+
+  :global(.public-page-hero),
+  :global(.public-page-hero__inner) {
+    max-width: 100vw;
+  }
+
+  @media (max-width: 640px) {
+    :global(.public-page-hero__inner) {
+      width: calc(100vw - 1.5rem);
+    }
+  }
+
+  :global(html.dark) .room-anchor-nav,
+  :global(html.dark) .accommodations-room-note,
+  :global(html.dark) .room-showcase {
+    background: var(--wb-surface-raised);
+  }
+
+  :global(html.dark) .room-showcase__media {
+    background:
+      linear-gradient(180deg, rgba(139, 200, 154, 0.1), transparent),
+      var(--wb-surface-soft);
+  }
+
+  @media (min-width: 901px) {
+    .accommodations-rooms {
+      padding: clamp(2.6rem, 4.6vw, 4.5rem) clamp(1.5rem, 4vw, 4rem);
+    }
+
+    .accommodations-rooms__inner {
+      width: min(100%, 88rem);
+    }
+
+    .accommodations-room-intro {
+      gap: clamp(1.25rem, 3vw, 2rem);
+      grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.7fr);
+    }
+
+    .accommodations-room-intro h2 {
+      max-width: 38rem;
+      font-size: clamp(2rem, 3.3vw, 3rem);
+    }
+
+    .accommodations-room-intro > p,
+    .accommodations-room-note > p {
+      line-height: 1.58;
+    }
+
+    .room-anchor-nav {
+      gap: 0.45rem;
+      margin: 1.25rem 0 1.5rem;
+      padding: 0.5rem;
+    }
+
+    .room-anchor-nav a {
+      min-height: 2.35rem;
+      padding: 0.55rem 0.75rem;
+    }
+
+    .accommodations-room-note {
+      gap: clamp(1rem, 2vw, 1.5rem);
+      grid-template-columns: minmax(18rem, 0.55fr) minmax(0, 1fr);
+      margin-bottom: 1.5rem;
+      padding: 1rem 1.1rem;
+    }
+
+    .accommodations-room-note h3 {
+      font-size: clamp(1.3rem, 2vw, 1.7rem);
+    }
+
+    .room-section-list {
+      gap: 1.15rem;
+    }
+
+    .room-showcase,
+    .room-showcase--reverse {
+      grid-template-columns: minmax(0, 0.96fr) minmax(22rem, 1.04fr);
+    }
+
+    .room-showcase--reverse {
+      grid-template-columns: minmax(22rem, 1.04fr) minmax(0, 0.96fr);
+    }
+
+    .room-showcase__media {
+      gap: 0.5rem;
+      padding: 0.7rem;
+    }
+
+    .room-showcase__hero-image {
+      min-height: 0;
+      aspect-ratio: 16 / 10;
+    }
+
+    .room-showcase__gallery {
+      gap: 0.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+    }
+
+    .room-showcase__gallery figure {
+      min-height: 0;
+      aspect-ratio: 4 / 3;
+    }
+
+    .room-showcase__content {
+      justify-content: start;
+      padding: clamp(1.35rem, 2.4vw, 2rem);
+    }
+
+    .room-showcase__number {
+      width: 2.35rem;
+      height: 2.35rem;
+      font-size: 0.9rem;
+    }
+
+    .room-showcase__title {
+      font-size: clamp(1.7rem, 2.7vw, 2.45rem);
+    }
+
+    .room-showcase__summary {
+      margin-top: 0.7rem;
+      font-size: clamp(1.02rem, 1.25vw, 1.12rem);
+      line-height: 1.5;
+    }
+
+    .room-showcase__description {
+      margin-top: 0.75rem;
+      font-size: 0.98rem;
+      line-height: 1.65;
+    }
+
+    .room-showcase__details {
+      margin-top: 0.85rem;
+    }
+
+    .room-showcase__features {
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .room-showcase__features li {
+      font-size: 0.96rem;
+    }
+
+    .room-showcase__actions {
+      margin-top: 1rem;
+    }
+
+    .room-showcase__book-link,
+    .room-showcase__text-link {
+      min-height: 2.55rem;
+      padding-block: 0.65rem;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .accommodations-room-intro,
+    .accommodations-room-note,
+    .room-showcase,
+    .room-showcase--reverse {
+      grid-template-columns: 1fr;
+    }
+
+    .room-showcase--reverse .room-showcase__media,
+    .room-showcase--reverse .room-showcase__content {
+      grid-column: auto;
+      grid-row: auto;
+    }
+
+    .room-anchor-nav {
+      position: static;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .accommodations-rooms {
+      padding-inline: 0.75rem;
+    }
+
+    .room-anchor-nav {
+      margin-block: 1.25rem;
+      padding: 0.5rem;
+      flex-wrap: wrap;
+      overflow-x: visible;
+    }
+
+    .room-anchor-nav a {
+      min-height: 2.5rem;
+      min-width: 0;
+      flex: 1 1 calc(50% - 0.3rem);
+      flex-basis: calc(50% - 0.3rem);
+    }
+
+    .accommodations-room-note {
+      padding: 1rem;
+    }
+
+    .room-section-list {
+      gap: 1rem;
+    }
+
+    .room-showcase {
+      border-radius: var(--wb-radius-md);
+    }
+
+    .room-showcase__media {
+      padding: 0.6rem;
+    }
+
+    .room-showcase__hero-image {
+      min-height: 15.5rem;
+    }
+
+    .room-showcase__gallery {
+      grid-template-columns: 1fr;
+    }
+
+    .room-showcase__gallery figure {
+      min-height: 10rem;
+    }
+
+    .room-showcase__content {
+      padding: 1.1rem;
+    }
+
+    .room-showcase__header {
+      grid-template-columns: 1fr;
+    }
+
+    .room-showcase__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .room-showcase__book-link,
+    .room-showcase__text-link {
+      width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .room-anchor-nav a {
+      transition: none;
+    }
+  }
+</style>

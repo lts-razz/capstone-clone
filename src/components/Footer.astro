@@ -1,0 +1,599 @@
+---
+import { getDashboardPathForRole, getUserRole } from '../lib/adminGuard';
+
+const pathname = Astro.url.pathname;
+const roleInfo = await getUserRole(Astro.cookies);
+const isAuthenticated = roleInfo.role !== 'none';
+const accountHref = isAuthenticated ? getDashboardPathForRole(roleInfo.role) : '/signin';
+const accountLabel = isAuthenticated ? 'Dashboard' : 'Login';
+const currentYear = new Date().getFullYear();
+
+const navigationItems = [
+  { href: '/', label: 'Home', active: pathname === '/' },
+  {
+    href: '/events_and_booking/events',
+    label: 'Packages',
+    active: pathname.startsWith('/events_and_booking/events'),
+  },
+  {
+    href: '/contact-us',
+    label: 'Contact',
+    active: pathname.startsWith('/contact-us'),
+  },
+  {
+    href: accountHref,
+    label: accountLabel,
+    active: pathname === accountHref,
+    account: true,
+  },
+];
+---
+
+<footer class="site-footer" aria-labelledby="site-footer-title">
+  <div class="site-footer__inner">
+    <div class="site-footer__brand-column">
+      <a
+        class="site-footer__logo"
+        href="/"
+        aria-label="Woodberry Resorts and Events Place home"
+      >
+        <img
+          src="/company-logo-clean.png"
+          alt="Woodberry Resorts and Events Place"
+          width="1331"
+          height="784"
+          loading="lazy"
+        />
+      </a>
+      <div class="site-footer__brand-copy">
+        <p class="site-footer__eyebrow">Celebrate. Relax. Remember.</p>
+        <h2 id="site-footer-title">A warm place for every gathering.</h2>
+      </div>
+
+      <nav class="site-footer__socials" aria-label="Social media">
+        <a
+          href="https://www.facebook.com/woodberryresortandevents"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Visit Woodberry on Facebook"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 8h3V4h-3c-3 0-5 2-5 5v3H6v4h3v5h4v-5h3l1-4h-4V9c0-.6.4-1 1-1Z"></path>
+          </svg>
+          <span>Facebook</span>
+        </a>
+        <a
+          href="https://www.instagram.com/woodberry.eventsplace/?hl=en"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Visit Woodberry on Instagram"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="5"></rect>
+            <circle cx="12" cy="12" r="4"></circle>
+            <circle cx="17.4" cy="6.7" r="1"></circle>
+          </svg>
+          <span>Instagram</span>
+        </a>
+      </nav>
+    </div>
+
+    <div class="site-footer__section">
+      <h2>Explore</h2>
+      <nav aria-label="Footer navigation">
+        <ul class="site-footer__navigation">
+          {
+            navigationItems.map((item) => (
+              <li>
+                <a
+                  href={item.href}
+                  class:list={[
+                    'site-footer__nav-link',
+                    { 'site-footer__nav-link--account': item.account },
+                  ]}
+                  aria-current={item.active ? 'page' : undefined}
+                >
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </div>
+
+    <div class="site-footer__section site-footer__contact">
+      <h2>Contact us</h2>
+      <address>
+        <ul class="site-footer__details">
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 3h3l1.5 4-2 1.5a15 15 0 0 0 6 6L17 12.5l4 1.5v3c0 2.2-1.8 4-4 4C9.3 21 3 14.7 3 7c0-2.2 1.8-4 4-4Z"></path>
+            </svg>
+            <div>
+              <span>Cellphone</span>
+              <a href="tel:09223746235">0922-374-6235</a>
+            </div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 4h14v16H5zM8 7h8M8 11h2M12 11h2M8 15h2M12 15h2"></path>
+            </svg>
+            <div>
+              <span>Telephone</span>
+              <a href="tel:+63447367161">(044) 736-7161</a>
+            </div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+              <path d="m4 7 8 6 8-6"></path>
+            </svg>
+            <div>
+              <span>Email</span>
+              <a href="mailto:thewoodberryresorteventsplace@gmail.com">
+                thewoodberryresorteventsplace@gmail.com
+              </a>
+            </div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"></path>
+              <circle cx="12" cy="10" r="2.5"></circle>
+            </svg>
+            <div>
+              <span>Address</span>
+              <p>B3 DRT HIGHWAY, ULINGAO, SAN RAFAEL, BULACAN</p>
+            </div>
+          </li>
+        </ul>
+      </address>
+    </div>
+
+    <div class="site-footer__section site-footer__hours">
+      <h2>Business hours</h2>
+      <div class="site-footer__hours-card">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M12 7v5l3.5 2"></path>
+        </svg>
+        <p>Open 7:00 AM to 5:00 PM Daily</p>
+      </div>
+      <p class="site-footer__hours-note">
+        Contact us to arrange a visit or ask about your preferred event date.
+      </p>
+    </div>
+  </div>
+
+  <div class="site-footer__bottom">
+    <p>&copy; {currentYear} Woodberry Resorts and Events Place. All rights reserved.</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    position: relative;
+    overflow: hidden;
+    border-top: 4px solid var(--wb-warm);
+    background:
+      radial-gradient(circle at 8% 18%, rgba(163, 127, 80, 0.18), transparent 22rem),
+      linear-gradient(135deg, #12351f 0%, #0b2817 58%, #071e11 100%);
+    color: #f7f4ea;
+  }
+
+  .site-footer::after {
+    position: absolute;
+    right: -8rem;
+    bottom: -11rem;
+    width: 28rem;
+    height: 28rem;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 3rem rgba(255, 255, 255, 0.025),
+      0 0 0 6rem rgba(255, 255, 255, 0.018);
+    content: '';
+    pointer-events: none;
+  }
+
+  .site-footer__inner {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: min(100% - 2rem, 82rem);
+    gap: clamp(2rem, 5vw, 4.5rem);
+    grid-template-columns: minmax(14rem, 1.15fr) minmax(10rem, 0.7fr) minmax(18rem, 1.45fr) minmax(13rem, 0.8fr);
+    margin: 0 auto;
+    padding: clamp(3rem, 7vw, 5.5rem) 0 clamp(2.5rem, 5vw, 4rem);
+  }
+
+  .site-footer__brand-column,
+  .site-footer__section {
+    min-width: 0;
+  }
+
+  .site-footer__logo {
+    display: grid;
+    width: min(100%, 15rem);
+    min-height: 7.75rem;
+    place-items: center;
+    border: 1px solid rgba(238, 225, 207, 0.32);
+    border-radius: var(--wb-radius-lg);
+    background: rgba(250, 247, 239, 0.96);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.2);
+    padding: 0.7rem 0.85rem;
+    transition: border-color 180ms ease, transform 180ms ease;
+  }
+
+  .site-footer__logo:hover {
+    border-color: rgba(238, 225, 207, 0.75);
+    transform: translateY(-2px);
+  }
+
+  .site-footer__logo img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .site-footer__brand-copy {
+    margin-top: 1.5rem;
+  }
+
+  .site-footer__eyebrow {
+    margin: 0 0 0.45rem;
+    color: #dfbf8c;
+    font-size: 0.69rem;
+    font-weight: 850;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .site-footer__brand-copy h2 {
+    max-width: 17rem;
+    margin: 0;
+    color: #ffffff;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+    letter-spacing: -0.025em;
+    line-height: 1.16;
+  }
+
+  .site-footer__socials {
+    display: flex;
+    gap: 0.55rem;
+    margin-top: 1.4rem;
+    flex-wrap: wrap;
+  }
+
+  .site-footer__socials a {
+    display: inline-flex;
+    min-height: 2.65rem;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #f7f4ea;
+    font-size: 0.76rem;
+    font-weight: 750;
+    padding: 0.6rem 0.75rem;
+    text-decoration: none;
+    transition: background-color 180ms ease, border-color 180ms ease;
+  }
+
+  .site-footer__socials a:hover {
+    border-color: rgba(223, 191, 140, 0.72);
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .site-footer__socials svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
+  .site-footer__socials a:first-child svg {
+    fill: currentColor;
+    stroke: none;
+  }
+
+  .site-footer__section > h2 {
+    margin: 0 0 1.15rem;
+    color: #dfbf8c;
+    font-size: 0.72rem;
+    font-weight: 850;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .site-footer__navigation,
+  .site-footer__details {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .site-footer__navigation {
+    gap: 0.65rem;
+  }
+
+  .site-footer__nav-link {
+    display: inline-flex;
+    width: 100%;
+    min-height: 2.7rem;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.045);
+    color: #f7f4ea;
+    font-size: 0.84rem;
+    font-weight: 750;
+    padding: 0.62rem 0.9rem;
+    text-decoration: none;
+    transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+  }
+
+  .site-footer__nav-link:hover,
+  .site-footer__nav-link[aria-current='page'] {
+    border-color: rgba(223, 191, 140, 0.72);
+    background: rgba(255, 255, 255, 0.11);
+    color: #ffffff;
+  }
+
+  .site-footer__nav-link--account {
+    border-color: #c9a873;
+    background: #c9a873;
+    color: #102b1a;
+  }
+
+  .site-footer__nav-link--account:hover,
+  .site-footer__nav-link--account[aria-current='page'] {
+    border-color: #e2c89e;
+    background: #e2c89e;
+    color: #0b2114;
+  }
+
+  .site-footer__contact address {
+    font-style: normal;
+  }
+
+  .site-footer__details {
+    gap: 1rem;
+  }
+
+  .site-footer__details li {
+    display: grid;
+    min-width: 0;
+    align-items: start;
+    gap: 0.75rem;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+  }
+
+  .site-footer__details svg,
+  .site-footer__hours-card svg {
+    width: 1.15rem;
+    height: 1.15rem;
+    fill: none;
+    stroke: #dfbf8c;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
+  .site-footer__details span {
+    display: block;
+    margin-bottom: 0.16rem;
+    color: rgba(255, 255, 255, 0.64);
+    font-size: 0.67rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .site-footer__details a,
+  .site-footer__details p {
+    margin: 0;
+    color: #f7f4ea;
+    font-size: 0.83rem;
+    font-weight: 620;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+    text-decoration-color: rgba(223, 191, 140, 0.55);
+    text-underline-offset: 0.2em;
+  }
+
+  .site-footer__details a:hover {
+    color: #ffffff;
+    text-decoration-color: currentColor;
+  }
+
+  .site-footer__hours-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    border: 1px solid rgba(223, 191, 140, 0.35);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.07);
+    padding: 0.9rem;
+  }
+
+  .site-footer__hours-card svg {
+    flex: 0 0 auto;
+    margin-top: 0.12rem;
+  }
+
+  .site-footer__hours-card p,
+  .site-footer__hours-note {
+    margin: 0;
+    color: #ffffff;
+    font-size: 0.86rem;
+    font-weight: 750;
+    line-height: 1.55;
+  }
+
+  .site-footer__hours-note {
+    margin-top: 0.85rem;
+    color: rgba(255, 255, 255, 0.66);
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  .site-footer__bottom {
+    position: relative;
+    z-index: 1;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .site-footer__bottom p {
+    width: min(100% - 2rem, 82rem);
+    margin: 0 auto;
+    color: rgba(255, 255, 255, 0.63);
+    font-size: 0.73rem;
+    padding: 1.1rem 0;
+    text-align: center;
+  }
+
+  :global(html.dark) .site-footer__socials a,
+  :global(html.dark) .site-footer__nav-link,
+  :global(html.dark) .site-footer__details a {
+    color: #f7f4ea;
+  }
+
+  :global(html.dark) .site-footer__nav-link--account,
+  :global(html.dark) .site-footer__nav-link--account:hover {
+    color: #0b2114;
+  }
+
+  @media (max-width: 1080px) {
+    .site-footer__inner {
+      grid-template-columns: minmax(14rem, 1fr) minmax(10rem, 0.7fr) minmax(18rem, 1.2fr);
+    }
+
+    .site-footer__hours {
+      grid-column: 1 / -1;
+    }
+
+    .site-footer__hours-card,
+    .site-footer__hours-note {
+      max-width: 27rem;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .site-footer__inner {
+      gap: 2.25rem 1.5rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .site-footer__brand-column,
+    .site-footer__contact,
+    .site-footer__hours {
+      grid-column: 1 / -1;
+    }
+
+    .site-footer__brand-column {
+      display: grid;
+      align-items: center;
+      column-gap: 1.5rem;
+      grid-template-columns: minmax(11rem, 0.75fr) minmax(14rem, 1fr);
+    }
+
+    .site-footer__brand-copy {
+      margin-top: 0;
+    }
+
+    .site-footer__socials {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .site-footer__inner {
+      width: min(100% - 1.5rem, 82rem);
+      gap: 2rem;
+      grid-template-columns: 1fr;
+      padding-top: 2.75rem;
+    }
+
+    .site-footer__brand-column {
+      display: block;
+      grid-column: auto;
+    }
+
+    .site-footer__brand-copy {
+      margin-top: 1.35rem;
+    }
+
+    .site-footer__section,
+    .site-footer__contact,
+    .site-footer__hours {
+      grid-column: auto;
+    }
+
+    .site-footer__logo {
+      width: min(100%, 14rem);
+    }
+
+    .site-footer__nav-link {
+      min-height: 3rem;
+    }
+  }
+
+  @media (min-width: 1081px) {
+    .site-footer__inner {
+      width: min(100% - 3rem, 88rem);
+      gap: clamp(1.5rem, 3vw, 3rem);
+      grid-template-columns: minmax(13rem, 1.05fr) minmax(9rem, 0.62fr) minmax(20rem, 1.55fr) minmax(12rem, 0.78fr);
+      padding: clamp(2.4rem, 4vw, 3.6rem) 0 clamp(2rem, 3vw, 2.8rem);
+    }
+
+    .site-footer__bottom p {
+      width: min(100% - 3rem, 88rem);
+      padding-block: 0.9rem;
+    }
+
+    .site-footer__logo {
+      width: min(100%, 13rem);
+      min-height: 6.5rem;
+    }
+
+    .site-footer__brand-copy {
+      margin-top: 1.1rem;
+    }
+
+    .site-footer__socials {
+      margin-top: 1rem;
+    }
+
+    .site-footer__section > h2 {
+      margin-bottom: 0.85rem;
+    }
+
+    .site-footer__navigation {
+      gap: 0.45rem;
+    }
+
+    .site-footer__details {
+      gap: 0.75rem;
+    }
+
+    .site-footer__nav-link {
+      min-height: 2.45rem;
+      padding-block: 0.52rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .site-footer__logo,
+    .site-footer__socials a,
+    .site-footer__nav-link {
+      transition: none;
+    }
+  }
+</style>

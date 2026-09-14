@@ -1,0 +1,20 @@
+---
+import Footer from '../components/Footer.astro';
+import PublicPageHero from '../components/PublicPageHero.astro';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout
+  title="About"
+  description="Learn more about Woodberry Resorts and Events Place."
+>
+  <div class="wb-page-surface">
+    <PublicPageHero
+      headingId="about-title"
+      title="About"
+      description="About content for Woodberry Resorts and Events Place will be added later."
+      compact
+    />
+  </div>
+  <Footer slot="footer" />
+</Layout>

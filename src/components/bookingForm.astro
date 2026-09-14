@@ -1,0 +1,4902 @@
+---
+import { getMinimumBookingDateValue } from "../lib/bookingDateRules";
+import { WOODBERRY_PACKAGES, type WoodberryPackage } from "../lib/woodberryPackages";
+import {
+  ADD_ON_OPTIONS,
+  BOOKING_EVENT_TYPES,
+  CORKAGE_OPTIONS,
+  EXTENSION_OPTIONS,
+  ROOM_EXTENSION_OPTION,
+  ROOM_RATE_OPTIONS,
+} from "../lib/bookingOptions";
+
+type Props = {
+  venueId: string;
+  venueName: string;
+  packageOptions?: WoodberryPackage[];
+  initialPackageType?: string;
+  packageId?: string;
+  customBooking?: boolean;
+  venueOptions?: {
+    id: string;
+    name: string;
+    description: string | null;
+    location?: string | null;
+    capacity: number | null;
+    image_url: string | null;
+  }[];
+  accountDetails?: {
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+  };
+};
+
+const {
+  venueId,
+  venueName,
+  packageOptions = WOODBERRY_PACKAGES,
+  initialPackageType = "",
+  packageId = "",
+  customBooking = false,
+  venueOptions = [],
+  accountDetails = {},
+} = Astro.props as Props;
+const availablePackageOptions = Array.isArray(packageOptions) ? packageOptions : WOODBERRY_PACKAGES;
+const initialMinimumBookingDateValue = getMinimumBookingDateValue();
+---
+
+<div
+  id="booking-form"
+  class="booking-shell"
+  data-minimum-booking-date={initialMinimumBookingDateValue}
+  data-package-options={JSON.stringify(availablePackageOptions)}
+  data-custom-booking={String(customBooking)}
+  data-venue-options={JSON.stringify(venueOptions)}
+  data-account-details={JSON.stringify(accountDetails)}
+>
+  <div class="booking-form__header">
+    <p class="booking-form__eyebrow">{customBooking ? "Custom Booking" : "Booking Request"}</p>
+    <h2>{customBooking ? "Build Your Own Woodberry Request" : "Plan Your Woodberry Booking"}</h2>
+    <p>
+      {customBooking
+        ? "Choose your preferred schedule, available venue, and custom items or services. Final pricing will be reviewed by Woodberry staff."
+        : "Share the details for your celebration, choose a package and any optional extras, then review everything before submitting your request."}
+    </p>
+  </div>
+
+  {customBooking && (
+    <div class="booking-guidance-card" role="note">
+      <strong>Rough pricing notice</strong>
+      <span>Prices shown for additional selections are rough estimates only. Final additional charges and required payment will be reviewed and determined by the Woodberry admin team after your request is submitted.</span>
+    </div>
+  )}
+
+  <!-- Notification banner -->
+  <div
+    id="bookingNotice"
+    class="hidden mb-4 px-4 py-3 rounded-lg text-sm font-semibold flex items-center gap-2"
+  >
+  </div>
+
+  <nav class="booking-stepper" aria-label="Booking form progress">
+    <div class="booking-stepper__track" aria-hidden="true">
+      <span id="bookingStepProgress"></span>
+    </div>
+    <ol>
+      <li>
+        <button type="button" class="booking-step-trigger is-current" data-step-target="0" aria-current="step">
+          <span class="booking-step-trigger__number">1</span>
+          <span class="booking-step-trigger__label">Client Details</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="booking-step-trigger" data-step-target="1" disabled>
+          <span class="booking-step-trigger__number">2</span>
+          <span class="booking-step-trigger__label">Date &amp; Venue</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="booking-step-trigger" data-step-target="2" disabled>
+          <span class="booking-step-trigger__number">3</span>
+          <span class="booking-step-trigger__label">Celebration Details</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="booking-step-trigger" data-step-target="3" disabled>
+          <span class="booking-step-trigger__number">4</span>
+          <span class="booking-step-trigger__label">Optionals</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="booking-step-trigger" data-step-target="4" disabled>
+          <span class="booking-step-trigger__number">5</span>
+          <span class="booking-step-trigger__label">Review &amp; Submit</span>
+        </button>
+      </li>
+    </ol>
+    <p id="bookingStepStatus" class="booking-stepper__status" aria-live="polite">
+      Step 1 of 5 — Client Details
+    </p>
+  </nav>
+
+  <form id="bookingForm" class="booking-flow">
+    <!-- Guest Information -->
+    <section class="booking-step space-y-4" data-booking-step="0" aria-labelledby="booking-step-client-title">
+      <h3 id="booking-step-client-title" tabindex="-1" class="text-lg font-semibold" style="color: var(--lion-primary);">
+        Client Details
+      </h3>
+      <p class="booking-step__intro">{customBooking ? "Tell us who to contact about this custom booking request and where to send updates." : "Tell us who to contact about this reservation and where to send updates."}</p>
+      <label class="account-details-option" for="useAccountDetails">
+        <input
+          type="checkbox"
+          id="useAccountDetails"
+          class="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+        />
+        <span>
+          <strong>Use my account details</strong>
+          <small>Fill available contact details from your signed-in account. You can review and edit them before submitting.</small>
+        </span>
+      </label>
+      <div>
+        <label
+          for="fullName"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);">Primary Contact's Full Name *</label
+        >
+        <input
+          type="text"
+          id="fullName"
+          name="fullName"
+          required
+          autocomplete="name"
+          placeholder="First and last name"
+          minlength="2"
+          maxlength="200"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        />
+      </div>
+      <div>
+        <label
+          for="email"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);">Email Address for Booking Updates *</label
+        >
+        <input
+          type="email"
+          id="email"
+          name="email"
+          required
+          autocomplete="email"
+          placeholder="you@example.com"
+          maxlength="254"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        />
+      </div>
+      <div>
+        <label
+          for="phone"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);">Mobile Number for Booking Updates *</label
+        >
+        <input
+          type="tel"
+          id="phone"
+          name="phone"
+          required
+          autocomplete="tel"
+          placeholder="e.g. 0917 123 4567"
+          minlength="7"
+          maxlength="30"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        />
+      </div>
+      <div>
+        <label
+          for="address"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);">Home or Billing Address *</label
+        >
+        <input
+          type="text"
+          id="address"
+          name="address"
+          required
+          autocomplete="street-address"
+          placeholder="House number, street, barangay, city, and province"
+          minlength="5"
+          maxlength="500"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        />
+      </div>
+      <fieldset class="notification-preference">
+        <legend>Notification preference</legend>
+        <p>Choose where we should send confirmations, schedules, reminders, and important booking updates.</p>
+        <div class="notification-preference__options" role="radiogroup" aria-label="Notification preference">
+          <label class="notification-preference__option">
+            <input
+              type="radio"
+              name="notificationPreference"
+              value="email"
+              class="notification-preference__input"
+            />
+            <span class="notification-preference__body">
+              <strong>Email only</strong>
+              <span>Send booking updates to your email address only.</span>
+            </span>
+          </label>
+          <label class="notification-preference__option">
+            <input
+              type="radio"
+              name="notificationPreference"
+              value="sms"
+              class="notification-preference__input"
+            />
+            <span class="notification-preference__body">
+              <strong>SMS only</strong>
+              <span>Send booking updates to your mobile number only.</span>
+            </span>
+          </label>
+          <label class="notification-preference__option">
+            <input
+              type="radio"
+              name="notificationPreference"
+              value="both"
+              class="notification-preference__input"
+              checked
+            />
+            <span class="notification-preference__body">
+              <strong>Both email and SMS</strong>
+              <span>Send every booking update by email and SMS.</span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+    </section>
+
+    <!-- Date and venue details -->
+    <section class="booking-step space-y-4" data-booking-step="1" aria-labelledby="booking-step-date-title" hidden>
+      <h3 id="booking-step-date-title" tabindex="-1" class="text-lg font-semibold" style="color: var(--lion-primary);">
+        Date &amp; Venue
+      </h3>
+      <p class="booking-step__intro">{customBooking ? "Choose the schedule, guest count, and available Woodberry venue for your request." : "Choose the schedule, guest count, and Woodberry package for your event."}</p>
+      <p class="text-sm text-gray-600">
+        Bookings must be made at least 1 week in advance. Availability is reserved by calendar date: a booking blocks its venue for every full day in the selected date range, regardless of the times entered.
+      </p>
+      <label class="date-mode-option" for="isMultiDay">
+        <input
+          type="checkbox"
+          id="isMultiDay"
+          name="isMultiDay"
+          class="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+        />
+        <span>
+          <strong>Staying for multiple days?</strong>
+          <small>Choose this for an overnight or multi-day stay.</small>
+          <small id="multiDayPackageLock" class="booking-field-package-lock hidden">This setting is locked by the selected package.</small>
+        </span>
+      </label>
+      <div id="bookingDateTimeFields" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label
+            for="startDateTime"
+            id="startDateTimeLabel"
+            class="block text-sm font-medium mb-2"
+            style="color: var(--jet-primary);">Event Start Date and Time *</label
+          >
+          <input
+            type="datetime-local"
+            id="startDateTime"
+            name="startDateTime"
+            required
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+          />
+        </div>
+        <div id="endDateTimeField">
+          <label
+            for="endDateTime"
+            id="endDateTimeLabel"
+            class="block text-sm font-medium mb-2"
+            style="color: var(--jet-primary);">Event End Date and Time *</label
+          >
+          <input
+            type="datetime-local"
+            id="endDateTime"
+            name="endDateTime"
+            required
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+          />
+        </div>
+      </div>
+      <div>
+        <label
+          for="guests"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);">Expected Number of Guests *</label
+        >
+        <input
+          type="number"
+          id="guests"
+          name="guests"
+          min="1"
+          required
+          inputmode="numeric"
+          placeholder="Enter the expected total"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        />
+      </div>
+      <div id="customVenueSection" class={customBooking ? "space-y-4 pt-4 border-t border-gray-100" : "hidden"}>
+        <div>
+          <h4 class="text-base font-semibold" style="color: var(--lion-primary);">
+            Available Venue *
+          </h4>
+          <p class="text-sm text-gray-600">
+            Choose your date first. The list below only shows active venues that are available for the selected booking date or date range.
+          </p>
+        </div>
+        <label for="customVenueSelect" class="block text-sm font-medium" style="color: var(--jet-primary);">
+          Woodberry venue
+        </label>
+        <select
+          id="customVenueSelect"
+          name="customVenueId"
+          required={customBooking}
+          disabled={!customBooking}
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        >
+          <option value="">Choose a booking date to see available venues</option>
+        </select>
+        <p id="customVenueNotice" class="booking-field-package-lock">Venue availability updates after you choose a date.</p>
+        <article id="customVenueDetails" class="custom-venue-details hidden" aria-live="polite"></article>
+      </div>
+      <div class={customBooking ? "hidden" : "space-y-4 pt-4 border-t border-gray-100"}>
+        <h4 class="text-base font-semibold" style="color: var(--lion-primary);">
+          Booking Package *
+        </h4>
+        <p class="text-sm text-gray-600">
+          Choose one package that fits your group. Each card shows its base
+          price, duration, guest limit, schedule, and included facilities.
+        </p>
+        <div id="packageOptions" class="woodberry-package-grid"></div>
+        <p id="packageLimitNotice" class="hidden rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></p>
+      </div>
+    </section>
+
+    <!-- Celebration details -->
+    <section class="booking-step space-y-4" data-booking-step="2" aria-labelledby="booking-step-celebration-title" hidden>
+      <h3 id="booking-step-celebration-title" tabindex="-1" class="text-lg font-semibold" style="color: var(--lion-primary);">
+        Celebration Details
+      </h3>
+      <p class="booking-step__intro">Share the event type, catering preference, and any notes for the Woodberry team.</p>
+      <div>
+        <label
+          for="eventType"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);">Type of Celebration or Event *</label
+        >
+        <select
+          id="eventType"
+          name="eventType"
+          required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        >
+          <option value="">Select event type</option>
+          {BOOKING_EVENT_TYPES.map((eventType) => (
+            <option value={eventType.key}>{eventType.label}</option>
+          ))}
+        </select>
+        <p id="eventTypePackageLock" class="booking-field-package-lock hidden">Some event types are unavailable for the selected package.</p>
+      </div>
+      <div id="customEventTypeField" class="hidden">
+        <label
+          for="customEventType"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);">Please specify the celebration type *</label
+        >
+        <input
+          type="text"
+          id="customEventType"
+          name="customEventType"
+          maxlength="100"
+          placeholder="Enter the celebration or event type"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+        />
+      </div>
+      <div class="space-y-3">
+        <label
+          for="caterer"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);"
+          >Outside Caterer <span class="text-gray-400 font-normal">(optional)</span
+          ></label
+        >
+        <input
+          type="text"
+          id="caterer"
+          name="caterer"
+          maxlength="200"
+          placeholder="Enter caterer name, if applicable"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all disabled:bg-gray-100 disabled:text-gray-500"
+        />
+        <label
+          for="useWoodberryCaterer"
+          class="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm font-medium"
+          style="color: var(--jet-primary);"
+        >
+          <input
+            type="checkbox"
+            id="useWoodberryCaterer"
+            name="useWoodberryCaterer"
+            class="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+          />
+          <span>I would like to use Woodberry's caterer</span>
+        </label>
+      </div>
+      <div class="booking-note-field">
+        <label
+          for="specialRequests"
+          class="block text-sm font-medium mb-2"
+          style="color: var(--jet-primary);"
+          >Notes or Special Requests <span class="text-gray-400 font-normal"
+            >(optional)</span
+          ></label
+        >
+        <textarea
+          id="specialRequests"
+          name="specialRequests"
+          rows="4"
+          maxlength="1000"
+          placeholder="Tell us about accessibility needs, setup requests, or other important details"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all resize-none"
+        ></textarea>
+      </div>
+    </section>
+
+    <!-- Optional extras -->
+    <section class="booking-step space-y-4" data-booking-step="3" aria-labelledby="booking-step-options-title" hidden>
+      <h3 id="booking-step-options-title" tabindex="-1" class="text-lg font-semibold" style="color: var(--lion-primary);">
+        Optionals
+      </h3>
+      <p class="booking-step__intro">{customBooking ? "Choose optional rooms, equipment, extra time, or corkage items for staff review. Final pricing is confirmed by Woodberry." : "Add only what your group needs. Every selection updates the estimate without changing current rates."}</p>
+      <div class="space-y-5">
+        {customBooking && (
+          <div class="booking-guidance-card">
+            <strong>Quote request only</strong>
+            <span>Selections below help the team prepare your quotation. Online payment opens only after staff confirms final pricing.</span>
+          </div>
+        )}
+        <section class="booking-option-section" data-booking-lockout-section="rooms" aria-labelledby="booking-rooms-title">
+          <div class="booking-option-section__heading">
+            <h4 id="booking-rooms-title">Rooms</h4>
+            <a href="/amenities#rooms" class="booking-room-details-link">View room details</a>
+          </div>
+          <p class="booking-section-lockout-note hidden" data-section-lockout-note>Rooms are not available with the selected package.</p>
+          <p>{customBooking ? "Select any rooms you would like included in the request. Each displayed 12-hour room rate is a rough estimate; extra room time is estimated at ₱200 per hour." : "Select any rooms needed in addition to those included in your package. Each listed room rate covers 12 hours. Room-only accommodation does not include pool use, and extra room time costs ₱200 per hour."}</p>
+          <div id="roomRateOptions" class="booking-option-grid"></div>
+          <div class="booking-option-card booking-option-card--manual">
+            <span class="booking-option-card__media" aria-hidden="true">
+              <img src={ROOM_EXTENSION_OPTION.image} alt="" loading="lazy" />
+            </span>
+            <span class="booking-option-card__content">
+              <strong>{ROOM_EXTENSION_OPTION.label}</strong>
+              <small class="booking-option-card__description">{ROOM_EXTENSION_OPTION.description}</small>
+              <small class="booking-option-card__price">&#8369;{ROOM_EXTENSION_OPTION.price.toLocaleString("en-PH")} per extra hour</small>
+              <label for="roomExtensionHours" class="booking-option-card__quantity-label">Extra room hours requested</label>
+              <input id="roomExtensionHours" type="number" min="0" step="1" value="0" class="booking-option-card__hours booking-option-card__hours--wide" />
+              <small id="roomExtensionPackageLock" class="booking-field-package-lock hidden">These hours are locked by the selected package.</small>
+            </span>
+          </div>
+        </section>
+        <section class="booking-option-section" data-booking-lockout-section="addOns" aria-labelledby="booking-addons-title">
+          <h4 id="booking-addons-title">Equipment and Entertainment Add-ons</h4>
+          <p class="booking-section-lockout-note hidden" data-section-lockout-note>Add-ons are not available with the selected package.</p>
+          <p>{customBooking ? "Select any Woodberry equipment or entertainment you would like quoted. Each displayed one-time rate is a rough estimate." : "Select any Woodberry equipment or entertainment you want added to your package estimate. Each displayed rate is charged once."}</p>
+          <div id="addOnOptions" class="booking-option-grid"></div>
+        </section>
+        <section class="booking-option-section" data-booking-lockout-section="extensions" aria-labelledby="booking-extensions-title">
+          <h4 id="booking-extensions-title">Extra Time and Guest Capacity</h4>
+          <p class="booking-section-lockout-note hidden" data-section-lockout-note>Extra time and capacity additions are not available with the selected package.</p>
+          <p>Choose an item, then enter the number of extra hours or 50-guest capacity blocks you need. The estimate updates using the displayed per-unit rate.</p>
+          <div id="extensionOptions" class="booking-option-grid"></div>
+        </section>
+        <section class="booking-option-section" data-booking-lockout-section="corkage" aria-labelledby="booking-corkage-title">
+          <h4 id="booking-corkage-title">Outside Equipment Corkage Charges</h4>
+          <p class="booking-section-lockout-note hidden" data-section-lockout-note>Corkage options are not available with the selected package.</p>
+          <p>Select each type of outside equipment you plan to bring. The displayed corkage charge is added once per selected item. There is no corkage fee for food or drinks.</p>
+          <div id="corkageOptions" class="booking-option-grid"></div>
+        </section>
+        <div class="booking-guidance-card booking-guidance-card--warm">
+          <strong>Preparation note</strong>
+          <span>Caterers and stylists receive 4 hours of preparation time. Extra preparation time costs &#8369;500. Parking and event safety staffing are coordinated during the event.</span>
+        </div>
+        {customBooking && (
+          <div class="booking-note-field">
+          <label
+            for="customOtherRequest"
+            class="block text-sm font-medium mb-2"
+            style="color: var(--jet-primary);"
+            >Other Request <span class="text-gray-400 font-normal">(optional)</span></label
+          >
+          <textarea
+            id="customOtherRequest"
+            name="customOtherRequest"
+            rows="3"
+            maxlength="1000"
+            placeholder="Add any other preferred services, setup details, or quotation notes"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all resize-none"
+          ></textarea>
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- Price Breakdown -->
+    <section class="booking-step space-y-4" data-booking-step="4" aria-labelledby="booking-step-review-title" hidden>
+      <h3 id="booking-step-review-title" tabindex="-1" class="text-lg font-semibold" style="color: var(--lion-primary);">
+        Review &amp; Submit
+      </h3>
+      <p class="booking-step__intro">{customBooking ? "Review your quote-only request, then read the Terms and Conditions before submitting." : "Review the estimate, then read the Terms and Conditions to open your complete booking summary before submitting."}</p>
+      <div class="booking-payment-card" aria-labelledby="booking-estimate-title">
+        <div>
+          <p class="booking-payment-card__eyebrow">{customBooking ? "Rough price guide" : "Price estimate"}</p>
+          <h3 id="booking-estimate-title">{customBooking ? "Review your estimated additions" : "Review your estimated cost"}</h3>
+          <p class="booking-payment-card__intro">{customBooking ? "The estimate covers only the priced additions selected below. It is not a package price, final total, or payment request." : "The amount shown is calculated from the selected package and optionals. Woodberry verifies current rates when the temporary reservation is created."}</p>
+        </div>
+        {customBooking ? (
+          <>
+            <div class="flex justify-between text-sm">
+              <span class="text-gray-600">Rough estimated additions total</span>
+              <span id="optionalExtrasDisplay" style="color: var(--butterscotch-primary);">&#8369;0.00</span>
+            </div>
+            <div class="booking-payment-card__admin-notice">
+              <span>Admin-determined payment</span>
+              <strong id="packageBaseDisplay">Determined after request review</strong>
+              <p>Woodberry admin will review the venue, schedule, selections, and any other requests before setting the required payment.</p>
+            </div>
+            <div class="flex justify-between font-bold pt-2 border-t border-gray-200" style="color: var(--jet-primary);">
+              <span>Final payment / total</span>
+              <span id="totalPrice">Subject to admin review</span>
+            </div>
+            <span id="minimumPayment" class="hidden"></span>
+            <span id="remainingBalance" class="hidden"></span>
+            <p class="booking-payment-card__authority">The rough additions estimate does not force this request into preset package pricing. Final additional charges and the required payment are determined by Woodberry admin after submission.</p>
+          </>
+        ) : (
+          <>
+            <div class="flex justify-between text-sm">
+              <span class="text-gray-600">Selected package base</span>
+              <span style="color: var(--butterscotch-primary);" id="packageBaseDisplay"></span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-gray-600">Optionals</span>
+              <span id="optionalExtrasDisplay">&#8369;0.00</span>
+            </div>
+            <div class="flex justify-between font-bold pt-2 border-t border-gray-200" style="color: var(--jet-primary);">
+              <span>Estimated Total</span>
+              <span id="totalPrice" style="color: var(--butterscotch-primary);">&#8369;0.00</span>
+            </div>
+            <div class="flex justify-between text-sm pt-2">
+              <span class="text-gray-600">Estimated minimum 50% down payment</span>
+              <span id="minimumPayment" class="font-semibold" style="color: var(--butterscotch-primary);">&#8369;0.00</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-gray-600">Remaining estimated balance</span>
+              <span id="remainingBalance" class="font-semibold">&#8369;0.00</span>
+            </div>
+            <p class="text-xs text-gray-500 pt-1">The remaining balance is due on or before the reservation date under Woodberry's payment policies.</p>
+            <p class="booking-payment-card__authority">When you submit, Woodberry recalculates every package and extra using current rates. This displayed estimate is not the final confirmed amount.</p>
+          </>
+        )}
+      </div>
+      <div class="booking-review-reminder" role="note">
+        <strong>Your request is not submitted yet.</strong>
+        <span>The next screen shows every booking detail and optional selection for one final check.</span>
+      </div>
+    </section>
+
+    <footer class="booking-step-actions">
+      <button type="button" id="bookingBackBtn" class="booking-step-button booking-step-button--secondary" hidden>
+        Back
+      </button>
+      <span class="booking-step-actions__spacer"></span>
+      <button type="button" id="bookingNextBtn" class="booking-step-button booking-step-button--primary">
+        Next: Date &amp; Venue
+      </button>
+      <button type="submit" class="booking-submit" id="submitBtn" hidden>
+        Review Terms and Conditions
+      </button>
+    </footer>
+  </form>
+</div>
+
+<!-- Terms and Conditions modal -->
+<div
+  id="termsModal"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center"
+  style="background:rgba(0,0,0,0.6);"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="terms-modal-title"
+>
+  <div
+    class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[92vh] flex flex-col"
+  >
+    <div class="px-7 pt-7 pb-4 border-b border-gray-100">
+      <div class="flex items-center gap-3 mb-1">
+        <div
+          class="w-10 h-10 rounded-full flex items-center justify-center text-xl"
+          style="background:var(--wb-warm-soft);color:var(--wb-earth);"
+        >
+          Terms
+        </div>
+        <h3 id="terms-modal-title" class="text-xl font-black" style="color:var(--jet-primary);">
+          Terms and Conditions
+        </h3>
+      </div>
+      <p class="text-sm text-gray-500">
+        Please read and agree before reviewing your booking.
+      </p>
+    </div>
+
+    <div class="px-7 py-5 overflow-y-auto space-y-3 text-sm leading-6 text-gray-700">
+      <p class="font-bold" style="color: var(--jet-primary);">TERMS OF SERVICE</p>
+      <p>
+        1. A minimum 50% down payment is required to secure the reservation.
+        Payment of the remaining balance must be made on or before the
+        reservation date.
+      </p>
+      <p>
+        2. Cancellation of reserved date shall be made three (3) weeks before
+        the reserved date to refund 50% of the deposited amount. Failure to do so
+        shall mean forfeiture of the deposit.
+      </p>
+      <p>
+        3. Venue/Room rental is restricted to the allotted time only. In case of
+        excess hours, client shall pay the corresponding amount for excess hours.
+      </p>
+      <p>
+        4. A maximum of four (4) guests are allowed to stay per room; otherwise,
+        additional payments will be made.
+      </p>
+      <p>
+        5. The client shall see to it that all belongings are personally attended.
+        The management shall not be liable for any accidents, damages, or loss.
+      </p>
+      <p>
+        6. Preparation and arrangement of place should be done four (4) hours
+        before the start of event. Php500.00 will be charged for extra hours, if
+        not included in the package.
+      </p>
+      <p>
+        7. Use of Videoke, Sound Systems, and Rooms should be paid as per
+        customer's request.
+      </p>
+      <p>8. Room accommodation only does not include the use of swimming pool.</p>
+      <p>9. We charge corkage fee for booth that requires electricity.</p>
+      <p>10. Liquors and drugs are not allowed inside the venue.</p>
+      <p>
+        11. No other fees shall be collected by the management unless stated
+        above.
+      </p>
+      <p>
+        12. We always abide by the rules/laws mandated by the local and national
+        government.
+      </p>
+      <p>
+        <strong>Note:</strong> Client or its representative hereby states that
+        he/she has read and fully understood these Terms and Conditions.
+      </p>
+
+      <label
+        for="termsAccepted"
+        class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 text-sm font-medium"
+        style="color: var(--jet-primary);"
+      >
+        <input
+          type="checkbox"
+          id="termsAccepted"
+          name="termsAccepted"
+          required
+          class="mt-1 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+        />
+        <span>I have read and agree to the Terms and Conditions</span>
+      </label>
+    </div>
+
+    <div class="px-7 pb-7 flex gap-3">
+      <button
+        id="terms-back-btn"
+        type="button"
+        class="flex-1 py-3 rounded-xl border-2 font-semibold text-sm transition hover:bg-gray-50"
+        style="border-color:#d1d5db;color:#374151;"
+      >
+        Go Back & Edit
+      </button>
+      <button
+        id="terms-continue-btn"
+        type="button"
+        class="flex-1 py-3 rounded-xl text-white font-bold text-sm transition hover:opacity-90"
+        style="background:var(--wb-green);"
+      >
+        Continue to Review Booking
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Booking confirmation modal -->
+<div
+  id="bookingConfirmModal"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center"
+  style="background:rgba(0,0,0,0.6);"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="booking-review-title"
+>
+  <div class="booking-confirmation-modal">
+    <div class="booking-confirmation__header">
+      <div>
+        <p class="booking-confirmation__eyebrow">{customBooking ? "Custom request review" : "Reservation review"}</p>
+        <h3 id="booking-review-title">{customBooking ? "Review your Woodberry request" : "Review your Woodberry reservation"}</h3>
+        <p>
+          {customBooking
+            ? "Confirm the details Woodberry will use to prepare your quotation."
+            : "Confirm the package, schedule, and details before creating a temporary reservation."}
+        </p>
+      </div>
+      <div class="booking-confirmation__mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 5c-9 6-14 13-14 22 0 9 6 16 14 16s14-7 14-16C38 18 33 11 24 5Z" fill="currentColor" opacity="0.16"/>
+          <path d="M24 41V17m0 16c4-2 7-5 9-10m-9 6c-4-2-7-5-9-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="booking-confirmation__body">
+      <section class="confirmation-venue-card">
+        <div>
+          <p class="confirmation-section__eyebrow">Package</p>
+          <p id="conf-venue" class="confirmation-venue-card__name"></p>
+        </div>
+        <span class="confirmation-status-pill">{customBooking ? "Quotation review required" : "Temporary reservation"}</span>
+      </section>
+
+      <section class="confirmation-section">
+        <div class="confirmation-section__header">
+          <p class="confirmation-section__eyebrow">Guest Information</p>
+          <h4>Contact details</h4>
+        </div>
+        <div class="confirmation-detail-grid confirmation-detail-grid--contact">
+          <div class="confirmation-detail">
+            <span>Full Name</span>
+            <p id="conf-name"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Phone</span>
+            <p id="conf-phone"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Email</span>
+            <p id="conf-email"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Address</span>
+            <p id="conf-address"></p>
+          </div>
+          <div class="confirmation-detail confirmation-detail--wide">
+            <span>Notifications</span>
+            <p id="conf-notifications"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="confirmation-section">
+        <div class="confirmation-section__header">
+          <p class="confirmation-section__eyebrow">Stay & Event</p>
+          <h4>Schedule summary</h4>
+        </div>
+        <div class="confirmation-detail-grid">
+          <div class="confirmation-detail">
+            <span>Starts</span>
+            <p id="conf-checkin"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Ends</span>
+            <p id="conf-checkout"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Calendar Date</span>
+            <p id="conf-eventdate"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Guests</span>
+            <p id="conf-guests"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Event Type</span>
+            <p id="conf-eventtype"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Booking Mode</span>
+            <p id="conf-nights"></p>
+          </div>
+          <div class="confirmation-detail confirmation-detail--wide">
+            <span>Caterer</span>
+            <p id="conf-caterer"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="confirmation-section">
+        <div class="confirmation-section__header">
+          <p class="confirmation-section__eyebrow">Selected Package</p>
+          <h4 id="conf-package-name">Woodberry package</h4>
+        </div>
+        <div class="confirmation-detail-grid">
+          <div class="confirmation-detail">
+            <span>{customBooking ? "Pricing basis" : "Base Price"}</span>
+            <p id="conf-package-price"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Duration</span>
+            <p id="conf-package-duration"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Time / Schedule</span>
+            <p id="conf-package-schedule"></p>
+          </div>
+          <div class="confirmation-detail">
+            <span>Capacity</span>
+            <p id="conf-package-capacity"></p>
+          </div>
+          <div class="confirmation-detail confirmation-detail--wide">
+            <span>Included</span>
+            <p id="conf-package-included"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="confirmation-section confirmation-section--split">
+        <div>
+          <div class="confirmation-section__header">
+            <p class="confirmation-section__eyebrow">Optional Selections</p>
+            <h4>Selected items</h4>
+          </div>
+          <div id="conf-additionals" class="confirmation-inclusions"></div>
+        </div>
+        <div id="conf-requests-wrap" class="hidden">
+          <div class="confirmation-section__header">
+            <p class="confirmation-section__eyebrow">Special Requests</p>
+            <h4>Guest notes</h4>
+          </div>
+          <div class="confirmation-note-card">
+            <p id="conf-requests"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="confirmation-payment-card">
+        <div class="confirmation-payment-card__top">
+          <div>
+            <p class="confirmation-section__eyebrow">{customBooking ? "Rough additions estimate" : "Payment Estimate"}</p>
+            <h4>{customBooking ? "Selected additions only" : "Estimated total"}</h4>
+            <p>{customBooking ? "This rough amount covers priced selections only. It is not the final booking total or required payment." : "This displayed amount is recalculated from package and optional-extra rates when the reservation is created."}</p>
+          </div>
+          <p id="conf-total" class="confirmation-payment-card__total"></p>
+        </div>
+        <div class="confirmation-payment-card__breakdown">
+          <div>
+            <span>{customBooking ? "Admin-determined payment" : "Estimated minimum 50% down payment"}</span>
+            <strong id="conf-minimum-payment"></strong>
+            <p>{customBooking ? "Woodberry admin determines the required payment after reviewing the complete request." : "A minimum 50% down payment is required to secure the reservation."}</p>
+          </div>
+          <div>
+            <span>{customBooking ? "Final payment / total" : "Remaining estimated balance"}</span>
+            <strong id="conf-remaining-balance"></strong>
+            <p>{customBooking ? "All final charges remain subject to Woodberry admin review." : "Due on or before the reservation date under Woodberry's payment policies."}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="confirmation-validity-reminder" role="note" aria-labelledby="reservation-validity-title">
+        <p class="confirmation-section__eyebrow">{customBooking ? "Pricing review" : "Reservation validity"}</p>
+        <h4 id="reservation-validity-title">{customBooking ? "Payment stays locked until admin finalizes the price" : "Your unpaid reservation has a 48-hour validity period"}</h4>
+        <p>{customBooking ? <><strong>No payment is due from this rough estimate.</strong> Woodberry admin will review the full request and set the final payable amount before online checkout becomes available.</> : <><strong>Unpaid reservations are valid for 48 hours only.</strong> If the minimum down payment is not made within 48 hours, the reservation may be automatically cancelled and the date may become available to others.</>}</p>
+      </section>
+
+      <section class="confirmation-next-steps">
+        <p class="confirmation-section__eyebrow">What happens next</p>
+        <ol>
+          <li>{customBooking ? "Submit this custom booking request for quotation review." : "Create a temporary reservation for the selected package and schedule."}</li>
+          <li>{customBooking ? "Woodberry staff will confirm the details and final payable amount with you." : "Your selected schedule is held temporarily until the payment deadline."}</li>
+          <li>{customBooking ? "Online payment becomes available only after admin finalizes the price." : "Complete the minimum 50% down payment to secure the booking."}</li>
+        </ol>
+      </section>
+    </div>
+
+    <div class="booking-confirmation__footer">
+      <button id="conf-back-btn" class="confirmation-button confirmation-button--secondary">
+        Go Back & Edit
+      </button>
+      <button id="conf-submit-btn" type="button" class="confirmation-button confirmation-button--primary">
+        {customBooking ? "Submit Custom Request" : "Create Reservation"}
+      </button>
+    </div>
+    <p id="confirmationError" class="confirmation-error hidden" role="alert"></p>
+  </div>
+</div>
+
+<!-- Booking success screen -->
+<div
+  id="bookingSuccessScreen"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center"
+  style="background:rgba(0,0,0,0.6);"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="booking-success-title"
+>
+  <div class="booking-success-card">
+    <div class="booking-success-card__mark" aria-hidden="true">
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="20" fill="currentColor" opacity="0.16"/>
+        <path d="m15 24 6 6 13-14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <p class="booking-success-card__eyebrow">{customBooking ? "Custom request received" : "Temporary reservation created"}</p>
+    <h3 id="booking-success-title">{customBooking ? "Woodberry will prepare your quotation" : "Your schedule is temporarily held"}</h3>
+    <p class="booking-success-card__intro">
+      {customBooking
+        ? "Thank you. Woodberry will review your requirements and finalize your quotation before payment opens."
+        : "Complete the required down payment before the deadline to secure this booking."}
+    </p>
+    <p id="success-notification-message" class="booking-success-card__intro"></p>
+
+    <div class="booking-success-card__reference">
+      <span>Booking Reference</span>
+      <p id="success-ref"></p>
+      <small id="success-venue"></small>
+      <small id="success-dates"></small>
+    </div>
+    <div id="success-payment-summary" class="booking-success-card__payment hidden" aria-label="Required payment summary">
+      <div>
+        <span>Held Until</span>
+        <strong id="success-expiration-deadline"></strong>
+      </div>
+      <div>
+        <span>Time Remaining</span>
+        <strong id="success-expiration-countdown"></strong>
+      </div>
+      <div>
+        <span>Total Booking Amount</span>
+        <strong id="success-total-amount"></strong>
+      </div>
+      <div>
+        <span>Required Down Payment</span>
+        <strong id="success-down-payment"></strong>
+      </div>
+    </div>
+    <p id="success-reservation-expiration" class="booking-success-card__intro"></p>
+    <p class="booking-success-card__validity">{customBooking ? <><strong>No payment is due from the rough estimate.</strong> Online checkout remains locked until Woodberry admin sets the final payable amount.</> : <><strong>Unpaid reservations are valid for 48 hours only.</strong> If the minimum down payment is not made within 48 hours, the reservation may be automatically cancelled and the date may become available to others.</>}</p>
+
+    <div class="booking-success-card__steps">
+      <div>
+        <span>1</span>
+        <p>{customBooking ? "Woodberry reviews your custom booking request." : "Your selected schedule is temporarily reserved."}</p>
+      </div>
+      <div>
+        <span>2</span>
+        <p>{customBooking ? "Admin reviews the rough selections and sets the final payable amount before payment opens." : "A minimum 50% down payment is required before the deadline to secure the booking."}</p>
+      </div>
+      <div>
+        <span>3</span>
+        <p>You can follow your booking status in My Bookings.</p>
+      </div>
+    </div>
+
+    <p id="success-next-action-message" class="booking-success-card__redirect">
+      {customBooking ? "You can follow this request in My Bookings." : "Pay now to secure this booking, or view it in My Bookings and pay before the deadline."}
+    </p>
+    <button id="success-pay-now" type="button" class="confirmation-button confirmation-button--primary hidden">
+      Pay Now
+    </button>
+    <a href="/dashboard" class="confirmation-button confirmation-button--secondary">
+      {customBooking ? "View My Bookings" : "Pay Later / View My Bookings"}
+    </a>
+  </div>
+</div>
+
+<script>
+  import {
+    formatReservationCountdown,
+    formatReservationDeadline,
+    getReservationRemainingMs,
+  } from "../lib/reservationDeadlineClient";
+
+  (window as any).WoodberryReservationDeadline = {
+    formatReservationCountdown,
+    formatReservationDeadline,
+    getReservationRemainingMs,
+  };
+</script>
+
+<script is:inline define:vars={{
+  venueId,
+  venueName,
+  initialPackageType,
+  packageId,
+  roomRateCatalog: ROOM_RATE_OPTIONS,
+  roomExtensionCatalog: ROOM_EXTENSION_OPTION,
+  addOnCatalog: ADD_ON_OPTIONS,
+  extensionCatalog: EXTENSION_OPTIONS,
+  corkageCatalog: CORKAGE_OPTIONS,
+  customBooking,
+}}>
+  var initialMinimumBookingDateValue =
+    document.getElementById("booking-form")?.getAttribute("data-minimum-booking-date") || "";
+  var form = document.getElementById("bookingForm");
+  var isMultiDayInput = document.getElementById("isMultiDay");
+  var startDateTimeInput = document.getElementById("startDateTime");
+  var endDateTimeInput = document.getElementById("endDateTime");
+  var endDateTimeField = document.getElementById("endDateTimeField");
+  var startDateTimeLabel = document.getElementById("startDateTimeLabel");
+  var endDateTimeLabel = document.getElementById("endDateTimeLabel");
+  var eventTypeInput = document.getElementById("eventType");
+  var customEventTypeInput = document.getElementById("customEventType");
+  var customEventTypeField = document.getElementById("customEventTypeField");
+  var useAccountDetailsInput = document.getElementById("useAccountDetails");
+  var termsAcceptedInput = document.getElementById("termsAccepted");
+  var addressInput = document.getElementById("address");
+  var catererInput = document.getElementById("caterer");
+  var useWoodberryCatererInput = document.getElementById("useWoodberryCaterer");
+  var optionalExtrasDisplay = document.getElementById("optionalExtrasDisplay");
+  var totalPriceEl = document.getElementById("totalPrice");
+  var minimumPaymentEl = document.getElementById("minimumPayment");
+  var remainingBalanceEl = document.getElementById("remainingBalance");
+  var noticeEl = document.getElementById("bookingNotice");
+  var notificationPreferenceInputs = document.querySelectorAll(
+    'input[name="notificationPreference"]',
+  );
+  var termsModal = document.getElementById("termsModal");
+  var confirmModal = document.getElementById("bookingConfirmModal");
+  var successScreen = document.getElementById("bookingSuccessScreen");
+  var termsBackBtn = document.getElementById("terms-back-btn");
+  var termsContinueBtn = document.getElementById("terms-continue-btn");
+  var confBackBtn = document.getElementById("conf-back-btn");
+  var confSubmitBtn = document.getElementById("conf-submit-btn");
+  var submitBtn = document.getElementById("submitBtn");
+  var confirmationError = document.getElementById("confirmationError");
+  var isSubmitting = false;
+  var successPaymentProcessing = false;
+  var successCountdownTimer = null;
+  var woodberryCatererName = "Woodberry's Caterer";
+  var packageOptionsWrap = document.getElementById("packageOptions");
+  var packageLimitNotice = document.getElementById("packageLimitNotice");
+  var customVenueSelect = document.getElementById("customVenueSelect");
+  var customVenueNotice = document.getElementById("customVenueNotice");
+  var customVenueDetails = document.getElementById("customVenueDetails");
+  var customOtherRequestInput = document.getElementById("customOtherRequest");
+  var roomRateOptionsWrap = document.getElementById("roomRateOptions");
+  var addOnOptionsWrap = document.getElementById("addOnOptions");
+  var extensionOptionsWrap = document.getElementById("extensionOptions");
+  var corkageOptionsWrap = document.getElementById("corkageOptions");
+  var roomExtensionHoursInput = document.getElementById("roomExtensionHours");
+  var selectedPackageType = initialPackageType || "";
+  var bookingShell = document.getElementById("booking-form");
+  var isCustomBooking = customBooking === true || bookingShell?.dataset.customBooking === "true";
+  var woodberryPackages = [];
+  try {
+    woodberryPackages = JSON.parse(bookingShell?.dataset.packageOptions || "[]");
+  } catch {
+    woodberryPackages = [];
+  }
+  var accountDetails = {};
+  try {
+    accountDetails = JSON.parse(bookingShell?.dataset.accountDetails || "{}");
+  } catch {
+    accountDetails = {};
+  }
+  var roomRates = roomRateCatalog;
+  var roomExtensionOption = roomExtensionCatalog;
+  var addOnOptions = addOnCatalog;
+  var extensionOptions = extensionCatalog;
+  var corkageOptions = corkageCatalog;
+  var bookingSteps = Array.from(document.querySelectorAll("[data-booking-step]"));
+  var bookingStepTriggers = Array.from(document.querySelectorAll("[data-step-target]"));
+  var bookingStepLabels = [
+    "Client Details",
+    "Date & Venue",
+    "Celebration Details",
+    "Optionals",
+    "Review & Submit",
+  ];
+  var bookingBackBtn = document.getElementById("bookingBackBtn");
+  var bookingNextBtn = document.getElementById("bookingNextBtn");
+  var bookingStepStatus = document.getElementById("bookingStepStatus");
+  var bookingStepProgress = document.getElementById("bookingStepProgress");
+  var currentBookingStep = 0;
+  var maximumVisitedStep = 0;
+  var CUSTOM_BOOKING_TYPE = "custom-booking";
+  var CUSTOM_BOOKING_NAME = "Custom Booking";
+  var customPackage = {
+    type: CUSTOM_BOOKING_TYPE,
+    name: CUSTOM_BOOKING_NAME,
+    price: 0,
+    duration: "Custom schedule",
+    schedule: "Preferred date/time reviewed by staff",
+    minPax: 1,
+    maxPax: 999,
+    inclusions: ["Available venue", "Selected custom items/services", "Staff quotation review"],
+    eventTypes: [],
+  };
+  var customVenueOptions = [];
+  try {
+    customVenueOptions = JSON.parse(bookingShell?.dataset.venueOptions || "[]");
+  } catch {
+    customVenueOptions = [];
+  }
+
+  var packageBaseDisplay = document.getElementById("packageBaseDisplay");
+  if (packageBaseDisplay) packageBaseDisplay.textContent = isCustomBooking ? "To be confirmed" : "Select a package";
+
+  function formatCurrency(amount) {
+    return new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: "PHP",
+      minimumFractionDigits: 2,
+    }).format(Number(amount) || 0);
+  }
+
+  function reservationDeadlineHelpers() {
+    var helpers = window.WoodberryReservationDeadline || {};
+    return {
+      formatDeadline: helpers.formatReservationDeadline || function (value) {
+        return value
+          ? new Date(value).toLocaleString("en-PH", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              timeZone: "Asia/Manila",
+            })
+          : "Deadline unavailable";
+      },
+      formatCountdown: helpers.formatReservationCountdown || function (remainingMs) {
+        if (!Number.isFinite(remainingMs)) return "Deadline unavailable";
+        var safeMs = Math.max(0, remainingMs);
+        var days = Math.floor(safeMs / 86400000);
+        var hours = Math.floor((safeMs % 86400000) / 3600000);
+        var minutes = Math.floor((safeMs % 3600000) / 60000);
+        var seconds = Math.floor((safeMs % 60000) / 1000);
+        var time = String(hours).padStart(2, "0") + ":" + String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+        return days > 0 ? days + " " + (days === 1 ? "day" : "days") + " " + time + " remaining" : time + " remaining";
+      },
+      remainingMs: helpers.getReservationRemainingMs || function (value) {
+        return value ? new Date(value).getTime() - Date.now() : null;
+      },
+    };
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function goToBookingStep(stepIndex, focusHeading) {
+    var nextStep = Math.max(0, Math.min(bookingSteps.length - 1, Number(stepIndex) || 0));
+    currentBookingStep = nextStep;
+
+    bookingSteps.forEach(function (step, index) {
+      var isCurrent = index === currentBookingStep;
+      step.hidden = !isCurrent;
+      step.setAttribute("aria-hidden", isCurrent ? "false" : "true");
+    });
+
+    bookingStepTriggers.forEach(function (trigger, index) {
+      var isCurrent = index === currentBookingStep;
+      var isComplete = index < currentBookingStep || index < maximumVisitedStep;
+      trigger.classList.toggle("is-current", isCurrent);
+      trigger.classList.toggle("is-complete", isComplete && !isCurrent);
+      trigger.disabled = index > maximumVisitedStep;
+      if (isCurrent) trigger.setAttribute("aria-current", "step");
+      else trigger.removeAttribute("aria-current");
+    });
+
+    if (bookingStepStatus) {
+      bookingStepStatus.textContent =
+        "Step " + (currentBookingStep + 1) + " of " + bookingSteps.length + " - " + bookingStepLabels[currentBookingStep];
+    }
+    if (bookingStepProgress) {
+      bookingStepProgress.style.width = ((currentBookingStep + 1) / bookingSteps.length) * 100 + "%";
+    }
+    if (bookingBackBtn) bookingBackBtn.hidden = currentBookingStep === 0;
+    if (bookingNextBtn) {
+      bookingNextBtn.hidden = currentBookingStep === bookingSteps.length - 1;
+      bookingNextBtn.textContent = currentBookingStep < bookingSteps.length - 1
+        ? "Next: " + bookingStepLabels[currentBookingStep + 1]
+        : "Next";
+    }
+    if (submitBtn) submitBtn.hidden = currentBookingStep !== bookingSteps.length - 1;
+    if (currentBookingStep === bookingSteps.length - 1) calculateNights();
+
+    if (focusHeading) {
+      bookingShell?.scrollIntoView({ behavior: "smooth", block: "start" });
+      bookingSteps[currentBookingStep]?.querySelector("h3")?.focus({ preventScroll: true });
+    }
+  }
+
+  function fillAccountDetails() {
+    if (!useAccountDetailsInput?.checked) return;
+    [
+      ["fullName", accountDetails.fullName],
+      ["email", accountDetails.email],
+      ["phone", accountDetails.phone],
+      ["address", accountDetails.address],
+    ].forEach(function (entry) {
+      var input = document.getElementById(entry[0]);
+      if (input && typeof entry[1] === "string" && entry[1].trim()) {
+        input.value = entry[1].trim();
+        input.setCustomValidity("");
+      }
+    });
+  }
+
+  function datePart(value) {
+    return typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : "";
+  }
+
+  function getStartDateValue() {
+    return datePart(startDateTimeInput?.value || "");
+  }
+
+  function getEndDateValue() {
+    return datePart(endDateTimeInput?.value || "");
+  }
+
+  function syncDateTimeMode() {
+    var isMultiDay = !!isMultiDayInput?.checked;
+    endDateTimeField?.classList.remove("hidden");
+    if (endDateTimeInput) {
+      endDateTimeInput.required = true;
+      endDateTimeInput.disabled = false;
+      if (!isMultiDay && endDateTimeInput.value && datePart(endDateTimeInput.value) !== getStartDateValue()) {
+        endDateTimeInput.value = "";
+      }
+    }
+    if (startDateTimeLabel) {
+      startDateTimeLabel.textContent = isMultiDay
+        ? "Stay Start Date and Time *"
+        : "Event Start Date and Time *";
+    }
+    if (endDateTimeLabel) {
+      endDateTimeLabel.textContent = isMultiDay
+        ? "Stay End Date and Time *"
+        : "Event End Date and Time *";
+    }
+    syncDateInputMinimums();
+  }
+
+  function syncCustomEventType() {
+    var isOther = eventTypeInput?.value === "other";
+    var isLocked = customEventTypeInput?.dataset.packageLocked === "true";
+    customEventTypeField?.classList.toggle("hidden", !isOther);
+    if (customEventTypeInput) {
+      customEventTypeInput.required = isOther;
+      customEventTypeInput.disabled = !isOther || isLocked;
+      if (!isOther) customEventTypeInput.value = "";
+    }
+  }
+
+  function getSelectedPackage() {
+    if (isCustomBooking) return customPackage;
+    return woodberryPackages.find(function (pkg) {
+      return pkg.type === selectedPackageType;
+    }) || null;
+  }
+
+  function getSelectedPackageId() {
+    if (isCustomBooking) return "";
+    return getSelectedPackage()?.id || packageId || "";
+  }
+
+  function getSelectedVenueId() {
+    if (isCustomBooking) return customVenueSelect?.value || "";
+    return getSelectedPackage()?.venueId || venueId || "";
+  }
+
+  function renderPackageOptions() {
+    if (!packageOptionsWrap) return;
+    if (isCustomBooking) {
+      selectedPackageType = CUSTOM_BOOKING_TYPE;
+      packageOptionsWrap.innerHTML = "";
+      return;
+    }
+    if (!woodberryPackages.length) {
+      packageOptionsWrap.innerHTML =
+        '<p class="woodberry-package-empty">No packages are currently available for booking.</p>';
+      return;
+    }
+    packageOptionsWrap.innerHTML = woodberryPackages
+      .map(function (pkg) {
+        return (
+          '<label class="woodberry-package-card" for="package-' + pkg.type + '">' +
+          '<input id="package-' + pkg.type + '" type="radio" name="packageType" value="' + pkg.type + '" required ' + (pkg.type === selectedPackageType ? 'checked ' : '') + '/>' +
+          '<span class="woodberry-package-card__body">' +
+          '<span class="woodberry-package-card__top"><strong>' + pkg.name + '</strong><em>Base: ' + formatCurrency(pkg.price) + '</em></span>' +
+          '<span><b>Duration:</b> ' + pkg.duration + '</span>' +
+          '<span><b>Schedule:</b> ' + pkg.schedule + '</span>' +
+          '<span><b>Guest limit:</b> ' + pkg.minPax + '-' + pkg.maxPax + ' guests</span>' +
+          '<small><b>Includes:</b> ' + pkg.inclusions.join(", ") + '</small>' +
+          (pkg.pricingNote ? '<small><b>Pricing:</b> ' + pkg.pricingNote + '</small>' : '') +
+          '</span>' +
+          '</label>'
+        );
+      })
+      .join("");
+
+    packageOptionsWrap.querySelectorAll('input[name="packageType"]').forEach(function (input) {
+      input.addEventListener("change", function () {
+        selectedPackageType = input.value;
+        packageOptionsWrap.querySelectorAll('input[name="packageType"]').forEach(function (packageInput) {
+          packageInput.setCustomValidity("");
+        });
+        applySelectedPackage();
+        calculateNights();
+        validateSelectedAvailability(false, false);
+      });
+    });
+  }
+
+  function getCustomVenueById(id) {
+    return customVenueOptions.find(function (venue) {
+      return venue.id === id;
+    }) || null;
+  }
+
+  function renderCustomVenueDetails() {
+    if (!customVenueDetails) return;
+    var selectedVenue = getCustomVenueById(getSelectedVenueId());
+    if (!selectedVenue) {
+      customVenueDetails.classList.add("hidden");
+      customVenueDetails.innerHTML = "";
+      return;
+    }
+
+    customVenueDetails.innerHTML =
+      '<h4>' + escapeHtml(selectedVenue.name) + '</h4>' +
+      (selectedVenue.description ? '<p>' + escapeHtml(selectedVenue.description) + '</p>' : "") +
+      '<div>' +
+      (selectedVenue.location ? '<span>Location: ' + escapeHtml(selectedVenue.location) + '</span>' : "") +
+      (selectedVenue.capacity ? '<span>Capacity: up to ' + escapeHtml(selectedVenue.capacity) + ' guests</span>' : "") +
+      '</div>';
+    customVenueDetails.classList.remove("hidden");
+  }
+
+  function setCustomVenueOptions(availableVenues, placeholder) {
+    if (!customVenueSelect) return;
+    var currentValue = customVenueSelect.value;
+    customVenueSelect.innerHTML =
+      '<option value="">' + escapeHtml(placeholder || "Choose an available venue") + '</option>' +
+      availableVenues.map(function (venue) {
+        return '<option value="' + escapeHtml(venue.id) + '">' +
+          escapeHtml(venue.name) +
+          (venue.capacity ? " - up to " + escapeHtml(venue.capacity) + " guests" : "") +
+          '</option>';
+      }).join("");
+    customVenueSelect.disabled = !isCustomBooking || availableVenues.length === 0;
+    if (availableVenues.some(function (venue) { return venue.id === currentValue; })) {
+      customVenueSelect.value = currentValue;
+    }
+    renderCustomVenueDetails();
+  }
+
+  async function refreshCustomVenueAvailability(showMessage) {
+    if (!isCustomBooking) return true;
+    var startDate = getStartDateValue();
+    var endDate = getEndDateValue();
+    if (!startDate || !endDate) {
+      setCustomVenueOptions([], "Choose a booking date to see available venues");
+      if (customVenueNotice) customVenueNotice.textContent = "Venue availability updates after you choose a date.";
+      return false;
+    }
+
+    if (customVenueNotice) customVenueNotice.textContent = "Checking available venues...";
+    try {
+      var params = new URLSearchParams({
+        includeVenues: "1",
+        startDate: startDate,
+        endDate: endDate,
+      });
+      var response = await fetch("/api/bookings/availability?" + params.toString());
+      var payload = await response.json().catch(function () {
+        return {};
+      });
+      if (!response.ok) throw new Error(payload.error || payload.message || "Could not load available venues.");
+      if (payload.minimumBookingDate) applyMinimumBookingDateValue(payload.minimumBookingDate);
+      customVenueOptions = payload.venues || customVenueOptions;
+      var availableVenues = customVenueOptions.filter(function (venue) {
+        return venue.isAvailable !== false;
+      });
+      setCustomVenueOptions(
+        availableVenues,
+        availableVenues.length ? "Choose an available venue" : "No venues available for these dates",
+      );
+      if (customVenueNotice) {
+        customVenueNotice.textContent = availableVenues.length
+          ? availableVenues.length + " venue" + (availableVenues.length === 1 ? "" : "s") + " available for your selected dates."
+          : "No venues are available for your selected dates. Please choose another date or date range.";
+      }
+      if (!availableVenues.length && showMessage) {
+        showNotice("No venues are available for your selected dates. Please choose another date or date range.", "error");
+      }
+      return availableVenues.length > 0;
+    } catch (availabilityError) {
+      setCustomVenueOptions([], "Could not load available venues");
+      if (customVenueNotice) customVenueNotice.textContent = availabilityError instanceof Error ? availabilityError.message : "Could not load available venues.";
+      if (showMessage) showNotice(customVenueNotice?.textContent || "Could not load available venues.", "error");
+      return false;
+    }
+  }
+
+  function collectCustomServiceSelections() {
+    return [];
+  }
+
+  function renderCheckedOptions(wrap, options, groupName, usesHours) {
+    if (!wrap) return;
+    wrap.innerHTML = options
+      .map(function (item) {
+        var detail = item.detail || (usesHours
+          ? formatCurrency(item.price) + (item.unit === "block" ? " per 50-guest block" : " per extra hour")
+          : formatCurrency(item.price));
+        var unitLabel = item.unit === "block" ? "50-guest capacity blocks" : "extra hours";
+        var hoursInput = usesHours
+          ? '<input type="number" min="0" step="1" value="0" data-option-hours="' + groupName + '" data-key="' + item.key + '" class="booking-option-card__hours" aria-label="Number of ' + unitLabel + ' for ' + item.label + '" />'
+          : "";
+        return (
+          '<label class="booking-option-card">' +
+          '<span class="booking-option-card__media" aria-hidden="true"><img src="' + item.image + '" alt="" loading="lazy" /></span>' +
+          '<span class="booking-option-card__content">' +
+          '<span class="booking-option-card__heading"><input type="checkbox" data-option-group="' + groupName + '" value="' + item.key + '" /><strong>' + item.label + '</strong></span>' +
+          '<small class="booking-option-card__description">' + (item.description || "Optional booking selection for your Woodberry event.") + '</small>' +
+          '<small class="booking-option-card__price">' + detail + '</small>' +
+          '<small class="booking-option-card__package-lock hidden" data-package-lock-note>Set by this package</small>' +
+          hoursInput +
+          '</span>' +
+          '</label>'
+        );
+      })
+      .join("");
+
+    wrap.querySelectorAll("input").forEach(function (input) {
+      input.addEventListener("change", calculateNights);
+      input.addEventListener("input", calculateNights);
+    });
+  }
+
+  function renderRateOptions() {
+    renderCheckedOptions(roomRateOptionsWrap, roomRates, "rooms", false);
+    renderCheckedOptions(addOnOptionsWrap, addOnOptions, "add-ons", false);
+    renderCheckedOptions(extensionOptionsWrap, extensionOptions, "extensions", true);
+    renderCheckedOptions(corkageOptionsWrap, corkageOptions, "corkage", false);
+    if (roomExtensionHoursInput) {
+      roomExtensionHoursInput.addEventListener("input", calculateNights);
+      roomExtensionHoursInput.addEventListener("change", calculateNights);
+    }
+  }
+
+  function setPackageLockedState(input, locked) {
+    if (!input) return;
+    input.disabled = !!locked;
+    input.dataset.packageLocked = locked ? "true" : "false";
+    var card = input.closest(".booking-option-card");
+    card?.classList.toggle("booking-option-card--locked", !!locked);
+    var note = card?.querySelector("[data-package-lock-note]");
+    if (note && locked) note.textContent = "Set by this package";
+    note?.classList.toggle("hidden", !locked);
+  }
+
+  function setPackageUnavailableState(input, unavailable, message) {
+    if (!input) return;
+    input.dataset.packageUnavailable = unavailable ? "true" : "false";
+    var card = input.closest(".booking-option-card");
+    card?.classList.toggle("booking-option-card--unavailable", !!unavailable);
+    var note = card?.querySelector("[data-package-lock-note]");
+    if (unavailable) {
+      input.checked = false;
+      input.disabled = true;
+      if (note) note.textContent = message || "Not available with selected package";
+      note?.classList.remove("hidden");
+    } else if (!card?.classList.contains("booking-option-card--locked")) {
+      note?.classList.add("hidden");
+    }
+  }
+
+  function setPackageIncludedState(input, included) {
+    if (!input) return;
+    input.dataset.packageIncluded = included ? "true" : "false";
+    var card = input.closest(".booking-option-card");
+    var price = card?.querySelector(".booking-option-card__price");
+    if (price && !input.dataset.originalPriceText) input.dataset.originalPriceText = price.textContent || "";
+    if (price) price.textContent = included ? "Included in selected package" : input.dataset.originalPriceText || price.textContent;
+  }
+
+  function applyOptionGroupDefaults(groupName, defaults, usesQuantity) {
+    document.querySelectorAll('[data-option-group="' + groupName + '"]').forEach(function (input) {
+      input.checked = false;
+      setPackageLockedState(input, false);
+      setPackageUnavailableState(input, false);
+      setPackageIncludedState(input, false);
+      if (usesQuantity) {
+        var quantityInput = document.querySelector('[data-option-hours="' + groupName + '"][data-key="' + input.value + '"]');
+        if (quantityInput) {
+          quantityInput.value = "0";
+          quantityInput.disabled = false;
+          quantityInput.dataset.packageIncluded = "false";
+          quantityInput.dataset.packageIncludedQuantity = "";
+        }
+      }
+    });
+
+    (Array.isArray(defaults) ? defaults : []).forEach(function (item) {
+      var input = document.querySelector('[data-option-group="' + groupName + '"][value="' + item.key + '"]');
+      if (!input) return;
+      input.checked = true;
+      setPackageLockedState(input, item.locked === true);
+      setPackageIncludedState(input, item.included === true);
+      if (usesQuantity) {
+        var quantityInput = document.querySelector('[data-option-hours="' + groupName + '"][data-key="' + item.key + '"]');
+        if (quantityInput) {
+          quantityInput.value = String(Math.max(1, Number(item.quantity) || 1));
+          quantityInput.disabled = item.locked === true;
+          quantityInput.dataset.packageIncluded = item.included === true ? "true" : "false";
+          quantityInput.dataset.packageIncludedQuantity = item.included === true && item.quantity
+            ? String(Math.max(1, Number(item.quantity) || 1))
+            : "";
+        }
+      }
+    });
+  }
+
+  function getPackageLockouts(defaults) {
+    return defaults && typeof defaults.lockouts === "object" && defaults.lockouts
+      ? defaults.lockouts
+      : {};
+  }
+
+  function isPackageSectionLocked(lockouts, sectionKey) {
+    return Array.isArray(lockouts.sections) && lockouts.sections.includes(sectionKey);
+  }
+
+  function lockoutSet(values) {
+    return new Set(Array.isArray(values) ? values : []);
+  }
+
+  function setBookingSectionLockout(sectionKey, locked) {
+    var section = document.querySelector('[data-booking-lockout-section="' + sectionKey + '"]');
+    section?.classList.toggle("booking-option-section--locked-out", !!locked);
+    section?.querySelector("[data-section-lockout-note]")?.classList.toggle("hidden", !locked);
+  }
+
+  function applyOptionGroupLockouts(groupName, lockouts, sectionKey, optionKey, usesQuantity) {
+    var sectionLocked = isPackageSectionLocked(lockouts, sectionKey);
+    var unavailableKeys = lockoutSet(lockouts[optionKey]);
+    setBookingSectionLockout(sectionKey, sectionLocked);
+    document.querySelectorAll('[data-option-group="' + groupName + '"]').forEach(function (input) {
+      var unavailable = sectionLocked || unavailableKeys.has(input.value);
+      setPackageUnavailableState(
+        input,
+        unavailable,
+        sectionLocked ? "This section is not available with selected package" : "Not available with selected package",
+      );
+      if (unavailable) setPackageIncludedState(input, false);
+      if (usesQuantity) {
+        var quantityInput = document.querySelector('[data-option-hours="' + groupName + '"][data-key="' + input.value + '"]');
+        if (quantityInput && unavailable) {
+          quantityInput.value = "0";
+          quantityInput.disabled = true;
+          quantityInput.dataset.packageIncluded = "false";
+          quantityInput.dataset.packageIncludedQuantity = "";
+        }
+      }
+    });
+  }
+
+  function syncPackageEventTypeOptions(selectedPackage) {
+    if (!eventTypeInput) return;
+    var allowed = Array.isArray(selectedPackage?.eventTypes) && selectedPackage.eventTypes.length
+      ? new Set(selectedPackage.eventTypes)
+      : null;
+    var unavailableCount = 0;
+    Array.from(eventTypeInput.options).forEach(function (option) {
+      if (!option.value) return;
+      var isAllowed = !allowed || allowed.has(option.value);
+      option.hidden = !isAllowed;
+      option.disabled = !isAllowed;
+      if (!isAllowed) unavailableCount++;
+    });
+    if (eventTypeInput.value && allowed && !allowed.has(eventTypeInput.value)) {
+      eventTypeInput.value = "";
+    }
+    document.getElementById("eventTypePackageLock")?.classList.toggle("hidden", unavailableCount === 0);
+  }
+
+  function applyPackageBookingDefaults(selectedPackage) {
+    var defaults = selectedPackage?.bookingOptions || {};
+    var lockouts = getPackageLockouts(defaults);
+
+    if (isMultiDayInput) {
+      isMultiDayInput.checked = defaults.isMultiDay?.selected === true;
+      isMultiDayInput.disabled = defaults.isMultiDay?.locked === true;
+      document.getElementById("multiDayPackageLock")?.classList.toggle("hidden", defaults.isMultiDay?.locked !== true);
+    }
+    if (eventTypeInput) {
+      syncPackageEventTypeOptions(selectedPackage);
+      eventTypeInput.disabled = false;
+    }
+    if (customEventTypeInput) {
+      customEventTypeInput.dataset.packageLocked = "false";
+    }
+
+    applyOptionGroupDefaults("rooms", defaults.rooms, false);
+    applyOptionGroupDefaults("add-ons", defaults.addOns, false);
+    applyOptionGroupDefaults("extensions", defaults.extensions, true);
+    applyOptionGroupDefaults("corkage", defaults.corkage, false);
+    applyOptionGroupLockouts("rooms", lockouts, "rooms", "rooms", false);
+    applyOptionGroupLockouts("add-ons", lockouts, "addOns", "addOns", false);
+    applyOptionGroupLockouts("extensions", lockouts, "extensions", "extensions", true);
+    applyOptionGroupLockouts("corkage", lockouts, "corkage", "corkage", false);
+
+    if (roomExtensionHoursInput) {
+      roomExtensionHoursInput.value = defaults.roomExtensionHours?.value
+        ? String(defaults.roomExtensionHours.value)
+        : "0";
+      roomExtensionHoursInput.disabled = defaults.roomExtensionHours?.locked === true;
+      roomExtensionHoursInput.dataset.packageIncluded = defaults.roomExtensionHours?.included === true ? "true" : "false";
+      roomExtensionHoursInput.dataset.packageIncludedQuantity = defaults.roomExtensionHours?.included === true && defaults.roomExtensionHours?.value
+        ? String(defaults.roomExtensionHours.value)
+        : "";
+      var roomExtensionUnavailable = isPackageSectionLocked(lockouts, "rooms") || lockouts.roomExtensionHours === true;
+      roomExtensionHoursInput.dataset.packageUnavailable = roomExtensionUnavailable ? "true" : "false";
+      if (roomExtensionUnavailable) {
+        roomExtensionHoursInput.value = "0";
+        roomExtensionHoursInput.disabled = true;
+        roomExtensionHoursInput.dataset.packageIncluded = "false";
+        roomExtensionHoursInput.dataset.packageIncludedQuantity = "";
+      }
+      var roomExtensionLockNote = document.getElementById("roomExtensionPackageLock");
+      if (roomExtensionLockNote) {
+        roomExtensionLockNote.textContent = roomExtensionUnavailable
+          ? "These hours are not available with the selected package."
+          : "These hours are locked by the selected package.";
+        roomExtensionLockNote.classList.toggle("hidden", !roomExtensionUnavailable && defaults.roomExtensionHours?.locked !== true);
+      }
+      roomExtensionHoursInput.closest(".booking-option-card")?.classList.toggle("booking-option-card--unavailable", roomExtensionUnavailable);
+    }
+
+    syncDateTimeMode();
+    syncCustomEventType();
+  }
+
+  function collectSelectedOptions(groupName, options, usesHours) {
+    return options
+      .map(function (item) {
+        var checkbox = document.querySelector('[data-option-group="' + groupName + '"][value="' + item.key + '"]');
+        if (!checkbox || checkbox.dataset.packageUnavailable === "true" || !checkbox.checked) return null;
+        var hours = 1;
+        var includedQuantity = 0;
+        if (usesHours) {
+          var hoursInput = document.querySelector('[data-option-hours="' + groupName + '"][data-key="' + item.key + '"]');
+          hours = Math.max(0, Number(hoursInput?.value) || 0);
+          if (hours <= 0) return null;
+          includedQuantity = checkbox.dataset.packageIncluded === "true"
+            ? Math.min(hours, Math.max(0, Number(hoursInput?.dataset.packageIncludedQuantity) || hours))
+            : 0;
+        }
+        var included = checkbox.dataset.packageIncluded === "true";
+        var amount = included && !usesHours ? 0 : item.price * Math.max(0, hours - includedQuantity);
+        return {
+          key: item.key,
+          label: item.label,
+          price: item.price,
+          quantity: usesHours ? undefined : 1,
+          hours: usesHours ? hours : undefined,
+          unit: usesHours ? item.unit : undefined,
+          included: included,
+          includedQuantity: usesHours && included ? includedQuantity : undefined,
+          amount: amount,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function getSelectedRooms() {
+    var rooms = collectSelectedOptions("rooms", roomRates, false);
+    if (roomExtensionHoursInput?.dataset.packageUnavailable === "true") return rooms;
+    var extensionHours = Math.max(0, Number(roomExtensionHoursInput?.value) || 0);
+    if (extensionHours > 0) {
+      var extensionIncluded = roomExtensionHoursInput?.dataset.packageIncluded === "true";
+      var includedQuantity = extensionIncluded
+        ? Math.min(extensionHours, Math.max(0, Number(roomExtensionHoursInput?.dataset.packageIncludedQuantity) || extensionHours))
+        : 0;
+      rooms.push({
+        key: roomExtensionOption.key,
+        label: roomExtensionOption.label,
+        price: roomExtensionOption.price,
+        hours: extensionHours,
+        included: extensionIncluded,
+        includedQuantity: extensionIncluded ? includedQuantity : undefined,
+        amount: roomExtensionOption.price * Math.max(0, extensionHours - includedQuantity),
+      });
+    }
+    return rooms;
+  }
+
+  function sumAmounts(items) {
+    return items.reduce(function (sum, item) {
+      return sum + Number(item.amount ?? item.price ?? 0);
+    }, 0);
+  }
+
+  function fmtDate(str) {
+    if (!str) return "N/A";
+    var d = new Date(str + "T00:00:00");
+    return d.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
+
+  function fmtDateTime(str) {
+    if (!str) return "Not specified";
+    return new Date(str).toLocaleString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  function parseDateOnly(str) {
+    if (!str) return null;
+    var parts = str.split("-").map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  function parseDateTimeLocal(str) {
+    if (!str) return null;
+    var date = new Date(str);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function formatDateOnly(date) {
+    var year = date.getFullYear();
+    var month = String(date.getMonth() + 1).padStart(2, "0");
+    var day = String(date.getDate()).padStart(2, "0");
+    return year + "-" + month + "-" + day;
+  }
+
+  var minimumBookingDate = parseDateOnly(initialMinimumBookingDateValue);
+  var minimumBookingDateValue = initialMinimumBookingDateValue;
+  var unavailableDateMessage = "Selected dates are unavailable. Please choose another date.";
+  var availabilityCheckMessage = "We could not verify availability for the selected venue. Please try again.";
+  var availabilityCache = {};
+  var dateAvailabilityValidationRun = 0;
+
+  function syncDateInputMinimums() {
+    var minimumDateTime = minimumBookingDateValue + "T00:00";
+    if (startDateTimeInput) startDateTimeInput.min = minimumDateTime;
+    if (endDateTimeInput) {
+      endDateTimeInput.min = startDateTimeInput?.value || minimumDateTime;
+      endDateTimeInput.max = !isMultiDayInput?.checked && getStartDateValue()
+        ? getStartDateValue() + "T23:59"
+        : "";
+    }
+  }
+
+  function applyMinimumBookingDateValue(nextMinimumBookingDateValue) {
+    var nextMinimumBookingDate = parseDateOnly(nextMinimumBookingDateValue);
+    if (!nextMinimumBookingDate || Number.isNaN(nextMinimumBookingDate.getTime())) return;
+
+    minimumBookingDate = nextMinimumBookingDate;
+    minimumBookingDateValue = nextMinimumBookingDateValue;
+    syncDateInputMinimums();
+  }
+
+  applyMinimumBookingDateValue(minimumBookingDateValue);
+
+  function showNotice(msg, type) {
+    if (!noticeEl) return;
+    noticeEl.className =
+      "mb-4 px-4 py-3 rounded-lg text-sm font-semibold flex items-center gap-2 " +
+      (type === "success"
+        ? "bg-green-100 text-green-800"
+        : "bg-red-100 text-red-800");
+    noticeEl.textContent = msg;
+    noticeEl.classList.remove("hidden");
+    noticeEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  var friendlyRequiredMessages = {
+    fullName: "Please enter the primary contact's full name.",
+    email: "Please enter the email address where you want to receive booking updates.",
+    phone: "Please enter a mobile number where Woodberry can contact you.",
+    address: "Please enter your complete home or billing address.",
+    startDateTime: "Please choose the event or stay start date and time.",
+    endDateTime: "Please choose the stay end date and time.",
+    guests: "Please enter the expected number of guests.",
+    eventType: "Please choose the type of celebration or event.",
+    customEventType: "Please specify the celebration or event type.",
+    packageType: "Please choose a booking package.",
+    customVenueId: "Please choose an available venue for your custom booking.",
+  };
+
+  function getFriendlyFieldMessage(input) {
+    if (input.validity.typeMismatch && input.type === "email") {
+      return "Please enter a complete email address, such as name@example.com.";
+    }
+    if (input.validity.tooShort) {
+      if (input.id === "phone") return "Please enter a valid mobile number with at least 7 characters.";
+      if (input.id === "address") return "Please enter a more complete address, including your city or municipality.";
+      return "Please provide a complete value for this field.";
+    }
+    if (input.validity.rangeUnderflow && input.id === "guests") {
+      return "The expected number of guests must be at least 1.";
+    }
+    if (input.validity.badInput && input.id === "guests") {
+      return "Please enter the expected number of guests as a whole number.";
+    }
+    return friendlyRequiredMessages[input.name] || "Please review this field and enter a valid value.";
+  }
+
+  function attachFriendlyValidation() {
+    form.querySelectorAll("input, select, textarea").forEach(function (input) {
+      input.addEventListener("invalid", function () {
+        if (input.hasAttribute("data-availability-invalid")) return;
+        input.setCustomValidity(getFriendlyFieldMessage(input));
+      });
+      ["input", "change"].forEach(function (eventName) {
+        input.addEventListener(eventName, function () {
+          if (!input.hasAttribute("data-availability-invalid")) input.setCustomValidity("");
+        });
+      });
+    });
+  }
+
+  function hideAvailabilityNoticeIfCurrent(message) {
+    if (!noticeEl || !noticeEl.textContent.includes(message)) return;
+    noticeEl.classList.add("hidden");
+  }
+
+  function setDateAvailabilityValidity(message) {
+    [startDateTimeInput, endDateTimeInput].filter(Boolean).forEach(function (input) {
+      input.setCustomValidity(message || "");
+      input.toggleAttribute("data-availability-invalid", !!message);
+      input.setAttribute("aria-invalid", message ? "true" : "false");
+    });
+  }
+
+  function availabilityMonthKey(year, monthIndex) {
+    return String(getSelectedPackageId() || getSelectedVenueId() || "all") + "-" + year + "-" + monthIndex;
+  }
+
+  function addDateRangeToSet(set, startISO, endISO) {
+    var start = parseDateOnly(String(startISO || "").slice(0, 10));
+    var end = parseDateOnly(String(endISO || startISO || "").slice(0, 10));
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+    for (var day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+      set.add(formatDateOnly(day));
+    }
+  }
+
+  function addBlockedDatesToSet(set, blockedDates) {
+    (blockedDates || []).forEach(function (blockedDate) {
+      if (typeof blockedDate === "string") {
+        set.add(blockedDate.slice(0, 10));
+        return;
+      }
+      var start =
+        blockedDate.date ||
+        blockedDate.blocked_date ||
+        blockedDate.start_date ||
+        blockedDate.startDate;
+      var end = blockedDate.end_date || blockedDate.endDate || start;
+      if (start) addDateRangeToSet(set, start, end);
+    });
+  }
+
+  async function fetchAvailabilityMonth(year, monthIndex, forceRefresh) {
+    var key = availabilityMonthKey(year, monthIndex);
+    if (!forceRefresh && availabilityCache[key]) return availabilityCache[key];
+
+    var params = new URLSearchParams({
+      year: String(year),
+      month: String(monthIndex + 1),
+    });
+    if (isCustomBooking) {
+      if (getSelectedVenueId()) params.set("venueId", getSelectedVenueId());
+    } else if (getSelectedPackageId()) {
+      params.set("packageId", getSelectedPackageId());
+    }
+
+    var response = await fetch("/api/bookings/availability?" + params.toString());
+    var payload = await response.json().catch(function () {
+      return {};
+    });
+    if (!response.ok) throw new Error(payload.error || payload.message || availabilityCheckMessage);
+    if (payload.minimumBookingDate) applyMinimumBookingDateValue(payload.minimumBookingDate);
+
+    var unavailableDates = new Set();
+    (payload.bookings || []).forEach(function (booking) {
+      addDateRangeToSet(unavailableDates, booking.start_date, booking.end_date);
+      if (booking.event_date) unavailableDates.add(String(booking.event_date).slice(0, 10));
+    });
+    addBlockedDatesToSet(unavailableDates, payload.blockedDates);
+
+    availabilityCache[key] = unavailableDates;
+    return unavailableDates;
+  }
+
+  function selectedMonthKeys(startDate, endDate, eventDate) {
+    var keys = [];
+    var seen = new Set();
+
+    function addMonth(date) {
+      var key = date.getFullYear() + "-" + date.getMonth();
+      if (seen.has(key)) return;
+      seen.add(key);
+      keys.push({ year: date.getFullYear(), monthIndex: date.getMonth() });
+    }
+
+    var cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    var last = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    while (cursor <= last) {
+      addMonth(cursor);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    if (eventDate) addMonth(eventDate);
+
+    return keys;
+  }
+
+  async function getUnavailableDatesForSelection(startDate, endDate, eventDate, forceRefresh) {
+    var unavailableDates = new Set();
+    var months = selectedMonthKeys(startDate, endDate, eventDate);
+    for (var i = 0; i < months.length; i++) {
+      var monthDates = await fetchAvailabilityMonth(
+        months[i].year,
+        months[i].monthIndex,
+        forceRefresh,
+      );
+      monthDates.forEach(function (date) {
+        unavailableDates.add(date);
+      });
+    }
+    return unavailableDates;
+  }
+
+  function selectionOverlapsUnavailableDates(startDate, endDate, eventDate, unavailableDates) {
+    for (var day = new Date(startDate); day <= endDate; day.setDate(day.getDate() + 1)) {
+      if (day < minimumBookingDate || unavailableDates.has(formatDateOnly(day))) return true;
+    }
+    return !!eventDate && (eventDate < minimumBookingDate || unavailableDates.has(formatDateOnly(eventDate)));
+  }
+
+  async function validateSelectedAvailability(showMessage, forceRefresh) {
+    var run = ++dateAvailabilityValidationRun;
+    setDateAvailabilityValidity("");
+
+    if (isCustomBooking && !getSelectedVenueId()) return true;
+
+    var selectedStartDate = parseDateOnly(getStartDateValue());
+    var selectedEndDate = parseDateOnly(getEndDateValue());
+    var selectedEventDate = selectedStartDate;
+    if (!selectedStartDate || !selectedEndDate || !selectedEventDate) return true;
+    if (selectedEndDate < selectedStartDate) return true;
+
+    try {
+      var unavailableDates = await getUnavailableDatesForSelection(
+        selectedStartDate,
+        selectedEndDate,
+        selectedEventDate,
+        forceRefresh,
+      );
+      if (run !== dateAvailabilityValidationRun) return true;
+
+      if (
+        selectionOverlapsUnavailableDates(
+          selectedStartDate,
+          selectedEndDate,
+          selectedEventDate,
+          unavailableDates,
+        )
+      ) {
+        setDateAvailabilityValidity(unavailableDateMessage);
+        if (showMessage) showNotice(unavailableDateMessage, "error");
+        return false;
+      }
+
+      hideAvailabilityNoticeIfCurrent(unavailableDateMessage);
+      hideAvailabilityNoticeIfCurrent(availabilityCheckMessage);
+      return true;
+    } catch (availabilityError) {
+      if (run !== dateAvailabilityValidationRun) return true;
+      setDateAvailabilityValidity(availabilityCheckMessage);
+      if (showMessage) showNotice(availabilityCheckMessage, "error");
+      return false;
+    }
+  }
+
+  function calculateNights() {
+    var nights = 0;
+    if (getStartDateValue() && getEndDateValue()) {
+      var checkIn = parseDateOnly(getStartDateValue());
+      var checkOut = parseDateOnly(getEndDateValue());
+      if (checkIn && checkOut && checkOut > checkIn) {
+        nights = Math.ceil((checkOut - checkIn) / 86400000);
+      }
+    }
+
+    var selectedPackage = getSelectedPackage();
+    var packageBase = selectedPackage ? selectedPackage.price : 0;
+    var selectedRooms = getSelectedRooms();
+    var selectedAddOns = collectSelectedOptions("add-ons", addOnOptions, false);
+    var selectedExtensions = collectSelectedOptions("extensions", extensionOptions, true);
+    var selectedCorkage = collectSelectedOptions("corkage", corkageOptions, false);
+    var customItems = collectCustomServiceSelections();
+    var selectedOptionItems = selectedRooms.concat(selectedAddOns, selectedExtensions, selectedCorkage, customItems);
+    var roomsTotal = sumAmounts(selectedRooms);
+    var addOnsTotal = sumAmounts(selectedAddOns);
+    var extensionsTotal = sumAmounts(selectedExtensions);
+    var corkageTotal = sumAmounts(selectedCorkage);
+    var roughAdditionsTotal = roomsTotal + addOnsTotal + extensionsTotal + corkageTotal;
+    var total = packageBase + roughAdditionsTotal;
+    var minimumPayment = total * 0.5;
+    var remainingBalance = total - minimumPayment;
+
+    if (isCustomBooking) {
+      optionalExtrasDisplay.textContent = formatCurrency(roughAdditionsTotal);
+      if (packageBaseDisplay) packageBaseDisplay.textContent = "Determined after request review";
+      totalPriceEl.textContent = "Subject to admin review";
+      minimumPaymentEl.textContent = "Determined after admin review";
+      remainingBalanceEl.textContent = "Subject to admin review";
+    } else {
+      optionalExtrasDisplay.textContent = formatCurrency(roomsTotal + addOnsTotal + extensionsTotal + corkageTotal);
+      if (packageBaseDisplay) packageBaseDisplay.textContent = selectedPackage ? formatCurrency(packageBase) : "Select a package";
+      totalPriceEl.textContent = formatCurrency(total);
+      minimumPaymentEl.textContent = formatCurrency(minimumPayment);
+      remainingBalanceEl.textContent = formatCurrency(remainingBalance);
+    }
+
+    return {
+      nights: nights,
+      total: isCustomBooking ? 0 : total,
+      packageBase: isCustomBooking ? 0 : packageBase,
+      roomsTotal: roomsTotal,
+      addOnsTotal: addOnsTotal,
+      extensionsTotal: extensionsTotal,
+      corkageTotal: corkageTotal,
+      roughAdditionsTotal: roughAdditionsTotal,
+      minimumPayment: isCustomBooking ? 0 : minimumPayment,
+      remainingBalance: isCustomBooking ? 0 : remainingBalance,
+      selectedRooms: selectedRooms,
+      selectedAddOns: selectedAddOns,
+      selectedExtensions: selectedExtensions,
+      selectedCorkage: selectedCorkage,
+      customItems: customItems,
+      selectedOptionItems: selectedOptionItems,
+    };
+  }
+
+  function applySelectedPackage() {
+    applyPackageBookingDefaults(getSelectedPackage());
+    validatePackagePax(false);
+  }
+
+  function validatePackagePax(showMessage) {
+    var selectedPackage = getSelectedPackage();
+    var guestsInput = document.getElementById("guests");
+    var pax = Number(guestsInput?.value) || 0;
+    if (isCustomBooking) {
+      var selectedVenue = getCustomVenueById(getSelectedVenueId());
+      if (!selectedVenue) {
+        if (showMessage) showNotice("Please choose an available venue for your custom booking.", "error");
+        return false;
+      }
+      var capacity = Number(selectedVenue.capacity) || 0;
+      var customValid = !capacity || !pax || pax <= capacity;
+      if (packageLimitNotice) {
+        packageLimitNotice.classList.toggle("hidden", customValid || !capacity || !pax);
+        if (!customValid) {
+          packageLimitNotice.textContent =
+            selectedVenue.name +
+            " can accommodate up to " +
+            capacity +
+            " guests. Please adjust the guest count or choose another venue.";
+        }
+      }
+      if (!customValid && showMessage) {
+        showNotice(
+          selectedVenue.name +
+            " can accommodate up to " +
+            capacity +
+            " guests. Please adjust the guest count or choose another venue.",
+          "error",
+        );
+      }
+      return customValid;
+    }
+    var valid = !!selectedPackage && pax >= selectedPackage.minPax && pax <= selectedPackage.maxPax;
+    if (packageLimitNotice) {
+      packageLimitNotice.classList.toggle("hidden", valid || !selectedPackage || !pax);
+      if (selectedPackage && pax) {
+        packageLimitNotice.textContent =
+          selectedPackage.name +
+          " allows " +
+          selectedPackage.minPax +
+          "-" +
+          selectedPackage.maxPax +
+          " guests. Please adjust the guest count or choose another package.";
+      }
+    }
+    if (!valid && showMessage) {
+      if (!selectedPackage) {
+        showNotice("Please choose a Woodberry package.", "error");
+      } else {
+        showNotice(
+          selectedPackage.name +
+            " allows " +
+            selectedPackage.minPax +
+            "-" +
+            selectedPackage.maxPax +
+            " guests. Please adjust the guest count or choose another package.",
+          "error",
+        );
+      }
+    }
+    return valid;
+  }
+
+  function syncCaterer() {
+    if (!catererInput || !useWoodberryCatererInput) return;
+    if (useWoodberryCatererInput.checked) {
+      catererInput.value = woodberryCatererName;
+      catererInput.disabled = true;
+    } else {
+      catererInput.disabled = false;
+      if (catererInput.value === woodberryCatererName) catererInput.value = "";
+    }
+  }
+
+  function getEventTypeLabel() {
+    var eventType = document.getElementById("eventType");
+    if (!eventType || !eventType.value) return "N/A";
+    if (eventType.value === "other") {
+      return customEventTypeInput?.value.trim() || "Other";
+    }
+    return eventType.options[eventType.selectedIndex].textContent || eventType.value;
+  }
+
+  function getNotificationPreference() {
+    var selected = document.querySelector('input[name="notificationPreference"]:checked');
+    return selected ? selected.value : "both";
+  }
+
+  function getNotificationPreferenceLabel() {
+    var preference = getNotificationPreference();
+    if (preference === "email") return "Email only";
+    if (preference === "sms") return "SMS only";
+    return "Both email and SMS";
+  }
+
+  function getSuccessNotificationMessage(preference) {
+    if (preference === "email") {
+      return "You chose email only. We will send confirmations, schedules, reminders, and important booking updates to your email address.";
+    }
+    if (preference === "sms") {
+      return "You chose SMS only. We will send confirmations, schedules, reminders, and important booking updates to your mobile number.";
+    }
+    return "You chose both email and SMS. We will send confirmations, schedules, reminders, and important booking updates by email and SMS.";
+  }
+
+  function validatePackageSchedule(showMessage) {
+    var selectedPackage = getSelectedPackage();
+    var timeOptions = selectedPackage?.timeOptions;
+    if (
+      isCustomBooking ||
+      !timeOptions ||
+      typeof timeOptions !== "object" ||
+      !["fixed_range", "duration", "range_duration"].includes(timeOptions.mode)
+    ) {
+      return true;
+    }
+
+    var selectedStart = parseDateTimeLocal(startDateTimeInput?.value || "");
+    var selectedEnd = parseDateTimeLocal(endDateTimeInput?.value || "");
+    if (!selectedStart || !selectedEnd || selectedEnd <= selectedStart) return true;
+
+    if (timeOptions.mode === "fixed_range" || timeOptions.mode === "range_duration") {
+      var fromMinutes = timeToMinutes(timeOptions.from_time);
+      var toMinutes = timeToMinutes(timeOptions.to_time);
+      if (fromMinutes === null || toMinutes === null || fromMinutes === toMinutes) return true;
+      var rangeMinutes = toMinutes > fromMinutes
+        ? toMinutes - fromMinutes
+        : 24 * 60 - fromMinutes + toMinutes;
+      var selectedStartMinutes = selectedStart.getTime() / 60000;
+      var selectedEndMinutes = selectedEnd.getTime() / 60000;
+      var startOfSelectedDay = new Date(
+        selectedStart.getFullYear(),
+        selectedStart.getMonth(),
+        selectedStart.getDate(),
+      ).getTime() / 60000;
+      var fitsRange = [startOfSelectedDay, startOfSelectedDay - 24 * 60].some(function (dayStart) {
+        var windowStart = dayStart + fromMinutes;
+        var windowEnd = windowStart + rangeMinutes;
+        return selectedStartMinutes >= windowStart && selectedEndMinutes <= windowEnd;
+      });
+      if (!fitsRange) {
+        if (showMessage) {
+          showNotice(
+            "The selected start and end must fit within the package time range (" +
+              timeOptions.from_time + "-" + timeOptions.to_time + ").",
+            "error",
+          );
+        }
+        return false;
+      }
+    }
+
+    if (timeOptions.mode === "duration" || timeOptions.mode === "range_duration") {
+      var requiredMinutes = Math.round(Number(timeOptions.hours) * 60);
+      if (!Number.isFinite(requiredMinutes) || requiredMinutes <= 0) return true;
+      var actualMinutes = Math.round((selectedEnd.getTime() - selectedStart.getTime()) / 60000);
+      if (actualMinutes !== requiredMinutes) {
+        if (showMessage) {
+          showNotice(
+            "This package requires a booking duration of exactly " + formatDurationHours(timeOptions.hours) + ".",
+            "error",
+          );
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function timeToMinutes(value) {
+    if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
+    var parts = value.split(":").map(Number);
+    return parts[0] * 60 + parts[1];
+  }
+
+  function formatDurationHours(value) {
+    var hours = Number(value);
+    return hours + " " + (hours === 1 ? "hour" : "hours");
+  }
+
+  function populateOptionSummary(items) {
+    var wrap = document.getElementById("conf-additionals");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+
+    if (!items.length) {
+      var empty = document.createElement("div");
+      empty.className = "booking-summary-card booking-summary-card--empty";
+      empty.textContent = "No optional rooms, add-ons, extensions, or corkage selected.";
+      wrap.appendChild(empty);
+      return;
+    }
+
+    items.forEach(function (item) {
+      var card = document.createElement("div");
+      card.className = "booking-summary-card";
+      var title = document.createElement("p");
+      title.className = "font-semibold";
+      title.textContent = (item.category ? item.category + ": " : "") + item.label;
+      card.appendChild(title);
+      var meta = document.createElement("p");
+      meta.className = "booking-summary-card__meta";
+      var requestedUnits = item.hours
+        ? item.hours + (item.unit === "block" ? " guest-capacity block" : " extra hour") + (item.hours === 1 ? "" : "s") + " - "
+        : "";
+      var includedUnits = item.includedQuantity
+        ? item.includedQuantity + (item.unit === "block" ? " included block" : " included hour") + (item.includedQuantity === 1 ? "" : "s") + " - "
+        : "";
+      meta.textContent = isCustomBooking
+        ? requestedUnits + "Rough estimate: " + formatCurrency(item.amount ?? item.price)
+        : item.included
+          ? includedUnits + (Number(item.amount) > 0 ? formatCurrency(item.amount) + " extra" : "Included in selected package")
+          : requestedUnits + formatCurrency(item.amount ?? item.price);
+      card.appendChild(meta);
+      wrap.appendChild(card);
+    });
+  }
+
+  startDateTimeInput.addEventListener("change", async function () {
+    syncDateInputMinimums();
+    calculateNights();
+    if (isCustomBooking) await refreshCustomVenueAvailability(true);
+    await validateSelectedAvailability(true, false);
+  });
+  endDateTimeInput.addEventListener("change", async function () {
+    calculateNights();
+    if (isCustomBooking) await refreshCustomVenueAvailability(true);
+    await validateSelectedAvailability(true, false);
+  });
+  isMultiDayInput.addEventListener("change", async function () {
+    syncDateTimeMode();
+    calculateNights();
+    if (isCustomBooking) await refreshCustomVenueAvailability(true);
+    await validateSelectedAvailability(true, false);
+  });
+  eventTypeInput.addEventListener("change", syncCustomEventType);
+  useAccountDetailsInput.addEventListener("change", fillAccountDetails);
+  document.getElementById("guests").addEventListener("input", function () {
+    validatePackagePax(false);
+    calculateNights();
+  });
+  useWoodberryCatererInput.addEventListener("change", syncCaterer);
+  customVenueSelect?.addEventListener("change", async function () {
+    renderCustomVenueDetails();
+    validatePackagePax(false);
+    await validateSelectedAvailability(true, true);
+  });
+  customOtherRequestInput?.addEventListener("input", calculateNights);
+
+  async function validateMainForm(forceAvailabilityRefresh) {
+    setDateAvailabilityValidity("");
+    if (noticeEl) noticeEl.classList.add("hidden");
+
+    form.querySelectorAll("input, select, textarea").forEach(function (input) {
+      if (!input.hasAttribute("data-availability-invalid")) input.setCustomValidity("");
+    });
+
+    if (!form.checkValidity()) {
+      var firstInvalidField = form.querySelector(":invalid");
+      var invalidStep = firstInvalidField?.closest("[data-booking-step]");
+      if (invalidStep) goToBookingStep(Number(invalidStep.dataset.bookingStep), false);
+      showNotice(
+        firstInvalidField?.validationMessage || "Please complete all required booking details.",
+        "error",
+      );
+      form.reportValidity();
+      firstInvalidField?.focus();
+      return false;
+    }
+
+    var selectedStartDate = parseDateOnly(getStartDateValue());
+    var selectedEndDate = parseDateOnly(getEndDateValue());
+    var selectedEventDate = selectedStartDate;
+
+    if (
+      !selectedStartDate ||
+      !selectedEndDate ||
+      !selectedEventDate ||
+      selectedStartDate < minimumBookingDate ||
+      selectedEndDate < minimumBookingDate
+    ) {
+      goToBookingStep(1, false);
+      showNotice("Bookings must be made at least 1 week in advance.", "error");
+      return false;
+    }
+
+    if (isMultiDayInput.checked) {
+      if (selectedEndDate <= selectedStartDate) {
+        goToBookingStep(1, false);
+        showNotice("A multi-day stay must end on a later calendar date.", "error");
+        return false;
+      }
+      var selectedStartDateTime = parseDateTimeLocal(startDateTimeInput.value);
+      var selectedEndDateTime = parseDateTimeLocal(endDateTimeInput.value);
+      if (!selectedStartDateTime || !selectedEndDateTime || selectedEndDateTime <= selectedStartDateTime) {
+        goToBookingStep(1, false);
+        showNotice("Stay end date and time must be after the start date and time.", "error");
+        return false;
+      }
+    }
+    if (!isMultiDayInput.checked && selectedEndDate.getTime() !== selectedStartDate.getTime()) {
+      goToBookingStep(1, false);
+      showNotice("A single-day booking must start and end on the same calendar date.", "error");
+      endDateTimeInput.focus();
+      return false;
+    }
+    var selectedStartDateTime = parseDateTimeLocal(startDateTimeInput.value);
+    var selectedEndDateTime = parseDateTimeLocal(endDateTimeInput.value);
+    if (!selectedStartDateTime || !selectedEndDateTime || selectedEndDateTime <= selectedStartDateTime) {
+      goToBookingStep(1, false);
+      showNotice("Booking end date and time must be after the start date and time.", "error");
+      endDateTimeInput.focus();
+      return false;
+    }
+
+    if (isCustomBooking && !(await refreshCustomVenueAvailability(true))) {
+      goToBookingStep(1, false);
+      return false;
+    }
+    if (!validatePackagePax(true)) {
+      goToBookingStep(1, false);
+      return false;
+    }
+    if (!validatePackageSchedule(true)) {
+      goToBookingStep(1, false);
+      startDateTimeInput.focus();
+      return false;
+    }
+    if (!(await validateSelectedAvailability(true, !!forceAvailabilityRefresh))) {
+      goToBookingStep(1, false);
+      return false;
+    }
+
+    return true;
+  }
+
+  function validateCurrentStepControls(stepIndex) {
+    var step = bookingSteps[stepIndex];
+    if (!step) return true;
+    var controls = Array.from(step.querySelectorAll("input, select, textarea"));
+    var firstInvalidField = controls.find(function (input) {
+      return !input.disabled && !input.checkValidity();
+    });
+    if (!firstInvalidField) return true;
+
+    showNotice(firstInvalidField.validationMessage || "Please complete this step before continuing.", "error");
+    firstInvalidField.reportValidity();
+    firstInvalidField.focus();
+    return false;
+  }
+
+  async function validateBookingStep(stepIndex) {
+    if (noticeEl) noticeEl.classList.add("hidden");
+    if (stepIndex === 1) setDateAvailabilityValidity("");
+    if (!validateCurrentStepControls(stepIndex)) return false;
+    if (stepIndex !== 1) return true;
+
+    var selectedStartDate = parseDateOnly(getStartDateValue());
+    var selectedEndDate = parseDateOnly(getEndDateValue());
+    if (!selectedStartDate || !selectedEndDate || selectedStartDate < minimumBookingDate) {
+      showNotice("Bookings must be made at least 1 week in advance.", "error");
+      startDateTimeInput.focus();
+      return false;
+    }
+    if (isMultiDayInput.checked && selectedEndDate <= selectedStartDate) {
+      showNotice("A multi-day stay must end on a later calendar date.", "error");
+      endDateTimeInput.focus();
+      return false;
+    }
+    if (isMultiDayInput.checked) {
+      var selectedStartDateTime = parseDateTimeLocal(startDateTimeInput.value);
+      var selectedEndDateTime = parseDateTimeLocal(endDateTimeInput.value);
+      if (!selectedStartDateTime || !selectedEndDateTime || selectedEndDateTime <= selectedStartDateTime) {
+        showNotice("Stay end date and time must be after the start date and time.", "error");
+        endDateTimeInput.focus();
+        return false;
+      }
+    }
+    if (!isMultiDayInput.checked && selectedEndDate.getTime() !== selectedStartDate.getTime()) {
+      showNotice("A single-day booking must start and end on the same calendar date.", "error");
+      endDateTimeInput.focus();
+      return false;
+    }
+    var selectedStartDateTime = parseDateTimeLocal(startDateTimeInput.value);
+    var selectedEndDateTime = parseDateTimeLocal(endDateTimeInput.value);
+    if (!selectedStartDateTime || !selectedEndDateTime || selectedEndDateTime <= selectedStartDateTime) {
+      showNotice("Booking end date and time must be after the start date and time.", "error");
+      endDateTimeInput.focus();
+      return false;
+    }
+    if (isCustomBooking && !(await refreshCustomVenueAvailability(true))) return false;
+    if (!validatePackagePax(true)) return false;
+    if (!validatePackageSchedule(true)) {
+      startDateTimeInput.focus();
+      return false;
+    }
+    return validateSelectedAvailability(true, false);
+  }
+
+  bookingBackBtn?.addEventListener("click", function () {
+    goToBookingStep(currentBookingStep - 1, true);
+  });
+
+  bookingNextBtn?.addEventListener("click", async function () {
+    if (bookingNextBtn.disabled) return;
+    bookingNextBtn.disabled = true;
+    bookingNextBtn.textContent = "Checking this step...";
+    try {
+      if (!(await validateBookingStep(currentBookingStep))) return;
+      maximumVisitedStep = Math.max(maximumVisitedStep, currentBookingStep + 1);
+      goToBookingStep(currentBookingStep + 1, true);
+    } finally {
+      bookingNextBtn.disabled = false;
+      if (!bookingNextBtn.hidden) {
+        bookingNextBtn.textContent = "Next: " + bookingStepLabels[currentBookingStep + 1];
+      }
+    }
+  });
+
+  bookingStepTriggers.forEach(function (trigger) {
+    trigger.addEventListener("click", async function () {
+      var targetStep = Number(trigger.dataset.stepTarget);
+      if (targetStep > maximumVisitedStep || targetStep === currentBookingStep) return;
+      if (targetStep > currentBookingStep && !(await validateBookingStep(currentBookingStep))) return;
+      goToBookingStep(targetStep, true);
+    });
+  });
+
+  function openConfirmationModal() {
+    var totals = calculateNights();
+    var catererValue = catererInput.value.trim() || "N/A";
+    var selectedPackage = getSelectedPackage();
+    var selectedVenue = isCustomBooking ? getCustomVenueById(getSelectedVenueId()) : null;
+
+    document.getElementById("conf-venue").textContent = isCustomBooking
+      ? (selectedVenue?.name || "Selected venue")
+      : selectedPackage?.name || venueName || "Woodberry package";
+    document.getElementById("conf-name").textContent =
+      document.getElementById("fullName").value || "N/A";
+    document.getElementById("conf-phone").textContent =
+      document.getElementById("phone").value || "N/A";
+    document.getElementById("conf-email").textContent =
+      document.getElementById("email").value || "N/A";
+    document.getElementById("conf-address").textContent = addressInput.value || "N/A";
+    document.getElementById("conf-notifications").textContent =
+      getNotificationPreferenceLabel();
+    document.getElementById("conf-checkin").textContent = fmtDateTime(startDateTimeInput.value);
+    document.getElementById("conf-checkout").textContent = fmtDateTime(endDateTimeInput.value);
+    document.getElementById("conf-eventdate").textContent = fmtDate(getStartDateValue());
+    document.getElementById("conf-guests").textContent =
+      document.getElementById("guests").value + " guests";
+    document.getElementById("conf-eventtype").textContent = getEventTypeLabel();
+    document.getElementById("conf-nights").textContent = isMultiDayInput.checked
+      ? totals.nights + " night" + (totals.nights !== 1 ? "s" : "")
+      : "Single event";
+    document.getElementById("conf-caterer").textContent = catererValue;
+    document.getElementById("conf-package-name").textContent =
+      isCustomBooking ? CUSTOM_BOOKING_NAME : selectedPackage?.name || "Woodberry package";
+    document.getElementById("conf-package-price").textContent = isCustomBooking
+      ? "No fixed preset package price"
+      : formatCurrency(selectedPackage?.price || 0);
+    document.getElementById("conf-package-duration").textContent =
+      selectedPackage?.duration || "N/A";
+    document.getElementById("conf-package-schedule").textContent =
+      selectedPackage?.schedule || "N/A";
+    document.getElementById("conf-package-capacity").textContent = selectedPackage
+      ? isCustomBooking && selectedVenue?.capacity
+        ? "Up to " + selectedVenue.capacity + " guests"
+        : selectedPackage.minPax + "-" + selectedPackage.maxPax + " guests"
+      : "N/A";
+    document.getElementById("conf-package-included").textContent =
+      isCustomBooking
+        ? "Optional selections are listed below; final pricing will be reviewed by Woodberry staff."
+        : selectedPackage?.inclusions.join(", ") || "N/A";
+    document.getElementById("conf-total").textContent = isCustomBooking
+      ? formatCurrency(totals.roughAdditionsTotal)
+      : formatCurrency(totals.total);
+    document.getElementById("conf-minimum-payment").textContent = isCustomBooking
+      ? "Determined after admin review"
+      : formatCurrency(totals.minimumPayment);
+    document.getElementById("conf-remaining-balance").textContent = isCustomBooking
+      ? "Subject to admin review"
+      : formatCurrency(totals.remainingBalance);
+    populateOptionSummary(
+      isCustomBooking
+        ? totals.selectedRooms.map(function (item) { return Object.assign({}, item, { category: "Room" }); })
+          .concat(totals.selectedAddOns.map(function (item) { return Object.assign({}, item, { category: "Add-on" }); }))
+          .concat(totals.selectedExtensions.map(function (item) { return Object.assign({}, item, { category: "Extension" }); }))
+          .concat(totals.selectedCorkage.map(function (item) { return Object.assign({}, item, { category: "Corkage" }); }))
+          .concat(totals.customItems.map(function (item) { return Object.assign({}, item, { category: item.group || "Custom" }); }))
+        : totals.selectedRooms.map(function (item) { return Object.assign({}, item, { category: "Room" }); })
+          .concat(totals.selectedAddOns.map(function (item) { return Object.assign({}, item, { category: "Add-on" }); }))
+          .concat(totals.selectedExtensions.map(function (item) { return Object.assign({}, item, { category: "Extension" }); }))
+          .concat(totals.selectedCorkage.map(function (item) { return Object.assign({}, item, { category: "Corkage" }); })),
+    );
+
+    var requests = [
+      document.getElementById("specialRequests").value,
+      isCustomBooking && customOtherRequestInput?.value.trim()
+        ? "Other custom request: " + customOtherRequestInput.value.trim()
+        : "",
+    ].filter(Boolean).join("\n\n");
+    var reqWrap = document.getElementById("conf-requests-wrap");
+    if (requests) {
+      document.getElementById("conf-requests").textContent = requests;
+      reqWrap.classList.remove("hidden");
+    } else {
+      reqWrap.classList.add("hidden");
+    }
+
+    confirmModal.classList.remove("hidden");
+  }
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    if (isSubmitting || submitBtn.disabled) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Checking booking details...";
+    try {
+      if (!(await validateMainForm(false))) return;
+      termsModal.classList.remove("hidden");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Review Terms and Conditions";
+    }
+  });
+
+  termsBackBtn.addEventListener("click", function () {
+    termsModal.classList.add("hidden");
+  });
+
+  termsModal.addEventListener("click", function (e) {
+    if (e.target === termsModal) termsModal.classList.add("hidden");
+  });
+
+  termsContinueBtn.addEventListener("click", async function () {
+    if (isSubmitting || termsContinueBtn.disabled) return;
+    if (noticeEl) noticeEl.classList.add("hidden");
+
+    if (!termsAcceptedInput.checked) {
+      showNotice(
+        "Please check the box to confirm that you have read and agree to the Terms and Conditions.",
+        "error",
+      );
+      termsAcceptedInput.focus();
+      return;
+    }
+
+    termsContinueBtn.disabled = true;
+    termsContinueBtn.textContent = "Preparing summary...";
+    try {
+      if (!(await validateMainForm(false))) return;
+      termsModal.classList.add("hidden");
+      openConfirmationModal();
+    } finally {
+      termsContinueBtn.disabled = false;
+      termsContinueBtn.textContent = "Continue to Review Booking";
+    }
+  });
+
+  confBackBtn.addEventListener("click", function () {
+    confirmModal.classList.add("hidden");
+  });
+
+  confirmModal.addEventListener("click", function (e) {
+    if (e.target === confirmModal) confirmModal.classList.add("hidden");
+  });
+
+  confSubmitBtn.addEventListener("click", async function () {
+    if (isSubmitting) return;
+    if (confirmationError) confirmationError.classList.add("hidden");
+    if (!termsAcceptedInput.checked) {
+      showNotice(
+        "Please check the box to confirm that you have read and agree to the Terms and Conditions.",
+        "error",
+      );
+      confirmModal.classList.add("hidden");
+      termsModal.classList.remove("hidden");
+      termsAcceptedInput.focus();
+      return;
+    }
+
+    isSubmitting = true;
+    confSubmitBtn.disabled = true;
+    confBackBtn.disabled = true;
+    confSubmitBtn.textContent = isCustomBooking ? "Submitting custom request..." : "Creating reservation...";
+
+    if (!(await validateMainForm(true))) {
+      isSubmitting = false;
+      confSubmitBtn.disabled = false;
+      confBackBtn.disabled = false;
+      confSubmitBtn.textContent = isCustomBooking ? "Submit Custom Request" : "Create Reservation";
+      confirmModal.classList.add("hidden");
+      return;
+    }
+
+    var totals = calculateNights();
+    var catererValue = catererInput.value.trim();
+    var selectedPackage = getSelectedPackage();
+
+    var formData = {
+      venueId: getSelectedVenueId(),
+      isMultiDay: isMultiDayInput.checked,
+      startDateTime: startDateTimeInput.value,
+      endDateTime: endDateTimeInput.value,
+      fullName: document.getElementById("fullName").value,
+      email: document.getElementById("email").value,
+      phone: document.getElementById("phone").value,
+      pax: parseInt(document.getElementById("guests").value) || null,
+      eventType: document.getElementById("eventType").value || null,
+      customEventType: customEventTypeInput.value.trim() || null,
+      packageType: isCustomBooking ? CUSTOM_BOOKING_TYPE : selectedPackage?.type,
+      packageId: isCustomBooking ? null : selectedPackage?.id || packageId || null,
+      packagePrice: totals.packageBase,
+      specialRequests: document.getElementById("specialRequests").value || null,
+      notificationPreference: getNotificationPreference(),
+      address: addressInput.value || null,
+      caterer: useWoodberryCatererInput.checked ? woodberryCatererName : catererValue || null,
+      useWoodberryCaterer: useWoodberryCatererInput.checked,
+      selectedRooms: totals.selectedRooms,
+      addOns: totals.selectedAddOns,
+      extensionSelections: totals.selectedExtensions,
+      corkageSelections: totals.selectedCorkage,
+      customItems: totals.customItems,
+      customOtherRequest: isCustomBooking ? customOtherRequestInput?.value.trim() || null : null,
+      estimateSummary: {
+        packageBase: totals.packageBase,
+        rooms: totals.roomsTotal,
+        addOns: totals.addOnsTotal,
+        extensions: totals.extensionsTotal,
+        corkage: totals.corkageTotal,
+        total: totals.total,
+        minimumPayment: totals.minimumPayment,
+        remainingBalance: totals.remainingBalance,
+        roughAdditionsTotal: totals.roughAdditionsTotal,
+      },
+      minimumPaymentAmount: totals.minimumPayment,
+      remainingBalanceAmount: totals.remainingBalance,
+      termsAccepted: termsAcceptedInput.checked,
+    };
+
+    var submissionSucceeded = false;
+    try {
+      var response = await fetch("/api/bookings/CreateBookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      var result = await response.json().catch(function () {
+        return {};
+      });
+
+      if (response.ok) {
+        submissionSucceeded = true;
+        confirmModal.classList.add("hidden");
+        var submittedPreference = formData.notificationPreference;
+        var refId = result.bookingId
+          ? result.bookingId.substring(0, 8).toUpperCase()
+          : "N/A";
+        document.getElementById("success-ref").textContent = "REF-" + refId;
+        document.getElementById("success-venue").textContent = isCustomBooking
+          ? getCustomVenueById(getSelectedVenueId())?.name || "Custom Booking"
+          : selectedPackage?.name || venueName || "";
+        document.getElementById("success-dates").textContent =
+          fmtDateTime(startDateTimeInput.value) + " to " + fmtDateTime(endDateTimeInput.value);
+        var deadlineHelper = reservationDeadlineHelpers();
+        var expirationDeadline = result.reservationExpiresAt
+          ? deadlineHelper.formatDeadline(result.reservationExpiresAt)
+          : "";
+        var serverTotalAmount = Number(result.totalPrice ?? 0);
+        var serverDownPaymentAmount = Number(result.minimumPaymentAmount ?? 0);
+        var paymentSummary = document.getElementById("success-payment-summary");
+        var expirationDeadlineEl = document.getElementById("success-expiration-deadline");
+        var expirationCountdownEl = document.getElementById("success-expiration-countdown");
+        var totalAmountEl = document.getElementById("success-total-amount");
+        var downPaymentEl = document.getElementById("success-down-payment");
+        var successReservationExpired = false;
+        var canPayNow = !isCustomBooking
+          && result.paymentAvailable === true
+          && Boolean(result.bookingId)
+          && Boolean(result.reservationExpiresAt)
+          && Number(deadlineHelper.remainingMs(result.reservationExpiresAt)) > 0
+          && Number.isFinite(serverTotalAmount)
+          && serverTotalAmount > 0
+          && Number.isFinite(serverDownPaymentAmount)
+          && serverDownPaymentAmount > 0;
+        if (paymentSummary) paymentSummary.classList.toggle("hidden", !canPayNow);
+        if (expirationDeadlineEl) expirationDeadlineEl.textContent = expirationDeadline || "Deadline unavailable";
+        if (expirationCountdownEl) {
+          expirationCountdownEl.textContent = canPayNow
+            ? deadlineHelper.formatCountdown(deadlineHelper.remainingMs(result.reservationExpiresAt))
+            : "";
+        }
+        if (totalAmountEl) totalAmountEl.textContent = formatCurrency(serverTotalAmount);
+        if (downPaymentEl) downPaymentEl.textContent = formatCurrency(serverDownPaymentAmount);
+        document.getElementById("success-reservation-expiration").textContent =
+          canPayNow && expirationDeadline
+            ? "Your reservation is temporarily held until " + expirationDeadline + ". Pay " + formatCurrency(serverDownPaymentAmount) + " to secure your booking."
+            : "";
+        document.getElementById("success-notification-message").textContent =
+          getSuccessNotificationMessage(submittedPreference);
+        var successPayNow = document.getElementById("success-pay-now");
+        successPaymentProcessing = false;
+        if (successPayNow) {
+          successPayNow.classList.toggle("hidden", !canPayNow);
+          successPayNow.disabled = false;
+          successPayNow.textContent = "Pay Now";
+          successPayNow.onclick = async function () {
+            if (!canPayNow || successReservationExpired || !result.bookingId || successPaymentProcessing) return;
+            successPaymentProcessing = true;
+            successPayNow.disabled = true;
+            successPayNow.textContent = "Opening PayMongo...";
+            try {
+              var checkoutResponse = await fetch("/api/payments/create-checkout", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bookingId: result.bookingId }),
+              });
+              var checkout = await checkoutResponse.json().catch(function () {
+                return {};
+              });
+              if (!checkoutResponse.ok || !checkout.checkoutUrl) {
+                throw new Error(checkout.error || checkout.message || "Could not start payment");
+              }
+              window.location.href = checkout.checkoutUrl;
+            } catch (checkoutError) {
+              showNotice(
+                checkoutError instanceof Error
+                  ? checkoutError.message
+                  : "Could not start payment. You can still pay from My Bookings.",
+                "error",
+              );
+              successPayNow.disabled = false;
+              successPayNow.textContent = "Pay Now";
+              successPaymentProcessing = false;
+            }
+          };
+        }
+        if (successCountdownTimer) {
+          window.clearInterval(successCountdownTimer);
+          successCountdownTimer = null;
+        }
+        if (canPayNow && result.reservationExpiresAt) {
+          var updateSuccessCountdown = function () {
+            var remainingMs = deadlineHelper.remainingMs(result.reservationExpiresAt);
+            if (expirationCountdownEl) expirationCountdownEl.textContent = deadlineHelper.formatCountdown(remainingMs);
+            if (remainingMs !== null && remainingMs <= 0) {
+              successReservationExpired = true;
+              canPayNow = false;
+              if (successPayNow) {
+                successPayNow.disabled = true;
+                successPayNow.classList.add("hidden");
+              }
+              if (paymentSummary) paymentSummary.classList.add("hidden");
+              document.getElementById("success-reservation-expiration").textContent =
+                "This payment deadline has passed. Online payment is no longer available for this hold.";
+              if (successCountdownTimer) {
+                window.clearInterval(successCountdownTimer);
+                successCountdownTimer = null;
+              }
+            }
+          };
+          updateSuccessCountdown();
+          successCountdownTimer = window.setInterval(updateSuccessCountdown, 1000);
+        }
+        successScreen.classList.remove("hidden");
+        form.reset();
+        if (notificationPreferenceInputs.length) {
+          notificationPreferenceInputs.forEach(function (input) {
+            input.checked = input.value === "both";
+          });
+        }
+        syncCaterer();
+        selectedPackageType = initialPackageType || "";
+        maximumVisitedStep = 0;
+        goToBookingStep(0, false);
+        if (packageLimitNotice) packageLimitNotice.classList.add("hidden");
+        applySelectedPackage();
+        calculateNights();
+      } else {
+        var fallbackMessage = "Please try again.";
+        var apiMessage = result.error ?? result.message ?? fallbackMessage;
+        if (confirmationError) {
+          confirmationError.textContent = apiMessage;
+          confirmationError.classList.remove("hidden");
+        }
+      }
+    } catch (err) {
+      if (confirmationError) {
+        confirmationError.textContent = "We could not submit your request. Please check your connection and try again; your summary is still available.";
+        confirmationError.classList.remove("hidden");
+      }
+    } finally {
+      if (!submissionSucceeded) {
+        isSubmitting = false;
+        confSubmitBtn.disabled = false;
+        confBackBtn.disabled = false;
+        confSubmitBtn.textContent = isCustomBooking ? "Submit Custom Request" : "Create Reservation";
+      }
+    }
+  });
+
+  renderPackageOptions();
+  renderRateOptions();
+  if (isCustomBooking) setCustomVenueOptions([], "Choose a booking date to see available venues");
+  applySelectedPackage();
+  attachFriendlyValidation();
+  syncCaterer();
+  syncDateTimeMode();
+  syncCustomEventType();
+  calculateNights();
+  goToBookingStep(0, false);
+</script>
+
+<style>
+  .booking-shell {
+    color: var(--wb-text);
+  }
+
+  .booking-form__header {
+    margin-bottom: 1.4rem;
+  }
+
+  .booking-form__eyebrow {
+    margin: 0 0 0.35rem;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .booking-form__header h2 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.9rem, 4vw, 2.65rem);
+    letter-spacing: 0;
+  }
+
+  .booking-form__header p:last-child {
+    max-width: 42rem;
+    margin: 0.55rem 0 0;
+    color: var(--wb-muted);
+    font-size: 0.96rem;
+  }
+
+  .confirmation-error {
+    margin: 0;
+    border-top: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+    padding: 0.8rem 1.5rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .booking-flow {
+    display: grid;
+    gap: 1.1rem;
+  }
+
+  .booking-stepper {
+    position: relative;
+    margin: 1.25rem 0 1rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    padding: 1rem;
+  }
+
+  .booking-stepper__track {
+    height: 0.3rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--wb-green-soft);
+  }
+
+  .booking-stepper__track span {
+    display: block;
+    width: 20%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--wb-green), var(--wb-earth));
+    transition: width 0.25s ease;
+  }
+
+  .booking-stepper ol {
+    display: grid;
+    gap: 0.4rem;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin: 0.85rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .booking-step-trigger {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 0.45rem;
+    border: 0;
+    border-radius: var(--wb-radius-sm);
+    background: transparent;
+    color: var(--wb-muted);
+    cursor: pointer;
+    font: inherit;
+    padding: 0.45rem;
+    text-align: left;
+  }
+
+  .booking-step-trigger:disabled {
+    cursor: default;
+    opacity: 0.58;
+  }
+
+  .booking-step-trigger:not(:disabled):hover {
+    background: var(--wb-green-soft);
+  }
+
+  .booking-step-trigger:focus-visible,
+  .booking-step-button:focus-visible,
+  .booking-submit:focus-visible {
+    outline: 3px solid var(--wb-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .booking-step-trigger__number {
+    display: grid;
+    width: 1.8rem;
+    height: 1.8rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--wb-border);
+    border-radius: 50%;
+    background: var(--wb-surface-soft);
+    color: var(--wb-muted) !important;
+    font-size: 0.75rem;
+    font-weight: 900;
+  }
+
+  .booking-step-trigger__label {
+    min-width: 0;
+    color: inherit !important;
+    font-size: 0.74rem;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .booking-step-trigger.is-current {
+    background: var(--wb-green-soft);
+    color: var(--wb-green-dark);
+  }
+
+  .booking-step-trigger.is-current .booking-step-trigger__number,
+  .booking-step-trigger.is-complete .booking-step-trigger__number {
+    border-color: var(--wb-green);
+    background: var(--wb-green);
+    color: #ffffff !important;
+  }
+
+  .booking-stepper__status {
+    margin: 0.75rem 0 0;
+    color: var(--wb-green-dark);
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-align: right;
+  }
+
+  #bookingNotice {
+    border: 1px solid transparent;
+    border-radius: var(--wb-radius-md);
+    box-shadow: var(--wb-shadow-sm);
+  }
+
+  #bookingNotice.bg-green-100 {
+    border-color: #c9ddbf;
+    background: var(--wb-green-soft) !important;
+    color: var(--wb-green-dark) !important;
+  }
+
+  #bookingNotice.bg-red-100 {
+    border-color: #e7b8ab;
+    background: #fbe7df !important;
+    color: #8f2f20 !important;
+  }
+
+  #bookingForm > .booking-step {
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 249, 244, 0.88)),
+      var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    padding: clamp(1rem, 2.4vw, 1.35rem);
+  }
+
+  .booking-step[hidden] {
+    display: none !important;
+  }
+
+  .booking-step__intro {
+    margin: -0.2rem 0 0 !important;
+    border-left: 3px solid var(--wb-green);
+    border-radius: 0 var(--wb-radius-sm) var(--wb-radius-sm) 0;
+    background: color-mix(in srgb, var(--wb-green-soft) 72%, transparent);
+    color: var(--wb-green-dark) !important;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    padding: 0.72rem 0.85rem;
+  }
+
+  .booking-step-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 0.15rem;
+  }
+
+  .booking-step-actions__spacer {
+    flex: 1 1 auto;
+  }
+
+  .booking-step-button {
+    min-height: 2.9rem;
+    border-radius: var(--wb-radius-md);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 900;
+    padding: 0.8rem 1.15rem;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .booking-step-button--primary {
+    border: 1px solid transparent;
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+  }
+
+  .booking-step-button--primary:hover {
+    background: var(--wb-action-hover);
+    transform: translateY(-1px);
+  }
+
+  .booking-step-button--secondary {
+    border: 1px solid var(--wb-border);
+    background: var(--wb-surface-raised);
+    color: var(--wb-green-dark);
+  }
+
+  .booking-step-button--secondary:hover {
+    border-color: var(--wb-green);
+    background: var(--wb-green-soft);
+  }
+
+  .booking-review-reminder {
+    display: grid;
+    gap: 0.25rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-soft);
+    color: var(--wb-muted);
+    padding: 0.9rem 1rem;
+    font-size: 0.84rem;
+    line-height: 1.5;
+  }
+
+  .booking-review-reminder strong {
+    color: var(--wb-green-dark);
+  }
+
+  #bookingForm h3,
+  #bookingForm h4 {
+    margin: 0;
+    color: var(--wb-green-dark) !important;
+    font-family: Georgia, "Times New Roman", serif;
+    letter-spacing: 0;
+  }
+
+  #bookingForm h3 {
+    font-size: 1.35rem;
+  }
+
+  #bookingForm h4 {
+    font-size: 1.05rem;
+  }
+
+  #bookingForm p,
+  #bookingForm span {
+    color: inherit;
+  }
+
+  #bookingForm .text-gray-600,
+  #bookingForm .text-gray-500,
+  #bookingForm .text-gray-400 {
+    color: var(--wb-muted) !important;
+  }
+
+  #bookingForm label {
+    color: var(--wb-green-dark) !important;
+    font-size: 0.86rem;
+    font-weight: 800;
+  }
+
+  #bookingForm input:not([type="checkbox"]):not([type="radio"]),
+  #bookingForm select,
+  #bookingForm textarea {
+    width: 100%;
+    min-height: 2.75rem;
+    border: 1px solid var(--wb-border) !important;
+    border-radius: var(--wb-radius-sm) !important;
+    background: var(--wb-input-bg) !important;
+    color: var(--wb-text) !important;
+    font: inherit;
+    padding: 0.78rem 0.9rem !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  #bookingForm textarea {
+    min-height: 8rem;
+    resize: vertical;
+  }
+
+  #bookingForm input::placeholder,
+  #bookingForm textarea::placeholder {
+    color: var(--wb-placeholder);
+  }
+
+  #bookingForm input:not([type="checkbox"]):not([type="radio"]):focus,
+  #bookingForm select:focus,
+  #bookingForm textarea:focus {
+    border-color: var(--wb-green) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--wb-focus-ring) 22%, transparent);
+    outline: none;
+  }
+
+  #bookingForm input[data-availability-invalid] {
+    border-color: #9a4a36 !important;
+    box-shadow: 0 0 0 4px rgba(154, 74, 54, 0.12);
+  }
+
+  #bookingForm input:disabled,
+  #bookingForm textarea:disabled {
+    border-color: var(--wb-disabled-border) !important;
+    background: var(--wb-disabled-bg) !important;
+    color: var(--wb-disabled-text) !important;
+    cursor: not-allowed;
+  }
+
+  #bookingForm input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    accent-color: var(--wb-green);
+  }
+
+  .notification-preference {
+    display: grid;
+    gap: 0.85rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(135deg, rgba(231, 239, 232, 0.78), rgba(250, 247, 239, 0.92)),
+      var(--wb-surface-soft);
+    padding: 1rem;
+  }
+
+  .notification-preference legend {
+    float: left;
+    width: 100%;
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .notification-preference legend + p {
+    clear: both;
+    margin: 0.25rem 0 0;
+    color: var(--wb-muted) !important;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .notification-preference__options {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .notification-preference__option {
+    min-width: 0;
+    cursor: pointer;
+  }
+
+  .notification-preference__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .notification-preference__body {
+    display: grid;
+    min-height: 5.35rem;
+    align-content: center;
+    gap: 0.32rem;
+    border: 1px solid rgba(170, 143, 102, 0.18);
+    border-radius: var(--wb-radius-md);
+    background: rgba(241, 243, 237, 0.82);
+    color: #7b8574 !important;
+    padding: 0.9rem;
+    text-align: center;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      color 0.2s ease,
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .notification-preference__body strong {
+    color: inherit;
+    font-size: 0.98rem;
+    font-weight: 900;
+    line-height: 1.2;
+  }
+
+  .notification-preference__body span {
+    color: inherit !important;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .notification-preference__option:has(.notification-preference__input:not(:checked))
+    .notification-preference__body {
+    opacity: 0.62;
+  }
+
+  .notification-preference__option:has(.notification-preference__input:checked)
+    .notification-preference__body {
+    border-color: rgba(21, 122, 69, 0.58);
+    background:
+      linear-gradient(135deg, rgba(231, 239, 232, 0.98), rgba(238, 229, 215, 0.86)),
+      #ffffff;
+    color: var(--wb-green-dark) !important;
+    box-shadow: 0 12px 22px rgba(21, 122, 69, 0.12);
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+
+  .notification-preference__option:hover .notification-preference__body,
+  .notification-preference__option:has(.notification-preference__input:focus-visible)
+    .notification-preference__body {
+    border-color: rgba(21, 122, 69, 0.44);
+    box-shadow: 0 0 0 4px rgba(21, 122, 69, 0.1);
+  }
+
+  #bookingForm label:has(input[type="checkbox"]),
+  #bookingForm div:has(> label > input[type="checkbox"]) {
+    border-color: var(--wb-border) !important;
+    border-radius: var(--wb-radius-md) !important;
+    background: rgba(250, 247, 239, 0.84);
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  #bookingForm label:has(input[type="checkbox"]:checked),
+  #bookingForm div:has(> label > input[type="checkbox"]:checked) {
+    border-color: rgba(21, 122, 69, 0.5) !important;
+    background: var(--wb-green-soft);
+    box-shadow: 0 8px 18px rgba(21, 122, 69, 0.08);
+  }
+
+  .account-details-option,
+  .date-mode-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    border: 1px solid var(--wb-border);
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+  }
+
+  .account-details-option input,
+  .date-mode-option input {
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+  }
+
+  .account-details-option span,
+  .date-mode-option span {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  .account-details-option strong,
+  .date-mode-option strong {
+    color: var(--wb-green-dark);
+  }
+
+  .account-details-option small,
+  .date-mode-option small {
+    color: var(--wb-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+
+  .equipment-information {
+    border: 1px solid var(--wb-green-pale);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-soft);
+    padding: 1rem;
+  }
+
+  .equipment-information__notice {
+    margin-top: 0.55rem !important;
+    color: var(--wb-green-dark) !important;
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+
+  .booking-payment-card {
+    display: grid;
+    gap: 0.75rem;
+    border: 1px solid rgba(170, 143, 102, 0.44);
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(135deg, rgba(238, 229, 215, 0.92), rgba(250, 247, 239, 0.96)),
+      var(--wb-surface-soft);
+    padding: clamp(1rem, 2.4vw, 1.35rem);
+  }
+
+  .booking-payment-card__eyebrow {
+    margin: 0;
+    color: var(--wb-green) !important;
+    font-size: 0.7rem;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .booking-payment-card__intro {
+    margin: 0.35rem 0 0 !important;
+    color: var(--wb-muted) !important;
+    font-size: 0.84rem;
+    line-height: 1.5;
+  }
+
+  .booking-payment-card__authority {
+    border-top: 1px solid rgba(170, 143, 102, 0.24);
+    padding-top: 0.75rem;
+    color: var(--wb-muted) !important;
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+
+  .booking-payment-card__admin-notice {
+    display: grid;
+    gap: 0.3rem;
+    border: 1px solid color-mix(in srgb, var(--wb-green) 28%, transparent);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--wb-green) 8%, var(--wb-surface-raised));
+    padding: 0.9rem 1rem;
+  }
+
+  .booking-payment-card__admin-notice span {
+    color: var(--wb-green-dark);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .booking-payment-card__admin-notice strong {
+    color: var(--wb-green-dark);
+  }
+
+  .booking-payment-card__admin-notice p {
+    margin: 0;
+    color: var(--wb-muted);
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+
+  .booking-payment-card > div {
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .booking-payment-card span:last-child {
+    color: var(--wb-green-dark);
+    font-weight: 800;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  #totalPrice,
+  #minimumPayment {
+    color: var(--wb-earth) !important;
+  }
+
+  .booking-payment-card > div:has(#totalPrice) {
+    border-color: rgba(170, 143, 102, 0.28) !important;
+    color: var(--wb-green-dark) !important;
+    font-size: 1.08rem;
+  }
+
+  .booking-payment-card > div:has(#minimumPayment) {
+    border: 1px solid rgba(170, 143, 102, 0.46);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0.85rem;
+  }
+
+  .booking-payment-card > p {
+    margin: 0;
+    color: var(--wb-earth) !important;
+  }
+
+  .booking-submit {
+    width: auto;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-action);
+    box-shadow: 0 12px 22px rgba(21, 122, 69, 0.18);
+    color: var(--wb-on-action);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 900;
+    padding: 0.95rem 1.2rem;
+    text-align: center;
+  }
+
+  .booking-submit:hover {
+    background: var(--wb-action-hover);
+    transform: translateY(-1px);
+  }
+
+  .booking-submit:disabled,
+  .booking-step-button:disabled,
+  .confirmation-button:disabled,
+  #terms-continue-btn:disabled {
+    cursor: wait;
+    border: 1px solid var(--wb-disabled-border) !important;
+    background: var(--wb-disabled-bg) !important;
+    color: var(--wb-disabled-text) !important;
+    opacity: 1;
+    transform: none;
+  }
+
+  #termsModal,
+  #bookingConfirmModal,
+  #bookingSuccessScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    background: rgba(26, 46, 16, 0.55) !important;
+    padding: 1rem;
+    backdrop-filter: blur(3px);
+  }
+
+  #termsModal.hidden,
+  #bookingConfirmModal.hidden,
+  #bookingSuccessScreen.hidden {
+    display: none;
+  }
+
+  #termsModal > div,
+  #bookingConfirmModal > div,
+  #bookingSuccessScreen > div {
+    width: min(100%, 44rem);
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg) !important;
+    background: var(--wb-surface-raised) !important;
+    box-shadow: var(--wb-shadow-lg) !important;
+    color: var(--wb-text);
+  }
+
+  #bookingConfirmModal > div {
+    width: min(100%, 48rem);
+  }
+
+  #bookingSuccessScreen > div {
+    width: min(100%, 28rem);
+  }
+
+  #termsModal h3,
+  #bookingConfirmModal h3,
+  #bookingSuccessScreen h3 {
+    color: var(--wb-green-dark) !important;
+    font-family: Georgia, "Times New Roman", serif;
+    letter-spacing: 0;
+  }
+
+  #termsModal > div > div:first-child,
+  #bookingConfirmModal > div > div:first-child {
+    border-color: var(--wb-border) !important;
+    background:
+      linear-gradient(180deg, rgba(247, 249, 244, 0.96), rgba(255, 255, 255, 0.96)),
+      var(--wb-surface-soft);
+  }
+
+  #termsModal > div > div:first-child div div,
+  #bookingConfirmModal > div > div:first-child div div,
+  #bookingSuccessScreen > div > div:first-child {
+    background: var(--wb-green-soft) !important;
+    color: var(--wb-green-dark);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  #termsModal .overflow-y-auto,
+  #bookingConfirmModal .overflow-y-auto {
+    scrollbar-color: var(--wb-green-pale) transparent;
+  }
+
+  #termsModal .overflow-y-auto p,
+  #bookingConfirmModal p,
+  #bookingSuccessScreen p {
+    color: var(--wb-muted);
+  }
+
+  #termsModal .overflow-y-auto p:first-child {
+    color: var(--wb-green-dark) !important;
+    letter-spacing: 0.08em;
+  }
+
+  #termsModal label:has(#termsAccepted) {
+    border-color: var(--wb-border) !important;
+    border-radius: var(--wb-radius-md) !important;
+    background: var(--wb-surface-soft);
+    color: var(--wb-green-dark) !important;
+  }
+
+  #termsModal label:has(#termsAccepted:checked) {
+    border-color: rgba(21, 122, 69, 0.5) !important;
+    background: var(--wb-green-soft);
+  }
+
+  #termsModal button,
+  #bookingConfirmModal button,
+  #bookingSuccessScreen a {
+    border-radius: var(--wb-radius-md) !important;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  #terms-back-btn,
+  #conf-back-btn {
+    border-color: var(--wb-border) !important;
+    background: #ffffff;
+    color: var(--wb-green-mid) !important;
+  }
+
+  #terms-back-btn:hover,
+  #conf-back-btn:hover {
+    background: var(--wb-green-soft) !important;
+  }
+
+  #terms-continue-btn,
+  #conf-submit-btn,
+  #bookingSuccessScreen a {
+    background: var(--wb-action) !important;
+    color: var(--wb-on-action) !important;
+    box-shadow: 0 10px 20px rgba(21, 122, 69, 0.16);
+  }
+
+  #terms-continue-btn:hover,
+  #conf-submit-btn:hover,
+  #bookingSuccessScreen a:hover {
+    background: var(--wb-action-hover) !important;
+  }
+
+  #bookingConfirmModal .bg-gray-50,
+  #bookingConfirmModal div[style*="#f9f7f4"],
+  #bookingSuccessScreen .bg-gray-50 {
+    border: 1px solid var(--wb-border);
+    background: var(--wb-surface-soft) !important;
+  }
+
+  #bookingConfirmModal .text-gray-400,
+  #bookingConfirmModal .text-gray-500,
+  #bookingConfirmModal .text-gray-600,
+  #bookingConfirmModal .text-gray-700,
+  #bookingSuccessScreen .text-gray-400,
+  #bookingSuccessScreen .text-gray-500,
+  #bookingSuccessScreen .text-gray-600 {
+    color: var(--wb-muted) !important;
+  }
+
+  #bookingConfirmModal p[id],
+  #bookingSuccessScreen #success-ref {
+    color: var(--wb-text);
+  }
+
+  #bookingConfirmModal div[style*="border-color:var(--butterscotch-primary)"] {
+    border-color: rgba(170, 143, 102, 0.5) !important;
+    background:
+      linear-gradient(135deg, rgba(238, 229, 215, 0.92), rgba(250, 247, 239, 0.96)) !important;
+  }
+
+  #conf-total,
+  #conf-minimum-payment,
+  #success-ref {
+    color: var(--wb-earth) !important;
+  }
+
+  .booking-confirmation-modal {
+    display: flex;
+    width: min(100%, 56rem) !important;
+    max-height: min(92vh, 56rem);
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .booking-confirmation__header {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.25rem;
+    border-bottom: 1px solid var(--wb-border);
+    background:
+      radial-gradient(circle at 100% 0%, rgba(231, 239, 232, 0.95), transparent 15rem),
+      linear-gradient(180deg, rgba(250, 247, 239, 0.98), rgba(255, 255, 255, 0.95));
+    padding: clamp(1.25rem, 3vw, 1.8rem);
+  }
+
+  .booking-confirmation__eyebrow,
+  .confirmation-section__eyebrow,
+  .booking-success-card__eyebrow {
+    margin: 0;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .booking-confirmation__header h3,
+  .booking-success-card h3 {
+    margin: 0.25rem 0 0;
+    color: var(--wb-green-dark) !important;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.55rem, 4vw, 2.1rem);
+    line-height: 1.12;
+  }
+
+  .booking-confirmation__header p:last-child,
+  .booking-success-card__intro {
+    max-width: 36rem;
+    margin: 0.45rem 0 0;
+    color: var(--wb-muted) !important;
+    font-size: 0.92rem;
+  }
+
+  .booking-confirmation__mark,
+  .booking-success-card__mark {
+    display: grid;
+    width: 3.65rem;
+    height: 3.65rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid rgba(21, 122, 69, 0.16);
+    border-radius: 999px;
+    background: var(--wb-green-soft) !important;
+    color: var(--wb-green);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  }
+
+  .booking-confirmation__mark svg,
+  .booking-success-card__mark svg {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .booking-confirmation__body {
+    display: grid;
+    gap: 1rem;
+    overflow-y: auto;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    scrollbar-color: var(--wb-green-pale) transparent;
+  }
+
+  .confirmation-venue-card,
+  .confirmation-section,
+  .confirmation-payment-card,
+  .confirmation-next-steps,
+  .booking-success-card__reference,
+  .booking-success-card__payment,
+  .booking-success-card__steps {
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-soft);
+    box-shadow: var(--wb-shadow-sm);
+  }
+
+  .confirmation-venue-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    background:
+      linear-gradient(135deg, rgba(231, 239, 232, 0.98), rgba(250, 247, 239, 0.96)),
+      var(--wb-surface-soft);
+    padding: 1.1rem;
+  }
+
+  .confirmation-venue-card__name {
+    margin: 0.25rem 0 0;
+    color: var(--wb-green-dark) !important;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.2rem, 3vw, 1.55rem);
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .confirmation-status-pill {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    border: 1px solid rgba(21, 122, 69, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.74);
+    color: var(--wb-green-mid);
+    font-size: 0.72rem;
+    font-weight: 900;
+    padding: 0.38rem 0.65rem;
+    text-transform: uppercase;
+  }
+
+  .confirmation-section {
+    padding: 1rem;
+  }
+
+  .confirmation-section__header {
+    margin-bottom: 0.8rem;
+  }
+
+  .confirmation-section__header h4,
+  .confirmation-payment-card h4 {
+    margin: 0.2rem 0 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.08rem;
+    letter-spacing: 0;
+  }
+
+  .confirmation-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+
+  .confirmation-detail-grid--contact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .confirmation-detail {
+    min-width: 0;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0.8rem;
+  }
+
+  .confirmation-detail--wide,
+  .confirmation-detail-grid--contact .confirmation-detail:nth-child(n + 3) {
+    grid-column: 1 / -1;
+  }
+
+  .confirmation-detail span,
+  .confirmation-payment-card__breakdown span,
+  .booking-success-card__reference span {
+    display: block;
+    color: var(--wb-muted);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    line-height: 1.25;
+    text-transform: uppercase;
+  }
+
+  .confirmation-detail p {
+    overflow-wrap: anywhere;
+    margin: 0.25rem 0 0;
+    color: var(--wb-text) !important;
+    font-size: 0.92rem;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .confirmation-inclusions {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  }
+
+  .confirmation-section--split {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  }
+
+  .confirmation-note-card {
+    min-height: 4.1rem;
+    border: 1px dashed rgba(21, 122, 69, 0.28);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.65);
+    padding: 0.85rem;
+  }
+
+  .confirmation-note-card p {
+    margin: 0;
+    color: var(--wb-muted) !important;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .confirmation-payment-card {
+    display: grid;
+    gap: 1rem;
+    border-color: rgba(170, 143, 102, 0.48);
+    background:
+      linear-gradient(135deg, rgba(238, 229, 215, 0.94), rgba(250, 247, 239, 0.97)),
+      var(--wb-surface-soft);
+    padding: 1rem;
+  }
+
+  .confirmation-payment-card__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .confirmation-payment-card__top p:not(.confirmation-section__eyebrow) {
+    margin: 0.3rem 0 0;
+    color: var(--wb-earth) !important;
+    font-size: 0.82rem;
+  }
+
+  .confirmation-payment-card__total {
+    flex: 0 0 auto;
+    margin: 0;
+    color: var(--wb-earth) !important;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.7rem, 5vw, 2.35rem);
+    font-weight: 900;
+    line-height: 1;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .confirmation-payment-card__breakdown {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .confirmation-payment-card__breakdown > div {
+    border: 1px solid rgba(170, 143, 102, 0.34);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0.9rem;
+  }
+
+  .confirmation-payment-card__breakdown strong {
+    display: block;
+    margin-top: 0.28rem;
+    color: var(--wb-green-dark);
+    font-size: 1.05rem;
+  }
+
+  .confirmation-payment-card__breakdown p {
+    margin: 0.35rem 0 0;
+    color: var(--wb-muted) !important;
+    font-size: 0.78rem;
+    line-height: 1.45;
+  }
+
+  .confirmation-next-steps {
+    padding: 1rem;
+  }
+
+  .confirmation-validity-reminder {
+    border: 1px solid rgba(154, 74, 54, 0.3);
+    background: linear-gradient(135deg, rgba(251, 231, 223, 0.88), rgba(247, 249, 244, 0.96));
+    padding: 1rem;
+  }
+
+  .confirmation-validity-reminder h4 {
+    margin: 0.25rem 0 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.08rem;
+  }
+
+  .confirmation-validity-reminder > p:last-child {
+    margin: 0.5rem 0 0;
+    color: #713c2f !important;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+
+  .confirmation-next-steps ol {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0.55rem 0 0;
+    padding-left: 1.15rem;
+    color: var(--wb-text);
+    font-size: 0.9rem;
+  }
+
+  .confirmation-next-steps li::marker {
+    color: var(--wb-green);
+    font-weight: 900;
+  }
+
+  .booking-confirmation__footer {
+    display: flex;
+    gap: 0.75rem;
+    border-top: 1px solid var(--wb-border);
+    background: var(--wb-surface-soft);
+    padding: 1rem clamp(1rem, 3vw, 1.5rem);
+  }
+
+  .confirmation-button {
+    display: inline-flex;
+    min-height: 3rem;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--wb-radius-md);
+    cursor: pointer;
+    font-size: 0.84rem;
+    font-weight: 900;
+    line-height: 1.2;
+    padding: 0.85rem 1rem;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .confirmation-button:hover {
+    transform: translateY(-1px);
+  }
+
+  .confirmation-button.hidden,
+  .booking-success-card__payment.hidden {
+    display: none;
+  }
+
+  .confirmation-button--primary {
+    background: var(--wb-action) !important;
+    color: var(--wb-on-action) !important;
+    box-shadow: 0 12px 22px rgba(21, 122, 69, 0.18);
+  }
+
+  .confirmation-button--primary:hover {
+    background: var(--wb-action-hover) !important;
+  }
+
+  .confirmation-button--secondary {
+    border-color: var(--wb-border) !important;
+    background: var(--wb-input-bg) !important;
+    color: var(--wb-link) !important;
+  }
+
+  .confirmation-button--secondary:hover {
+    background: var(--wb-green-soft) !important;
+  }
+
+  .booking-success-card {
+    display: grid;
+    gap: 1rem;
+    padding: clamp(1.25rem, 4vw, 1.8rem);
+    text-align: center;
+  }
+
+  #bookingSuccessScreen > .booking-success-card {
+    width: min(100%, 34rem);
+  }
+
+  .booking-success-card__mark {
+    margin: 0 auto;
+  }
+
+  .booking-success-card__reference {
+    padding: 1rem;
+    text-align: left;
+  }
+
+  .booking-success-card__reference p {
+    margin: 0.25rem 0 0;
+    color: var(--wb-earth) !important;
+    font-family: "Courier New", monospace;
+    font-size: 1rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+  }
+
+  .booking-success-card__reference small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--wb-muted);
+    font-size: 0.84rem;
+    line-height: 1.4;
+  }
+
+  .booking-success-card__payment {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 1rem;
+    text-align: left;
+  }
+
+  .booking-success-card__payment div {
+    min-width: 0;
+    border: 1px solid rgba(170, 143, 102, 0.34);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0.85rem;
+  }
+
+  .booking-success-card__payment span {
+    display: block;
+    color: var(--wb-muted);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    line-height: 1.25;
+    text-transform: uppercase;
+  }
+
+  .booking-success-card__payment strong {
+    display: block;
+    margin-top: 0.32rem;
+    color: var(--wb-green-dark);
+    font-size: 0.98rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .booking-success-card__steps {
+    display: grid;
+    gap: 0.65rem;
+    padding: 1rem;
+    text-align: left;
+  }
+
+  .booking-success-card__steps div {
+    display: grid;
+    align-items: start;
+    gap: 0.65rem;
+    grid-template-columns: auto 1fr;
+  }
+
+  .booking-success-card__steps span {
+    display: grid;
+    width: 1.55rem;
+    height: 1.55rem;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--wb-green-soft);
+    color: var(--wb-green-dark);
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  .booking-success-card__steps p,
+  .booking-success-card__redirect {
+    margin: 0;
+    color: var(--wb-muted) !important;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .booking-success-card__validity {
+    margin: 0;
+    border: 1px solid rgba(154, 74, 54, 0.3);
+    border-radius: var(--wb-radius-md);
+    background: rgba(251, 231, 223, 0.72);
+    color: #713c2f !important;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    padding: 0.85rem;
+    text-align: left;
+  }
+
+  :global(.booking-summary-card) {
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--wb-text);
+    font-size: 0.9rem;
+    padding: 0.85rem;
+  }
+
+  :global(.booking-summary-card p) {
+    margin: 0;
+  }
+
+  :global(.booking-summary-card__meta) {
+    color: var(--wb-muted);
+    font-size: 0.78rem;
+    margin-top: 0.28rem !important;
+  }
+
+  :global(.booking-summary-card--empty) {
+    color: var(--wb-muted);
+  }
+
+  .woodberry-package-grid,
+  .booking-option-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  }
+
+  .woodberry-package-empty {
+    grid-column: 1 / -1;
+    margin: 0;
+    border: 1px solid #fde2e2;
+    border-radius: 0.75rem;
+    background: #fff7f7;
+    color: #9a3412;
+    font-size: 0.9rem;
+    font-weight: 800;
+    padding: 1rem;
+  }
+
+  .custom-venue-details {
+    display: grid;
+    gap: 0.45rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-soft);
+    padding: 1rem;
+  }
+
+  .custom-venue-details h4 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.15rem;
+  }
+
+  .custom-venue-details p {
+    margin: 0;
+    color: var(--wb-muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+
+  .custom-venue-details div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .custom-venue-details span {
+    border-radius: 999px;
+    background: var(--wb-green-soft);
+    color: var(--wb-green-mid);
+    font-size: 0.76rem;
+    font-weight: 900;
+    padding: 0.35rem 0.6rem;
+  }
+
+  .booking-guidance-card {
+    display: grid;
+    gap: 0.25rem;
+    border: 1px solid rgba(21, 122, 69, 0.2);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-soft);
+    padding: 1rem;
+  }
+
+  .booking-guidance-card strong {
+    color: var(--wb-green-dark);
+    font-size: 0.86rem;
+    font-weight: 900;
+  }
+
+  .booking-guidance-card span {
+    color: var(--wb-muted) !important;
+    font-size: 0.84rem;
+    line-height: 1.5;
+  }
+
+  .booking-guidance-card--warm {
+    border-color: rgba(170, 143, 102, 0.36);
+    background: var(--wb-warm-soft);
+  }
+
+  .booking-guidance-card--warm strong {
+    color: var(--wb-earth);
+  }
+
+  .booking-option-section {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .booking-option-section__heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .booking-option-section + .booking-option-section {
+    border-top: 1px solid var(--wb-border);
+    padding-top: 1rem;
+  }
+
+  .booking-option-section h4 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.08rem;
+  }
+
+  .booking-room-details-link {
+    display: inline-flex;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(21, 122, 69, 0.28);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-green-soft);
+    color: var(--wb-green-mid) !important;
+    flex: 0 0 auto;
+    font-size: 0.76rem;
+    font-weight: 900;
+    line-height: 1.1;
+    padding: 0.55rem 0.75rem;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .booking-room-details-link:hover {
+    border-color: rgba(21, 122, 69, 0.5);
+    background: rgba(225, 235, 226, 0.78);
+    color: var(--wb-green-dark) !important;
+    transform: translateY(-1px);
+  }
+
+  .booking-option-section p {
+    margin: -0.35rem 0 0;
+    color: var(--wb-muted) !important;
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+
+  .booking-option-section .booking-section-lockout-note {
+    margin: 0;
+    border: 1px solid var(--wb-danger-border);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-danger-bg);
+    color: var(--wb-danger-text) !important;
+    font-size: 0.8rem;
+    font-weight: 800;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .booking-option-section--locked-out .booking-option-grid,
+  .booking-option-section--locked-out .booking-option-card--manual {
+    opacity: 0.62;
+  }
+
+  .booking-note-field {
+    border: 1px solid color-mix(in srgb, var(--wb-earth) 24%, var(--wb-border));
+    border-radius: var(--wb-radius-md);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 249, 244, 0.9)),
+      var(--wb-warm-soft);
+    box-shadow: 0 6px 18px rgba(26, 46, 16, 0.04);
+    padding: 1rem;
+  }
+
+  .booking-note-field label {
+    color: var(--wb-green-dark) !important;
+    font-weight: 900 !important;
+  }
+
+  .booking-note-field textarea {
+    border-color: color-mix(in srgb, var(--wb-earth) 32%, var(--wb-border)) !important;
+    background: rgba(255, 255, 255, 0.86) !important;
+  }
+
+  .woodberry-package-card,
+  .booking-option-card {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.76);
+    cursor: pointer;
+    padding: 0.9rem;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .booking-option-card {
+    display: grid;
+    grid-template-columns: 7.25rem minmax(0, 1fr);
+    align-items: stretch;
+    padding: 0.55rem;
+  }
+
+  .booking-option-card__media {
+    display: block;
+    min-height: 7.5rem;
+    overflow: hidden;
+    border-radius: calc(var(--wb-radius-md) - 0.25rem);
+    background: var(--wb-green-soft);
+  }
+
+  .booking-option-card__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 7.5rem;
+    object-fit: cover;
+  }
+
+  .booking-option-card__content {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 0.35rem;
+    padding: 0.35rem 0.25rem 0.35rem 0.15rem;
+  }
+
+  .booking-option-card__heading {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .booking-option-card__heading strong {
+    line-height: 1.25;
+  }
+
+  .booking-option-card__description {
+    line-height: 1.45;
+  }
+
+  .booking-option-card__price {
+    color: var(--wb-earth) !important;
+    font-weight: 900;
+  }
+
+  .booking-option-card--manual {
+    cursor: default;
+  }
+
+  .booking-option-card--manual:hover {
+    transform: none;
+  }
+
+  .booking-option-card__quantity-label {
+    margin-top: 0.2rem;
+    font-size: 0.76rem !important;
+  }
+
+  .woodberry-package-card:has(input:checked),
+  .booking-option-card:has(input[type="checkbox"]:checked) {
+    border-color: rgba(21, 122, 69, 0.48);
+    background: var(--wb-green-soft);
+    box-shadow: var(--wb-shadow-sm);
+  }
+
+  .woodberry-package-card:hover,
+  .booking-option-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(21, 122, 69, 0.35);
+  }
+
+  .woodberry-package-card input,
+  .booking-option-card input[type="checkbox"] {
+    margin-top: 0.25rem;
+    accent-color: var(--wb-green);
+  }
+
+  .woodberry-package-card__body,
+  .booking-option-card__content {
+    display: grid;
+    min-width: 0;
+    gap: 0.25rem;
+    color: var(--wb-text);
+    font-size: 0.88rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .woodberry-package-card__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .woodberry-package-card strong,
+  .booking-option-card strong {
+    color: var(--wb-green-dark);
+    font-weight: 900;
+  }
+
+  .woodberry-package-card em {
+    color: var(--wb-earth);
+    font-style: normal;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .woodberry-package-card small,
+  .booking-option-card small {
+    color: var(--wb-muted);
+    font-size: 0.78rem;
+  }
+
+  .woodberry-package-card b {
+    color: var(--wb-green-dark);
+    font-weight: 900;
+  }
+
+  .booking-option-card__hours {
+    width: 100%;
+    max-width: 8rem;
+    flex: 0 0 auto;
+    border: 1px solid var(--wb-border);
+    border-radius: 0.65rem;
+    padding: 0.45rem 0.55rem;
+  }
+
+  #bookingForm .booking-option-card__hours {
+    min-height: 2.45rem;
+    padding: 0.45rem 0.55rem !important;
+  }
+
+  .booking-option-card__hours--wide {
+    max-width: 9rem;
+  }
+
+  .booking-option-card--locked {
+    cursor: default;
+  }
+
+  .booking-option-card--unavailable {
+    background: color-mix(in srgb, var(--wb-disabled-bg) 72%, var(--wb-surface-raised));
+    border-color: var(--wb-border);
+    cursor: not-allowed;
+    opacity: 0.78;
+  }
+
+  .booking-option-card--locked:hover {
+    transform: none;
+  }
+
+  .booking-option-card--unavailable:hover {
+    border-color: var(--wb-border);
+    transform: none;
+  }
+
+  .booking-option-card .booking-option-card__package-lock {
+    color: var(--wb-green-dark);
+    font-weight: 800;
+  }
+
+  .booking-field-package-lock {
+    margin: 0.4rem 0 0;
+    color: var(--wb-green-dark);
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  @media (max-width: 640px) {
+    #bookingForm > .booking-step {
+      border-radius: var(--wb-radius-md);
+      padding: 1rem;
+    }
+
+    .booking-stepper {
+      padding: 0.85rem;
+    }
+
+    .booking-stepper ol {
+      gap: 0.2rem;
+    }
+
+    .booking-step-trigger {
+      flex-direction: column;
+      gap: 0.3rem;
+      padding: 0.4rem 0.2rem;
+      text-align: center;
+    }
+
+    .booking-step-trigger__label {
+      font-size: 0.66rem;
+    }
+
+    .booking-stepper__status {
+      text-align: left;
+    }
+
+    .booking-step-actions {
+      align-items: stretch;
+      flex-direction: column-reverse;
+    }
+
+    .booking-step-actions__spacer {
+      display: none;
+    }
+
+    .booking-step-button,
+    .booking-submit {
+      width: 100%;
+    }
+
+    .notification-preference__options {
+      grid-template-columns: 1fr;
+    }
+
+    .notification-preference__body {
+      min-height: 4.25rem;
+      text-align: left;
+    }
+
+    .booking-payment-card > div,
+    #bookingConfirmModal .flex.justify-between {
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .booking-payment-card span:last-child {
+      text-align: left;
+      white-space: normal;
+    }
+
+    #termsModal > div,
+    #bookingConfirmModal > div {
+      max-height: 94vh;
+    }
+
+    #termsModal > div > div:last-child,
+    #bookingConfirmModal > div > div:last-child {
+      flex-direction: column;
+    }
+
+    #bookingConfirmModal .grid.grid-cols-2 {
+      grid-template-columns: 1fr;
+    }
+
+    #bookingConfirmModal .col-span-2 {
+      grid-column: auto;
+    }
+
+    .booking-confirmation__header,
+    .confirmation-venue-card,
+    .confirmation-payment-card__top,
+    .booking-confirmation__footer {
+      flex-direction: column;
+    }
+
+    .booking-confirmation__mark {
+      display: none;
+    }
+
+    .confirmation-detail-grid,
+    .confirmation-detail-grid--contact,
+    .confirmation-payment-card__breakdown,
+    .booking-success-card__payment {
+      grid-template-columns: 1fr;
+    }
+
+    .confirmation-detail--wide,
+    .confirmation-detail-grid--contact .confirmation-detail:nth-child(n + 3) {
+      grid-column: auto;
+    }
+
+    .confirmation-payment-card__total {
+      text-align: left;
+      white-space: normal;
+    }
+
+    .confirmation-button {
+      width: 100%;
+    }
+
+    #termsModal,
+    #bookingConfirmModal,
+    #bookingSuccessScreen {
+      padding: 0.65rem;
+    }
+
+    .booking-success-card {
+      max-height: calc(100vh - 1.3rem);
+      overflow-y: auto;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .booking-option-section__heading {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .booking-room-details-link {
+      width: 100%;
+    }
+
+    .woodberry-package-card__top {
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .woodberry-package-card em {
+      white-space: normal;
+    }
+
+    .booking-option-card {
+      grid-template-columns: 1fr;
+    }
+
+    .booking-option-card__media,
+    .booking-option-card__media img {
+      min-height: 9rem;
+      max-height: 10rem;
+    }
+
+    .booking-option-card__content {
+      padding: 0.45rem 0.35rem 0.35rem;
+    }
+
+    .booking-option-card__hours,
+    .booking-option-card__hours--wide {
+      max-width: none;
+    }
+  }
+
+  :global(html.dark) #bookingForm input:not([type="checkbox"]):not([type="radio"]),
+  :global(html.dark) #bookingForm select,
+  :global(html.dark) #bookingForm textarea,
+  :global(html.dark) #terms-back-btn,
+  :global(html.dark) #conf-back-btn {
+    background: var(--wb-surface-raised) !important;
+    border-color: var(--wb-border) !important;
+    color: var(--wb-text) !important;
+  }
+
+  :global(html.dark) #bookingForm > .booking-step,
+  :global(html.dark) .booking-stepper,
+  :global(html.dark) .booking-payment-card,
+  :global(html.dark) #termsModal > div,
+  :global(html.dark) #bookingConfirmModal > div,
+  :global(html.dark) #bookingSuccessScreen > div {
+    background: var(--wb-surface-raised) !important;
+  }
+
+  :global(html.dark) .booking-confirmation__header,
+  :global(html.dark) .booking-confirmation__footer,
+  :global(html.dark) .confirmation-venue-card,
+  :global(html.dark) .confirmation-section,
+  :global(html.dark) .confirmation-payment-card,
+  :global(html.dark) .confirmation-next-steps,
+  :global(html.dark) .confirmation-validity-reminder,
+  :global(html.dark) .booking-success-card__reference,
+  :global(html.dark) .booking-success-card__payment,
+  :global(html.dark) .booking-success-card__steps {
+    background: var(--wb-surface-soft) !important;
+  }
+
+  :global(html.dark) .confirmation-validity-reminder > p:last-child,
+  :global(html.dark) .booking-success-card__validity {
+    color: var(--wb-earth) !important;
+  }
+
+  :global(html.dark) .booking-success-card__validity {
+    background: rgba(58, 48, 35, 0.72);
+    border-color: rgba(197, 164, 112, 0.4);
+  }
+
+  :global(html.dark) .confirmation-detail,
+  :global(html.dark) .confirmation-note-card,
+  :global(html.dark) .confirmation-payment-card__breakdown > div,
+  :global(html.dark) .booking-success-card__payment div,
+  :global(html.dark) .confirmation-button--secondary,
+  :global(html.dark) .booking-summary-card {
+    background: var(--wb-surface-raised) !important;
+  }
+
+  :global(html.dark) #bookingForm label:has(input[type="checkbox"]),
+  :global(html.dark) #bookingForm div:has(> label > input[type="checkbox"]),
+  :global(html.dark) .notification-preference,
+  :global(html.dark) .equipment-information,
+  :global(html.dark) .booking-payment-card > div:has(#minimumPayment),
+  :global(html.dark) #termsModal label:has(#termsAccepted),
+  :global(html.dark) .confirmation-status-pill {
+    background: var(--wb-surface-soft) !important;
+    border-color: var(--wb-border) !important;
+    color: var(--wb-text) !important;
+  }
+
+  :global(html.dark) #bookingForm label:has(input[type="checkbox"]:checked),
+  :global(html.dark) #bookingForm div:has(> label > input[type="checkbox"]:checked),
+  :global(html.dark) #termsModal label:has(#termsAccepted:checked) {
+    background: var(--wb-green-soft) !important;
+    border-color: var(--wb-green-pale) !important;
+  }
+
+  :global(html.dark) .notification-preference__body {
+    background: var(--wb-surface-raised);
+    border-color: var(--wb-border);
+    color: var(--wb-muted) !important;
+  }
+
+  :global(html.dark)
+    .notification-preference__option:has(.notification-preference__input:checked)
+    .notification-preference__body {
+    background: var(--wb-green-soft);
+    border-color: var(--wb-green-pale);
+    color: var(--wb-text) !important;
+    box-shadow: none;
+  }
+
+  :global(html.dark) #bookingForm input:disabled,
+  :global(html.dark) #bookingForm textarea:disabled {
+    background: var(--wb-disabled-bg) !important;
+    color: var(--wb-disabled-text) !important;
+  }
+
+  :global(html.dark) .booking-payment-card,
+  :global(html.dark) .confirmation-payment-card,
+  :global(html.dark) #bookingConfirmModal div[style*="border-color:var(--butterscotch-primary)"] {
+    background:
+      linear-gradient(135deg, rgba(58, 48, 35, 0.78), rgba(23, 29, 22, 0.96)),
+      var(--wb-surface-soft) !important;
+    border-color: rgba(197, 164, 112, 0.46) !important;
+  }
+
+  :global(html.dark) .booking-payment-card > p,
+  :global(html.dark) .confirmation-payment-card__top p:not(.confirmation-section__eyebrow) {
+    color: var(--wb-earth) !important;
+  }
+
+  :global(html.dark) #termsModal > div > div:first-child,
+  :global(html.dark) #bookingConfirmModal > div > div:first-child,
+  :global(html.dark) .booking-confirmation__header {
+    background:
+      radial-gradient(circle at 100% 0%, rgba(37, 56, 35, 0.72), transparent 15rem),
+      var(--wb-surface-soft) !important;
+  }
+
+  :global(html.dark) .booking-confirmation__mark,
+  :global(html.dark) .booking-success-card__mark,
+  :global(html.dark) .booking-success-card__steps span {
+    box-shadow: none;
+  }
+</style>

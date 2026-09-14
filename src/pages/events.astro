@@ -1,0 +1,615 @@
+---
+import EventPhotoGallery, { type EventGalleryPhoto } from '../components/EventPhotoGallery.astro';
+import Footer from '../components/Footer.astro';
+import PublicPageHero from '../components/PublicPageHero.astro';
+import Layout from '../layouts/Layout.astro';
+import { woodberryEventPhotos } from '../data/woodberryPhotos';
+
+type EventSection = {
+  id: string;
+  name: string;
+  eyebrow: string;
+  intro: string;
+  description: string;
+  highlights: string[];
+  photos: EventGalleryPhoto[];
+};
+
+const eventSections: EventSection[] = [
+  {
+    id: 'childrens-party',
+    name: "Children's Party",
+    eyebrow: 'Birthdays and family celebrations',
+    intro: 'Bright, cheerful party setups with room for games, cake moments, buffet service, and family photos.',
+    description:
+      "Woodberry gives children's parties a warm resort setting where guests can celebrate comfortably without feeling crowded. The covered event areas, poolside views, food displays, and themed decor moments help create a joyful celebration that still feels polished for parents and relatives.",
+    highlights: [
+      'Colorful table and stage styling for themed birthdays',
+      'Comfortable dining flow for kids, parents, and relatives',
+      'Photo-ready cake, food, poolside, and program areas',
+    ],
+    photos: woodberryEventPhotos.childrenParty,
+  },
+  {
+    id: 'debut',
+    name: 'Debut',
+    eyebrow: 'Elegant milestone celebrations',
+    intro: 'A refined setting for an eighteenth birthday, from grand entrance to program highlights.',
+    description:
+      'For debuts, Woodberry balances formal celebration with a relaxed resort atmosphere. The venue supports memorable entrances, styled stage moments, dining service, and poolside portraits, giving families a graceful space for a once-in-a-lifetime milestone.',
+    highlights: [
+      'Stage and entrance areas suited for formal program moments',
+      'Poolside scenery for portraits and guest arrival photos',
+      'Dining and catering spaces arranged for a polished evening',
+    ],
+    photos: woodberryEventPhotos.debut,
+  },
+  {
+    id: 'weddings',
+    name: 'Weddings',
+    eyebrow: 'Warm receptions and intimate gatherings',
+    intro: 'A romantic resort setting for wedding receptions, dining, drinks, and picture-worthy details.',
+    description:
+      'Woodberry creates an inviting backdrop for weddings that feel personal, graceful, and easy for guests to enjoy. Couples can celebrate with a prepared stage, buffet service, reception details, and relaxed resort surroundings that make the day feel intimate and memorable.',
+    highlights: [
+      'Reception-friendly hall and stage arrangements',
+      'Buffet and drinks areas for smooth guest service',
+      'Warm indoor and resort photo spots for couple and family portraits',
+    ],
+    photos: woodberryEventPhotos.weddings,
+  },
+];
+---
+
+<Layout
+  title="Events"
+  description="Explore children's parties, debuts, and weddings at Woodberry Resorts and Events Place."
+>
+  <div class="wb-page-surface">
+    <PublicPageHero
+      headingId="events-title"
+      title="Events"
+      description="Celebrate birthdays, debuts, and weddings in warm resort spaces prepared for dining, photos, program moments, and time with the people who matter."
+      image={eventSections[2].photos[0].src}
+      imageAlt="Wedding celebration reception at Woodberry Resorts and Events Place"
+      compact
+    >
+      <a slot="actions" href="#event-types" class="public-page-hero__link public-page-hero__link--primary">
+        Explore events
+      </a>
+      <a slot="actions" href="/events_and_booking/events" class="public-page-hero__link public-page-hero__link--secondary">
+        View packages
+      </a>
+    </PublicPageHero>
+
+    <section id="event-types" class="events-showcase" aria-labelledby="event-types-title">
+      <div class="events-showcase__inner">
+        <div class="events-intro">
+          <div>
+            <p class="events-eyebrow">Woodberry Celebrations</p>
+            <h2 id="event-types-title">Find the setting for your occasion</h2>
+          </div>
+          <p>
+            Each celebration has its own rhythm, from playful birthday details to elegant milestone programs and romantic receptions. Browse the event styles below and picture how Woodberry can hold the day.
+          </p>
+        </div>
+
+        <nav class="event-anchor-nav" aria-label="Event type navigation">
+          {eventSections.map((event) => (
+            <a href={`#${event.id}`}>{event.name}</a>
+          ))}
+        </nav>
+
+        <div class="event-section-list">
+          {
+            eventSections.map((event, index) => (
+              <article
+                id={event.id}
+                class:list={['event-showcase', { 'event-showcase--reverse': index % 2 === 1 }]}
+                aria-labelledby={`${event.id}-title`}
+              >
+                <div class="event-showcase__gallery">
+                  <EventPhotoGallery label={event.name} photos={event.photos} />
+                </div>
+
+                <div class="event-showcase__content">
+                  <div class="event-showcase__header">
+                    <span class="event-showcase__number">{String(index + 1).padStart(2, '0')}</span>
+                    <div>
+                      <p class="event-showcase__eyebrow">{event.eyebrow}</p>
+                      <h3 id={`${event.id}-title`} class="event-showcase__title">{event.name}</h3>
+                    </div>
+                  </div>
+
+                  <p class="event-showcase__intro">{event.intro}</p>
+                  <p class="event-showcase__description">{event.description}</p>
+
+                  <ul class="event-showcase__highlights">
+                    {event.highlights.map((highlight) => (
+                      <li>{highlight}</li>
+                    ))}
+                  </ul>
+
+                  <div class="event-showcase__actions">
+                    <a href="/events_and_booking/events" class="event-showcase__book-link">
+                      View event packages
+                    </a>
+                    <a href="#event-types" class="event-showcase__text-link">
+                      Back to events
+                    </a>
+                  </div>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+  </div>
+  <Footer slot="footer" />
+</Layout>
+
+<style>
+  .events-showcase {
+    scroll-margin-top: calc(var(--site-header-height) + 1rem);
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+    padding: clamp(3rem, 7vw, 6rem) clamp(0.9rem, 4vw, 3rem);
+    background:
+      radial-gradient(circle at 88% 4%, rgba(163, 127, 80, 0.16), transparent 24rem),
+      linear-gradient(180deg, var(--wb-surface) 0%, var(--wb-surface-soft) 48%, var(--wb-surface) 100%);
+  }
+
+  .events-showcase__inner {
+    width: min(100%, 76rem);
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .events-intro {
+    display: grid;
+    min-width: 0;
+    align-items: end;
+    gap: clamp(1rem, 4vw, 3rem);
+    grid-template-columns: minmax(0, 0.95fr) minmax(18rem, 0.78fr);
+  }
+
+  .events-eyebrow,
+  .event-showcase__eyebrow {
+    margin: 0;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .events-eyebrow {
+    margin-bottom: 0.55rem;
+  }
+
+  .events-intro h2 {
+    max-width: 45rem;
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(2rem, 5vw, 4rem);
+    letter-spacing: 0;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  .events-intro > p {
+    min-width: 0;
+    margin: 0;
+    color: var(--wb-muted);
+    line-height: 1.75;
+  }
+
+  .event-anchor-nav {
+    position: sticky;
+    z-index: 3;
+    top: calc(var(--site-header-height) + 0.75rem);
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    gap: 0.55rem;
+    margin: clamp(1.5rem, 4vw, 2.35rem) 0;
+    overflow-x: auto;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 76%, transparent);
+    border-radius: var(--wb-radius-md);
+    background: color-mix(in srgb, var(--wb-surface-raised) 92%, transparent);
+    box-shadow: var(--wb-shadow-sm);
+    padding: 0.65rem;
+    scrollbar-width: thin;
+    backdrop-filter: blur(16px);
+  }
+
+  .event-anchor-nav a {
+    display: inline-flex;
+    min-height: 2.65rem;
+    align-items: center;
+    justify-content: center;
+    flex: 1 0 max-content;
+    border: 1px solid transparent;
+    border-radius: var(--wb-radius-sm);
+    color: var(--wb-link);
+    font-size: 0.82rem;
+    font-weight: 900;
+    padding: 0.7rem 0.9rem;
+    text-decoration: none;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .event-anchor-nav a:hover,
+  .event-anchor-nav a:focus-visible {
+    border-color: color-mix(in srgb, var(--wb-green) 38%, var(--wb-border));
+    background: var(--wb-green-soft);
+    color: var(--wb-link-hover);
+    transform: translateY(-1px);
+  }
+
+  .event-section-list {
+    display: grid;
+    min-width: 0;
+    gap: clamp(1.4rem, 3.5vw, 2.75rem);
+  }
+
+  .event-showcase {
+    scroll-margin-top: calc(var(--site-header-height) + 6rem);
+    display: grid;
+    min-width: 0;
+    max-width: 100%;
+    align-items: stretch;
+    gap: 0;
+    grid-template-columns: minmax(0, 1.08fr) minmax(21rem, 0.92fr);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 82%, transparent);
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(244, 241, 232, 0.94)),
+      var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-md);
+    color: var(--wb-text);
+  }
+
+  .event-showcase--reverse {
+    grid-template-columns: minmax(21rem, 0.92fr) minmax(0, 1.08fr);
+  }
+
+  .event-showcase--reverse .event-showcase__gallery {
+    grid-column: 2;
+  }
+
+  .event-showcase--reverse .event-showcase__content {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .event-showcase__gallery {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    min-height: 100%;
+    padding: clamp(0.7rem, 1.5vw, 1rem);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--wb-green-dark) 10%, transparent), transparent),
+      color-mix(in srgb, var(--wb-green-soft) 54%, var(--wb-surface-raised));
+  }
+
+  .event-showcase__content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.35rem, 3vw, 2.6rem);
+  }
+
+  .event-showcase__header {
+    display: grid;
+    align-items: start;
+    gap: 0.85rem;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .event-showcase__number {
+    display: grid;
+    width: 2.65rem;
+    height: 2.65rem;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--wb-warm) 46%, var(--wb-border));
+    border-radius: 999px;
+    background: var(--wb-warm-soft);
+    color: var(--wb-earth);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+  }
+
+  .event-showcase__title {
+    margin: 0.28rem 0 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.9rem, 4vw, 3.25rem);
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.02;
+  }
+
+  .event-showcase__intro {
+    margin: 0.95rem 0 0;
+    color: var(--wb-earth);
+    font-size: clamp(1rem, 1.5vw, 1.16rem);
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .event-showcase__description {
+    margin: 0.85rem 0 0;
+    color: var(--wb-muted);
+    line-height: 1.75;
+  }
+
+  .event-showcase__highlights {
+    display: grid;
+    gap: 0.6rem;
+    margin: 1.2rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .event-showcase__highlights li {
+    position: relative;
+    color: var(--wb-text);
+    font-size: 0.94rem;
+    line-height: 1.55;
+    padding-left: 1.35rem;
+  }
+
+  .event-showcase__highlights li::before {
+    position: absolute;
+    top: 0.58rem;
+    left: 0;
+    width: 0.52rem;
+    height: 0.52rem;
+    border: 2px solid color-mix(in srgb, var(--wb-surface-raised) 80%, transparent);
+    border-radius: 999px;
+    background: var(--wb-green);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--wb-green) 32%, transparent);
+    content: "";
+  }
+
+  .event-showcase__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.4rem;
+    flex-wrap: wrap;
+  }
+
+  .event-showcase__book-link,
+  .event-showcase__text-link {
+    display: inline-flex;
+    min-height: 2.8rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--wb-radius-sm);
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .event-showcase__book-link {
+    border: 1px solid var(--wb-action);
+    background: var(--wb-action);
+    box-shadow: 0 10px 20px rgba(21, 122, 69, 0.14);
+    color: var(--wb-on-action);
+    padding: 0.75rem 1rem;
+  }
+
+  .event-showcase__book-link:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .event-showcase__text-link {
+    color: var(--wb-link);
+    padding: 0.75rem 0.35rem;
+  }
+
+  .event-showcase__text-link:hover {
+    color: var(--wb-link-hover);
+  }
+
+  :global(.public-page-hero),
+  :global(.public-page-hero__inner) {
+    max-width: 100vw;
+  }
+
+  :global(html.dark) .event-anchor-nav,
+  :global(html.dark) .event-showcase {
+    background: var(--wb-surface-raised);
+  }
+
+  :global(html.dark) .event-showcase__gallery {
+    background:
+      linear-gradient(180deg, rgba(139, 200, 154, 0.1), transparent),
+      var(--wb-surface-soft);
+  }
+
+  @media (min-width: 901px) {
+    .events-showcase {
+      padding: clamp(2.6rem, 4.6vw, 4.5rem) clamp(1.5rem, 4vw, 4rem);
+    }
+
+    .events-showcase__inner {
+      width: min(100%, 88rem);
+    }
+
+    .events-intro {
+      gap: clamp(1.25rem, 3vw, 2rem);
+      grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.7fr);
+    }
+
+    .events-intro h2 {
+      max-width: 38rem;
+      font-size: clamp(2rem, 3.3vw, 3rem);
+    }
+
+    .events-intro > p {
+      line-height: 1.58;
+    }
+
+    .event-anchor-nav {
+      gap: 0.45rem;
+      margin: 1.25rem 0 1.5rem;
+      padding: 0.5rem;
+    }
+
+    .event-anchor-nav a {
+      min-height: 2.35rem;
+      padding: 0.55rem 0.8rem;
+    }
+
+    .event-section-list {
+      gap: 1.15rem;
+    }
+
+    .event-showcase,
+    .event-showcase--reverse {
+      grid-template-columns: minmax(0, 0.96fr) minmax(22rem, 1.04fr);
+    }
+
+    .event-showcase--reverse {
+      grid-template-columns: minmax(22rem, 1.04fr) minmax(0, 0.96fr);
+    }
+
+    .event-showcase__gallery {
+      align-items: flex-start;
+      padding: 0.7rem;
+    }
+
+    .event-showcase__content {
+      justify-content: start;
+      padding: clamp(1.35rem, 2.4vw, 2rem);
+    }
+
+    .event-showcase__number {
+      width: 2.35rem;
+      height: 2.35rem;
+      font-size: 0.9rem;
+    }
+
+    .event-showcase__title {
+      font-size: clamp(1.7rem, 2.7vw, 2.45rem);
+    }
+
+    .event-showcase__intro {
+      margin-top: 0.7rem;
+      font-size: clamp(1.02rem, 1.25vw, 1.12rem);
+      line-height: 1.5;
+    }
+
+    .event-showcase__description {
+      margin-top: 0.75rem;
+      font-size: 0.98rem;
+      line-height: 1.65;
+    }
+
+    .event-showcase__highlights {
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .event-showcase__highlights li {
+      font-size: 0.96rem;
+    }
+
+    .event-showcase__actions {
+      margin-top: 1rem;
+    }
+
+    .event-showcase__book-link,
+    .event-showcase__text-link {
+      min-height: 2.55rem;
+      padding-block: 0.65rem;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .events-intro,
+    .event-showcase,
+    .event-showcase--reverse {
+      grid-template-columns: 1fr;
+    }
+
+    .event-showcase--reverse .event-showcase__gallery,
+    .event-showcase--reverse .event-showcase__content {
+      grid-column: auto;
+      grid-row: auto;
+    }
+
+    .event-anchor-nav {
+      position: static;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .events-showcase {
+      padding-inline: 0.75rem;
+    }
+
+    .event-anchor-nav {
+      margin-block: 1.25rem;
+      padding: 0.5rem;
+      flex-wrap: wrap;
+      overflow-x: visible;
+    }
+
+    .event-anchor-nav a {
+      min-height: 2.5rem;
+      min-width: 0;
+      flex: 1 1 100%;
+    }
+
+    .event-section-list {
+      gap: 1rem;
+    }
+
+    .event-showcase {
+      border-radius: var(--wb-radius-md);
+    }
+
+    .event-showcase__gallery {
+      padding: 0.6rem;
+    }
+
+    .event-showcase__content {
+      padding: 1.1rem;
+    }
+
+    .event-showcase__header {
+      grid-template-columns: 1fr;
+    }
+
+    .event-showcase__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .event-showcase__book-link,
+    .event-showcase__text-link {
+      width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .event-anchor-nav a {
+      transition: none;
+    }
+  }
+</style>

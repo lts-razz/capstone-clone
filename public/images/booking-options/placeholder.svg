@@ -1,0 +1,10 @@
+<svg width="640" height="400" viewBox="0 0 640 400" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title description">
+  <title id="title">Woodberry option image placeholder</title>
+  <desc id="description">A simple nature-inspired placeholder for future booking option photography.</desc>
+  <rect width="640" height="400" fill="#E8F2E3"/>
+  <circle cx="520" cy="92" r="44" fill="#EDC58D"/>
+  <path d="M0 322L146 176L250 274L354 144L640 348V400H0V322Z" fill="#A9C99F"/>
+  <path d="M0 358L176 248L276 322L424 214L640 338V400H0V358Z" fill="#4A7C3F"/>
+  <path d="M274 400V273C274 236 304 206 341 206C378 206 408 236 408 273V400H274Z" fill="#2D5A27"/>
+  <path d="M341 219V400" stroke="#DDE8D4" stroke-width="8" stroke-linecap="round"/>
+</svg>

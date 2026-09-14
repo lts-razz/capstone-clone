@@ -1,0 +1,79 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'Discover Woodberry Resorts and Events Place for private celebrations, poolside gatherings, staycations, and comfortable room options.',
+} = Astro.props;
+const pageTitle = title
+  ? `${title} | Woodberry Resorts and Events Place`
+  : 'Woodberry Resorts and Events Place';
+---
+
+<!doctype html>
+<html lang="en" class="max-w-screen min-h-screen m-0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/company-logo-clean.png" />
+    <meta name="theme-color" content="#f2efe5" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <script>
+      (function () {
+        try {
+          var saved = null;
+          try {
+            saved = localStorage.getItem('theme');
+          } catch (e) {
+            saved = null;
+          }
+          var prefersDark =
+            typeof window !== 'undefined' &&
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+          if (saved === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+          } else if (prefersDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+
+          if (typeof window !== 'undefined' && window.addEventListener) {
+            window.addEventListener('theme-changed', function (ev) {
+              try {
+                var v =
+                  ev && (ev instanceof CustomEvent ? ev.detail : undefined);
+                if (v === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else if (v === 'light') {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch (e) {
+                /* ignore */
+              }
+            });
+          }
+        } catch (e) {
+          // ignore errors (privacy modes may throw)
+        }
+      })();
+    </script>
+  </head>
+  <body class="w-full min-h-screen m-0">
+    <Header />
+    <main class="max-w-full min-h-screen"><slot /></main>
+    <slot name="footer" />
+  </body>
+</html>

@@ -1,0 +1,200 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ShowButton from '../components/showButton.astro';
+import { getSafeInternalRedirect } from '../lib/auth';
+
+const redirectPath = getSafeInternalRedirect(Astro.url.searchParams.get('redirect'));
+---
+
+<Layout title="Create an account">
+  <section class="auth-page" aria-labelledby="signup-title">
+    <div class="auth-shell">
+      <div class="auth-brand-panel auth-brand-panel--logo-free auth-brand-panel--signup">
+        <div class="auth-brand-copy">
+          <p class="auth-brand-eyebrow">Plan something memorable</p>
+          <h2 class="auth-brand-title">Woodberry Resorts and Events Place</h2>
+          <p class="auth-brand-subtitle">
+            Create your account to request reservations and keep your Woodberry plans in one place.
+          </p>
+        </div>
+      </div>
+
+      <div id="formBox" class="auth-card">
+        <header class="auth-card-header">
+          <div class="auth-card-topline">
+            <p class="auth-card-eyebrow">Join Woodberry</p>
+            <a href="/" class="auth-back">Back to home</a>
+          </div>
+          <h1 id="signup-title">Create an account</h1>
+          <p class="auth-intro">Tell us a little about yourself to get started.</p>
+        </header>
+
+        <div id="signupNotice" class="hidden auth-notice" role="status" aria-live="polite"></div>
+
+        <form id="register-form" data-redirect={redirectPath} novalidate class="auth-form">
+          <div class="auth-field-row">
+            <div class="auth-field">
+              <label for="firstName">First name</label>
+              <input
+                type="text"
+                name="firstName"
+                id="firstName"
+                autocomplete="given-name"
+                required
+                class="auth-input"
+              />
+            </div>
+
+            <div class="auth-field">
+              <label for="lastName">Last name</label>
+              <input
+                type="text"
+                name="lastName"
+                id="lastName"
+                autocomplete="family-name"
+                required
+                class="auth-input"
+              />
+            </div>
+          </div>
+
+          <div class="auth-field">
+            <label for="email">Email address</label>
+            <input
+              type="email"
+              name="email"
+              id="email"
+              autocomplete="email"
+              inputmode="email"
+              required
+              class="auth-input"
+            />
+          </div>
+
+          <div class="auth-field">
+            <label for="password">Password</label>
+            <div class="auth-password-field">
+              <input
+                type="password"
+                name="password"
+                id="password"
+                autocomplete="new-password"
+                required
+                class="auth-input"
+              />
+              <ShowButton />
+            </div>
+            <p class="auth-field-help">Use a secure password you do not use elsewhere.</p>
+          </div>
+
+          <button id="registerSubmit" type="submit" class="auth-submit">Create an account</button>
+        </form>
+
+        <div id="verificationActions" class="hidden auth-resend">
+          <span>Didn't receive the email? </span>
+          <button id="resendVerification" type="button" class="auth-link">Resend verification email</button>
+        </div>
+
+        <p class="auth-footer">
+          Already have an account?
+          <a href={`/signin?redirect=${encodeURIComponent(redirectPath)}`} class="auth-link">Sign in</a>
+        </p>
+      </div>
+    </div>
+  </section>
+</Layout>
+<script>
+  import { startResendCooldown } from '../lib/resendVerification';
+
+  const form = document.getElementById('register-form') as HTMLFormElement | null;
+  const registerSubmit = document.getElementById('registerSubmit') as HTMLButtonElement | null;
+  const noticeEl = document.getElementById('signupNotice');
+  const verificationActions = document.getElementById('verificationActions');
+  const resendButton = document.getElementById('resendVerification') as HTMLButtonElement | null;
+  let registeredEmail = '';
+
+  function showNotice(msg: string, type: 'error' | 'success') {
+    if (!noticeEl) return;
+    noticeEl.className = 'auth-notice '
+      + (type === 'success' ? 'auth-notice--success' : 'auth-notice--error');
+    noticeEl.textContent = msg;
+    noticeEl.classList.remove('hidden');
+  }
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (registerSubmit?.disabled) return;
+    if (noticeEl) noticeEl.classList.add('hidden');
+
+    const formData = new FormData(form);
+    const firstName = formData.get('firstName')?.toString().trim();
+    const lastName  = formData.get('lastName')?.toString().trim();
+    const email     = formData.get('email')?.toString().trim();
+    const password  = formData.get('password')?.toString();
+
+    if (!firstName || !lastName || !email || !password) {
+      showNotice('Please fill in all fields.', 'error');
+      return;
+    }
+
+    if (registerSubmit) {
+      registerSubmit.disabled = true;
+      registerSubmit.textContent = 'Creating account...';
+    }
+
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, firstName, lastName }),
+        redirect: 'follow',
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.requiresEmailVerification === false) {
+          window.location.href = form.dataset.redirect || '/dashboard';
+          return;
+        }
+
+        registeredEmail = email;
+        form.reset();
+        showNotice(data.message ?? 'Account created. Please verify your email before signing in.', 'success');
+        verificationActions?.classList.remove('hidden');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showNotice('Signup failed: ' + (data.error ?? 'Please try again.'), 'error');
+      }
+    } catch {
+      showNotice('Something went wrong. Please try again.', 'error');
+    } finally {
+      if (registerSubmit) {
+        registerSubmit.disabled = false;
+        registerSubmit.textContent = 'Create an account';
+      }
+    }
+  });
+
+  resendButton?.addEventListener('click', async () => {
+    if (!registeredEmail) return;
+    resendButton.disabled = true;
+    let cooldownStarted = false;
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registeredEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      showNotice(data.message ?? data.error ?? 'Unable to resend verification email.', res.ok ? 'success' : 'error');
+      if (res.ok) {
+        startResendCooldown(resendButton);
+        cooldownStarted = true;
+      }
+    } catch {
+      showNotice('Unable to resend verification email. Please try again.', 'error');
+    } finally {
+      if (!cooldownStarted) resendButton.disabled = false;
+    }
+  });
+</script>

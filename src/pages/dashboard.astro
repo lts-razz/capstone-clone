@@ -1,0 +1,1718 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PublicPageHero from '../components/PublicPageHero.astro';
+import { isEmailVerified } from '../lib/auth';
+import { customerGuard } from '../lib/adminGuard';
+import { supabaseAdmin, supabase } from '../lib/supabase';
+import { normalizeBookingStatus } from '../lib/bookingStatus';
+import { getReservationDeadlineState, hasRequiredSecuringPayment, normalizeBookingPaymentStatus } from '../lib/reservationValidity';
+import { formatReservationCountdown, formatReservationDeadline } from '../lib/reservationDeadlineClient';
+import { woodberryPhotos } from '../data/woodberryPhotos';
+
+const guard = await customerGuard(Astro.cookies);
+if (guard instanceof Response) {
+  if (guard.status === 401) return Astro.redirect('/signin');
+  return Astro.redirect('/');
+}
+const user = guard.user;
+const emailVerified = isEmailVerified(user);
+
+const db = supabaseAdmin ?? supabase;
+
+const { data: profile } = await db
+  .from('customers')
+  .select('first_name, last_name, email, phone, email_notifications_enabled, sms_notifications_enabled')
+  .eq('id', user.id)
+  .single();
+
+const { data: bookings } = await db
+  .from('bookings')
+  .select('id, full_name, phone, pax, start_date, end_date, start_datetime, end_datetime, event_type, status, total_price, venue_id, event_date, special_requests, created_at, updated_at, package_type, package_price, package_inclusions, selected_rooms, add_ons, extension_selections, corkage_selections, additionals, estimate_summary, minimum_payment_amount, remaining_balance_amount, reservation_created_at, reservation_expires_at, reservation_expired_at, cancellation_reason, cancellation_source')
+  .eq('user_id', user.id)
+  .order('created_at', { ascending: false })
+  .limit(20);
+
+const rawBookingIds = (bookings ?? []).map(booking => booking.id);
+const { data: bookingPayments } = rawBookingIds.length > 0
+  ? await db.from('booking_payments').select('booking_id, payment_status, amount_paid, refund_status, refund_amount, refund_processed_at, refund_notes').in('booking_id', rawBookingIds)
+  : { data: [] };
+const paymentMap = Object.fromEntries((bookingPayments ?? []).map(payment => [payment.booking_id, {
+  ...payment,
+  payment_status: normalizeBookingPaymentStatus(payment.payment_status),
+}]));
+
+const normalizedBookings = (bookings ?? []).map((booking) => ({
+  ...booking,
+  status: normalizeBookingStatus(booking.status),
+  payment: paymentMap[booking.id] ?? { payment_status: 'unpaid', amount_paid: 0 },
+}));
+
+const venueIds = [...new Set(normalizedBookings.map(b => b.venue_id))];
+const { data: venues } = venueIds.length > 0
+  ? await db.from('venues').select('id, name, image_url').in('id', venueIds)
+  : { data: [] };
+const venueMap = Object.fromEntries((venues ?? []).map(v => [v.id, v]));
+
+const woodberryPackageNames: Record<string, string> = {
+  'lunch-time': 'Lunch Time Package',
+  'dinner-time': 'Dinner Time Package',
+  'barkada-staycation': 'Barkada Staycation',
+  'pamilya-staycation': 'Pamilya Staycation',
+  'room-rates': 'Room Rates',
+  'custom-booking': 'Custom Booking',
+};
+
+const bookingIds = normalizedBookings.map(b => b.id);
+const { data: existingReviews } = bookingIds.length > 0
+  ? await db.from('reviews').select('booking_id').eq('user_id', user.id).in('booking_id', bookingIds)
+  : { data: [] };
+const reviewedSet = new Set((existingReviews ?? []).map((r: any) => r.booking_id));
+
+const displayName = profile?.first_name
+  ? `${profile.first_name} ${profile.last_name ?? ''}`.trim()
+  : user.email;
+
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+
+const fmtLocalDateTime = (value: string) => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!match) return value;
+  const [, year, month, day, hour, minute] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
+    .toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+};
+
+const fmtBookingSchedule = (booking: { start_datetime?: string | null; end_datetime?: string | null; start_date: string; end_date: string }) => {
+  const hasCurrentDateTimes = booking.start_datetime?.slice(0, 10) === booking.start_date
+    && (!booking.end_datetime || booking.end_datetime.slice(0, 10) === booking.end_date);
+  if (booking.start_datetime && hasCurrentDateTimes) {
+    return booking.end_datetime
+      ? `${fmtLocalDateTime(booking.start_datetime)} → ${fmtLocalDateTime(booking.end_datetime)}`
+      : fmtLocalDateTime(booking.start_datetime);
+  }
+  return `${fmtDate(booking.start_date)} → ${fmtDate(booking.end_date)}`;
+};
+
+const statusConfig: Record<string, { bg: string; text: string; border: string; dot: string; label: string }> = {
+  pending:          { bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)', dot: '#aa8f66', label: 'Payment Required' },
+  booked:           { bg: 'var(--wb-success-bg)', text: 'var(--wb-success-text)', border: 'var(--wb-success-border)', dot: '#176b42', label: 'Booking Secured' },
+  cancelled:        { bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)', dot: '#8f2f20', label: 'Cancelled' },
+  rescheduled:      { bg: 'var(--wb-green-soft)', text: 'var(--wb-link)', border: 'var(--wb-green-pale)', dot: '#496743', label: 'Rescheduled' },
+  completed:        { bg: 'var(--wb-surface-soft)', text: 'var(--wb-muted)', border: 'var(--wb-border)', dot: '#5e554a', label: 'Completed' },
+};
+
+const emailNotificationsEnabled = profile?.email_notifications_enabled ?? true;
+const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
+---
+
+<Layout title="My Bookings">
+<div class="dashboard-page wb-page-surface">
+  <PublicPageHero
+    headingId="dashboard-title"
+    eyebrow="Your Woodberry account"
+    title={`Your Woodberry Plans, ${displayName}`}
+    description="Keep track of your private resort stays, event packages, celebration dates, payments, and updates in one welcoming place."
+    image={woodberryPhotos.dashboardHero}
+    compact
+  >
+    <Fragment slot="actions">
+      <a href="/events_and_booking/events" class="public-page-hero__link public-page-hero__link--primary">View Packages</a>
+      <a href="/events_and_booking/events#availability-filters" class="public-page-hero__link public-page-hero__link--secondary">Check Availability</a>
+      <form method="POST" action="/api/auth/signout">
+        <button type="submit" class="public-page-hero__link public-page-hero__link--secondary">Sign Out</button>
+      </form>
+    </Fragment>
+  </PublicPageHero>
+
+  <div class="dashboard-page__content">
+
+    <!-- ── Quick action cards ── -->
+    {!emailVerified && (
+      <div class="dashboard-verification">
+        <p class="font-bold">Verify your email before booking or paying</p>
+        <p class="mt-1 text-sm">Use the verification link sent to {user.email} before you book an event or make a payment.</p>
+        <div class="mt-3 text-sm">
+          <span>Didn't receive the email? </span>
+          <button id="dashboardResendVerification" data-email={user.email ?? ''} type="button" class="font-bold underline disabled:opacity-60">Resend verification email.</button>
+          <p id="dashboardVerificationNotice" class="hidden mt-2 font-semibold"></p>
+        </div>
+      </div>
+    )}
+
+    <div class="dashboard-overview">
+      <a href="/events_and_booking/events"
+        class="dashboard-summary-card dashboard-summary-card--primary">
+        <div class="dashboard-summary-card__icon" aria-hidden="true">WB</div>
+        <div>
+          <p>View Packages</p>
+          <span>Explore resort stays and event packages</span>
+        </div>
+        <span class="dashboard-summary-card__arrow" aria-hidden="true">→</span>
+      </a>
+
+      <div class="dashboard-summary-card">
+        <div class="dashboard-summary-card__icon" aria-hidden="true">{normalizedBookings.length}</div>
+        <div>
+          <p>My Bookings</p>
+          <span>{normalizedBookings.length} celebration{normalizedBookings.length !== 1 ? 's' : ''} planned</span>
+        </div>
+      </div>
+
+      <div class="dashboard-summary-card dashboard-summary-card--warm">
+        <div class="dashboard-summary-card__icon" aria-hidden="true">{reviewedSet.size}</div>
+        <div>
+          <p>Shared Reviews</p>
+          <span>{reviewedSet.size} Woodberry review{reviewedSet.size !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Bookings section ── -->
+    <section class="dashboard-panel">
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="text-base font-black" style="color:var(--jet-primary);">Notification Preferences</h2>
+          <p class="text-xs text-gray-500 mt-1">Choose how Woodberry sends booking updates.</p>
+        </div>
+        <div class="flex gap-3 flex-wrap">
+          <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold cursor-pointer">
+            <input id="emailNotificationsToggle" type="checkbox" checked={emailNotificationsEnabled} class="accent-green-700" />
+            Email
+          </label>
+          <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold cursor-pointer">
+            <input id="smsNotificationsToggle" type="checkbox" checked={smsNotificationsEnabled} class="accent-green-700" />
+            SMS
+          </label>
+        </div>
+      </div>
+      <p id="notificationPreferenceMessage" class="hidden text-sm font-semibold mt-4"></p>
+    </section>
+
+    <div class="dashboard-section-heading">
+      <div>
+        <p>Celebrations and stays</p>
+        <h2>My Woodberry Bookings</h2>
+      </div>
+      <span>{normalizedBookings.length} booking{normalizedBookings.length !== 1 ? 's' : ''}</span>
+    </div>
+
+    {normalizedBookings.length > 0 ? (
+      <div class="dashboard-bookings">
+        {normalizedBookings.map((b) => {
+          const todayD = new Date(); todayD.setHours(0,0,0,0);
+          const endDate = new Date(b.end_date);
+          const canReview = (b.status === 'booked' || b.status === 'completed') && !reviewedSet.has(b.id);
+          const hasReview = reviewedSet.has(b.id);
+          const venue     = (venueMap as any)[b.venue_id];
+          const venueName = venue?.name ?? 'Unknown Venue';
+          const isCustomBooking = b.package_type === 'custom-booking';
+          const customPricingFinalized = isCustomBooking
+            && (b.estimate_summary as any)?.pricingStatus === 'finalized'
+            && Number(b.total_price) > 0
+            && Number(b.minimum_payment_amount) > 0;
+          const awaitingCustomQuotation = isCustomBooking && !customPricingFinalized
+            && b.status === 'pending';
+          const packageName = isCustomBooking
+            ? 'Custom Booking'
+            : b.package_type ? (woodberryPackageNames[b.package_type] ?? b.package_type) : 'Woodberry Package';
+          const cfg       = statusConfig[b.status] ?? statusConfig.booked;
+          const isCompleted = b.status === 'completed' || (b.status === 'booked' && endDate < todayD);
+          const reservation = getReservationDeadlineState(b);
+          const reservationDeadline = formatReservationDeadline(b.reservation_expires_at);
+          const hasPricedTotal = isCustomBooking
+            ? customPricingFinalized
+            : Number(b.total_price ?? (b.estimate_summary as any)?.total ?? 0) > 0
+              && Number(b.minimum_payment_amount ?? (b.estimate_summary as any)?.minimumPayment ?? 0) > 0;
+          const canPayReservation = b.status === 'pending'
+            && !awaitingCustomQuotation
+            && !hasRequiredSecuringPayment(b, b.payment)
+            && (reservation.kind === 'active_unpaid' || reservation.kind === 'expiring_soon')
+            && hasPricedTotal
+            && Boolean(b.reservation_expires_at);
+          const requiredPayment = Number(b.minimum_payment_amount ?? (b.estimate_summary as any)?.minimumPayment ?? 0);
+          const requiredPaymentLabel = requiredPayment > 0 ? `₱${requiredPayment.toLocaleString()}` : 'Required payment';
+          const countdownLabel = canPayReservation ? formatReservationCountdown(reservation.remainingMs) : '';
+
+          return (
+            <div
+              class="dashboard-booking-card"
+              style={`border-color:${cfg.border};`}
+              onclick={`openUserBookingDetail(${JSON.stringify(JSON.stringify({ ...b, venueName, packageName, customerEmail: profile?.email ?? user.email, customerPhone: profile?.phone ?? b.phone ?? null }))})`}
+            >
+              <!-- Coloured left accent bar -->
+              <div style={`height:4px;background:${cfg.dot};`}></div>
+
+              <div class="p-5">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+
+                  <!-- Left: venue + dates -->
+                  <div class="flex items-start gap-4 flex-1 min-w-0">
+                    <!-- Venue icon / initial -->
+                    <div class="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black text-white"
+                      style={`background:${cfg.dot};`}>
+                      {venueName.charAt(0)}
+                    </div>
+                    <div class="min-w-0">
+                      <p class="font-bold text-base truncate" style="color:var(--jet-primary);">{venueName}</p>
+                      <p class="text-xs mt-1 font-semibold" style="color:var(--wb-green);">{packageName}</p>
+                      <p class="text-sm mt-0.5" style="color:var(--wb-muted);">
+                        {fmtBookingSchedule(b)}
+                        {b.event_type ? <span class="text-xs ml-1 px-2 py-0.5 rounded-full" style="background:var(--wb-warm-soft);color:var(--wb-earth);">{b.event_type}</span> : ''}
+                      </p>
+                      {b.event_date && !b.start_datetime && (
+                        <p class="text-xs mt-1 flex items-center gap-1" style="color:var(--wb-muted);">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                          Event: {fmtDate(b.event_date)}
+                        </p>
+                      )}
+                      {reservation.kind === 'expired_cancelled' && (
+                        <p class="text-xs mt-2 font-semibold rounded-lg px-3 py-2" style="color:var(--wb-danger-text);background:var(--wb-danger-bg);border:1px solid var(--wb-danger-border);">
+                          This reservation expired because the required payment was not completed within 48 hours.
+                        </p>
+                      )}
+                      {awaitingCustomQuotation && (
+                        <p class="text-xs mt-2 font-semibold rounded-lg px-3 py-2" style="color:var(--wb-link);background:var(--wb-green-soft);border:1px solid var(--wb-green-pale);">
+                          Woodberry is finalizing your quotation. No payment is due yet.
+                        </p>
+                      )}
+                      {!awaitingCustomQuotation && reservation.kind === 'deadline_passed' && (
+                        <p class="text-xs mt-2 font-semibold rounded-lg px-3 py-2" style="color:var(--wb-danger-text);background:var(--wb-danger-bg);border:1px solid var(--wb-danger-border);">
+                          This unpaid reservation has passed its payment deadline and is awaiting automatic cancellation.
+                        </p>
+                      )}
+                      {canPayReservation && (
+                        <div class={`reservation-deadline-panel ${reservation.warning ? 'reservation-deadline-panel--warning' : ''}`} data-reservation-panel data-booking-id={b.id}>
+                          <div>
+                            <span>Reserved until</span>
+                            <strong>{reservationDeadline}</strong>
+                          </div>
+                          <div>
+                            <span>Time left</span>
+                            <strong data-reservation-countdown data-expires-at={b.reservation_expires_at}>{countdownLabel}</strong>
+                          </div>
+                          <p>{requiredPaymentLabel} down payment is required to secure this booking. This hold is temporary until the deadline.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <!-- Right: status + price + action -->
+                  <div class="dashboard-booking-card__actions">
+                    <!-- Status badge -->
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                      style={`background:${cfg.bg};color:${cfg.text};border:1px solid ${cfg.border};`}>
+                      <span class="w-1.5 h-1.5 rounded-full" style={`background:${cfg.dot};`}></span>
+                      {isCompleted ? 'Completed' : awaitingCustomQuotation ? 'Waiting for Quotation' : cfg.label}
+                    </span>
+
+                    {isCustomBooking && !customPricingFinalized ? (
+                      <p class="text-sm font-black" style="color:var(--wb-earth);">
+                        To be confirmed
+                      </p>
+                    ) : b.total_price && (
+                      <p class="text-base font-black" style="color:var(--wb-earth);">
+                        ₱{Number(b.total_price).toLocaleString()}
+                      </p>
+                    )}
+
+                    <button
+                      onclick={`event.stopPropagation();openUserBookingDetail(${JSON.stringify(JSON.stringify({ ...b, venueName, packageName, customerEmail: profile?.email ?? user.email, customerPhone: profile?.phone ?? b.phone ?? null }))})`}
+                      class="dashboard-action-button dashboard-action-button--outline"
+                    >
+                      👁 View Details
+                    </button>
+
+                    {canPayReservation && (
+                      <button
+                        data-payable-for={b.id}
+                        onclick={`event.stopPropagation();payUserBooking('${b.id}', this)`}
+                        class="dashboard-action-button dashboard-action-button--primary"
+                      >
+                        Pay Now
+                      </button>
+                    )}
+
+                    {canReview && (
+                      <button
+                        onclick={`event.stopPropagation();openReviewModal('${b.id}','${venueName.replace(/'/g, "\'")}')`}
+                        class="dashboard-action-button dashboard-action-button--warm"
+                      >
+                        ⭐ Leave a Review
+                      </button>
+                    )}
+                    {hasReview && (
+                      <span class="text-xs font-semibold flex items-center gap-1" style="color:var(--wb-green);">
+                        ✓ Reviewed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <div class="dashboard-empty-state">
+        <div class="text-5xl mb-4">📭</div>
+        <p class="font-bold text-lg mb-1" style="color:var(--jet-primary);">No bookings yet</p>
+        <p class="text-sm text-gray-500 mb-5">Explore private resort, pool, pavilion, staycation, and room packages for your next gathering.</p>
+        <a href="/events_and_booking/events"
+          class="wb-btn wb-btn--primary wb-btn--lg">
+          View Packages →
+        </a>
+      </div>
+    )}
+
+  </div>
+</div>
+</Layout>
+
+<style>
+  .dashboard-page {
+    padding-bottom: clamp(3rem, 7vw, 5rem);
+  }
+
+  .dashboard-page__content {
+    width: min(100% - 2rem, 68rem);
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.75rem) 0 0;
+  }
+
+  .dashboard-verification {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--wb-warning-border);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-warning-bg);
+    color: var(--wb-warning-text);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--wb-shadow-sm);
+  }
+
+  .dashboard-verification p {
+    color: inherit;
+  }
+
+  .dashboard-overview {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: clamp(1.5rem, 4vw, 2.25rem);
+  }
+
+  .dashboard-summary-card {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 8rem;
+    align-items: center;
+    gap: 1rem;
+    overflow: hidden;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    color: var(--wb-text);
+    padding: 1.25rem;
+    text-decoration: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .dashboard-summary-card:hover {
+    border-color: rgba(21, 122, 69, 0.42);
+    box-shadow: var(--wb-shadow-md);
+    transform: translateY(-1px);
+  }
+
+  .dashboard-summary-card--primary {
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--wb-green-dark), var(--wb-green));
+    color: #ffffff;
+  }
+
+  .dashboard-summary-card--warm {
+    border-color: color-mix(in srgb, var(--wb-warm) 42%, transparent);
+    background: linear-gradient(135deg, var(--wb-warm-soft), var(--wb-surface-raised));
+  }
+
+  .dashboard-summary-card__icon {
+    display: grid;
+    width: 3rem;
+    height: 3rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid rgba(21, 122, 69, 0.16);
+    border-radius: 999px;
+    background: var(--wb-green-soft);
+    color: var(--wb-green-dark);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1rem;
+    font-weight: 900;
+  }
+
+  .dashboard-summary-card--primary .dashboard-summary-card__icon {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+  }
+
+  .dashboard-summary-card p {
+    margin: 0;
+    color: inherit;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.1rem;
+    font-weight: 800;
+  }
+
+  .dashboard-summary-card span:not(.dashboard-summary-card__arrow) {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--wb-muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .dashboard-summary-card--primary span:not(.dashboard-summary-card__arrow) {
+    color: rgba(255, 255, 255, 0.86);
+  }
+
+  .dashboard-summary-card__arrow {
+    position: absolute;
+    right: 1rem;
+    color: rgba(255, 255, 255, 0.32);
+    font-size: 2.25rem;
+  }
+
+  .dashboard-panel {
+    margin-bottom: 2rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    padding: clamp(1.1rem, 3vw, 1.5rem);
+  }
+
+  .dashboard-section-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .dashboard-section-heading p {
+    margin: 0 0 0.25rem;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-section-heading h2 {
+    margin: 0;
+    color: var(--wb-green-dark) !important;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.55rem, 3vw, 2.2rem);
+  }
+
+  .dashboard-section-heading > span {
+    color: var(--wb-muted);
+    font-size: 0.8rem;
+    font-weight: 800;
+  }
+
+  .dashboard-bookings {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .dashboard-booking-card {
+    overflow: hidden;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .dashboard-booking-card:hover {
+    box-shadow: var(--wb-shadow-md);
+    transform: translateY(-1px);
+  }
+
+  .dashboard-booking-card__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .dashboard-action-button {
+    display: inline-flex;
+    min-height: 2.4rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--wb-radius-sm);
+    padding: 0.6rem 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .dashboard-action-button--outline {
+    border-color: var(--wb-border);
+    background: transparent;
+    color: var(--wb-link);
+  }
+
+  .dashboard-action-button--outline:hover {
+    background: var(--wb-green-soft);
+  }
+
+  .dashboard-action-button--primary {
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+    box-shadow: 0 8px 18px rgba(21, 93, 57, 0.18);
+  }
+
+  .dashboard-action-button--primary:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .dashboard-action-button--warm {
+    background: var(--wb-action-warm);
+    color: var(--wb-on-action-warm);
+  }
+
+  .reservation-deadline-panel,
+  .reservation-detail-deadline {
+    display: grid;
+    gap: 0.65rem;
+    margin-top: 0.85rem;
+    border: 1px solid var(--wb-success-border);
+    border-radius: var(--wb-radius-md);
+    background: linear-gradient(135deg, var(--wb-success-bg), var(--wb-surface-raised));
+    box-shadow: var(--wb-shadow-sm);
+    color: var(--wb-success-text);
+    padding: 0.85rem;
+  }
+
+  .reservation-deadline-panel--warning,
+  .reservation-detail-deadline--warning {
+    border-color: var(--wb-warning-border);
+    background: linear-gradient(135deg, var(--wb-warning-bg), var(--wb-surface-raised));
+    color: var(--wb-warning-text);
+  }
+
+  .reservation-deadline-panel--expired,
+  .reservation-detail-deadline--expired {
+    border-color: var(--wb-danger-border);
+    background: var(--wb-danger-bg);
+    color: var(--wb-danger-text);
+  }
+
+  .reservation-deadline-panel div,
+  .reservation-detail-deadline div {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .reservation-deadline-panel span,
+  .reservation-detail-deadline span {
+    color: var(--wb-muted);
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .reservation-deadline-panel strong,
+  .reservation-detail-deadline strong {
+    color: inherit;
+    font-size: 0.95rem;
+    font-weight: 950;
+    line-height: 1.25;
+    text-align: right;
+  }
+
+  .reservation-deadline-panel p,
+  .reservation-detail-deadline p {
+    margin: 0;
+    color: inherit;
+    font-size: 0.8rem;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .dashboard-empty-state {
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--wb-green-pale);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-raised);
+    padding: clamp(2.5rem, 8vw, 4.5rem) 1.25rem;
+    text-align: center;
+  }
+
+  :global(.user-booking-selection-list) {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0.35rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :global(.user-booking-selection-list li) {
+    border: 1px solid var(--wb-border);
+    border-radius: 0.65rem;
+    background: var(--wb-surface-soft);
+    padding: 0.55rem 0.7rem;
+  }
+
+  :global(.user-booking-selection-list strong),
+  :global(.user-booking-selection-list small) {
+    display: block;
+  }
+
+  :global(.user-booking-selection-list strong) {
+    color: var(--wb-text);
+    font-size: 0.875rem;
+  }
+
+  :global(.user-booking-selection-list small) {
+    margin-top: 0.15rem;
+    color: var(--wb-muted);
+    line-height: 1.35;
+  }
+
+  :global(.user-booking-selection-empty) {
+    margin: 0.35rem 0 0;
+    border: 1px dashed var(--wb-border);
+    border-radius: 0.65rem;
+    background: var(--wb-surface-soft);
+    color: var(--wb-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+    padding: 0.55rem 0.7rem;
+  }
+
+  :global(html.dark) body {
+    background: var(--wb-surface);
+  }
+
+  :global(html.dark) .dashboard-summary-card,
+  :global(html.dark) .dashboard-panel,
+  :global(html.dark) .dashboard-booking-card,
+  :global(html.dark) .dashboard-empty-state {
+    background: var(--wb-surface-raised);
+    border-color: var(--wb-border);
+    color: var(--wb-text);
+  }
+
+  :global(html.dark) .dashboard-summary-card--primary {
+    background: linear-gradient(135deg, #15251a, #1f6b43);
+    color: #ffffff;
+  }
+
+  :global(html.dark) .dashboard-summary-card--warm,
+  :global(html.dark) .dashboard-verification {
+    background: var(--wb-warning-bg);
+    border-color: var(--wb-warning-border);
+    color: var(--wb-warning-text);
+  }
+
+  :global(html.dark) .dashboard-summary-card__icon {
+    border-color: var(--wb-border);
+    background: var(--wb-green-soft);
+    color: var(--wb-text);
+  }
+
+  :global(html.dark) main h1,
+  :global(html.dark) main h2,
+  :global(html.dark) main h3,
+  :global(html.dark) main h4 {
+    color: var(--wb-green-dark) !important;
+  }
+
+  :global(html.dark) section[style*="background:white"],
+  :global(html.dark) div[style*="background:white"],
+  :global(html.dark) #userBookingDetailModal > div,
+  :global(html.dark) #reviewModal > div {
+    background: var(--wb-surface-raised) !important;
+    border-color: var(--wb-border) !important;
+    color: var(--wb-text) !important;
+    box-shadow: var(--wb-shadow-md) !important;
+  }
+
+  :global(html.dark) #userBookingDetailModal,
+  :global(html.dark) #reviewModal {
+    background: rgba(8, 12, 7, 0.72) !important;
+    backdrop-filter: blur(4px);
+  }
+
+  :global(html.dark) #userBookingDetailModal [class*="border-b"],
+  :global(html.dark) #reviewModal [class*="border-b"] {
+    border-color: var(--wb-border) !important;
+  }
+
+  :global(html.dark) #userBookingDetailModal .bg-gray-50,
+  :global(html.dark) #reviewModal .bg-gray-50,
+  :global(html.dark) #ubd-requests {
+    background: var(--wb-surface-soft) !important;
+    color: var(--wb-muted) !important;
+  }
+
+  :global(html.dark) .text-gray-500,
+  :global(html.dark) .text-gray-400,
+  :global(html.dark) .text-gray-300,
+  :global(html.dark) #reviewVenueName {
+    color: var(--wb-muted) !important;
+  }
+
+  :global(html.dark) label.inline-flex {
+    background: var(--wb-surface-soft);
+    border-color: var(--wb-border) !important;
+    color: var(--wb-text) !important;
+  }
+
+  :global(html.dark) button[style*="background:var(--jet-primary)"] {
+    background: var(--wb-action) !important;
+    color: var(--wb-on-action) !important;
+  }
+
+  :global(html.dark) button[style*="border-color:#cbd5e1"],
+  :global(html.dark) button[style*="border-color:#e5e7eb"],
+  :global(html.dark) button[style*="border-color:#cbd5e1;color:#64748b"] {
+    background: var(--wb-surface-soft) !important;
+    border-color: var(--wb-border) !important;
+    color: var(--wb-green-mid) !important;
+  }
+
+  :global(html.dark) span[style*="background:#f3f4f6"] {
+    background: var(--wb-green-soft) !important;
+    color: var(--wb-green-mid) !important;
+    border: 1px solid var(--wb-border);
+  }
+
+  :global(html.dark) span[style*="background:#f3ede3"],
+  :global(html.dark) span[style*="background:#edf2eb"],
+  :global(html.dark) span[style*="background:#f4f1e8"],
+  :global(html.dark) span[style*="background:#e7efe8"] {
+    background: var(--wb-green-soft) !important;
+    color: var(--wb-green-mid) !important;
+    border-color: var(--wb-border) !important;
+  }
+
+  :global(html.dark) span[style*="background:#fef2f2"] {
+    background: #3a211c !important;
+    color: #efb0a2 !important;
+    border-color: #6d3a2d !important;
+  }
+
+  :global(html.dark) div[style*="border:1.5px solid"] {
+    background: var(--wb-surface-raised) !important;
+  }
+
+  :global(html.dark) p[style*="color:#6b7280"],
+  :global(html.dark) p[style*="color:#9ca3af"] {
+    color: var(--wb-muted) !important;
+  }
+
+  :global(html.dark) .star-btn {
+    color: #4d5748 !important;
+  }
+
+  :global(html.dark) #reviewComment {
+    background: var(--wb-surface-soft) !important;
+    border-color: var(--wb-border) !important;
+    color: var(--wb-text) !important;
+  }
+
+  @media (min-width: 641px) and (max-width: 900px) {
+    .dashboard-overview {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-summary-card--primary {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .dashboard-page__content {
+      width: min(100% - 1.5rem, 68rem);
+    }
+
+    .dashboard-overview {
+      grid-template-columns: 1fr;
+    }
+
+    .dashboard-summary-card {
+      min-height: 6.5rem;
+    }
+
+    .dashboard-section-heading {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .dashboard-booking-card__actions {
+      width: 100%;
+      align-items: stretch;
+    }
+
+    .dashboard-action-button {
+      width: 100%;
+    }
+
+    .reservation-deadline-panel div,
+    .reservation-detail-deadline div {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .reservation-deadline-panel strong,
+    .reservation-detail-deadline strong {
+      text-align: left;
+    }
+
+    #userBookingDetailModal,
+    #reviewModal {
+      align-items: flex-start;
+      padding: 1rem 0.75rem;
+    }
+
+    #userBookingDetailModal > div,
+    #reviewModal > div {
+      max-height: 94vh;
+      margin-inline: 0;
+    }
+
+    #userBookingDetailModal .px-7,
+    #reviewModal .px-6 {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style>
+
+<!-- ── USER BOOKING DETAILS MODAL ─────────────────────────────────────────── -->
+<div id="userBookingDetailModal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:var(--wb-overlay);">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[92vh] overflow-y-auto">
+    <div class="px-7 py-5 border-b border-gray-100 flex items-start justify-between">
+      <div>
+        <h3 class="text-2xl font-black" style="color:var(--jet-primary);">Booking Details</h3>
+        <p class="text-sm text-gray-500 mt-1">Your submitted booking information</p>
+      </div>
+      <button onclick="closeUserBookingDetail()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    </div>
+
+    <div class="px-7 py-5 space-y-6">
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-semibold text-gray-500">Current Status:</span>
+        <span id="ubd-status" class="px-3 py-1 rounded-full text-sm font-bold"></span>
+      </div>
+
+      <div>
+        <h4 class="text-sm font-black tracking-widest uppercase mb-4" style="color:var(--jet-primary);">Guest Information</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><p class="text-xs text-gray-400 font-semibold">Full Name</p><p id="ubd-name" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Phone</p><p id="ubd-phone" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Email</p><p id="ubd-email" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Guests</p><p id="ubd-pax" class="font-semibold mt-1">—</p></div>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-sm font-black tracking-widest uppercase mb-4" style="color:var(--jet-primary);">Booking Information</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><p class="text-xs text-gray-400 font-semibold">Venue</p><p id="ubd-venue" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Package</p><p id="ubd-package" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Event Type</p><p id="ubd-event-type" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Event Schedule</p><p id="ubd-event-date" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Reserved Dates</p><p id="ubd-hold" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Package Base</p><p id="ubd-package-price" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Total Price</p><p id="ubd-price" class="font-bold mt-1" style="color:var(--butterscotch-primary);">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">50% Minimum</p><p id="ubd-minimum" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Balance</p><p id="ubd-balance" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Submitted</p><p id="ubd-created" class="font-semibold mt-1">—</p></div>
+        </div>
+        <div id="ubd-reservation-expiration" class="reservation-detail-deadline hidden" data-reservation-panel>
+          <div>
+            <span>Reserved until</span>
+            <strong id="ubd-reservation-deadline">—</strong>
+          </div>
+          <div>
+            <span>Time left</span>
+            <strong id="ubd-reservation-countdown" data-reservation-countdown></strong>
+          </div>
+          <p id="ubd-reservation-payment"></p>
+        </div>
+        <p id="ubd-reservation-message" class="hidden mt-4 rounded-xl px-4 py-3 text-sm font-semibold" style="background:var(--wb-success-bg);color:var(--wb-success-text);border:1px solid var(--wb-success-border);"></p>
+        <p id="ubd-pricing-note" class="mt-3 text-sm leading-6 text-gray-500">A minimum 50% down payment is required to secure the reservation. The remaining balance is paid later according to Woodberry's process.</p>
+      </div>
+
+      <div>
+        <h4 class="text-sm font-black tracking-widest uppercase mb-4" style="color:var(--jet-primary);">Estimate Summary</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><p class="text-xs text-gray-400 font-semibold">Inclusions</p><p id="ubd-inclusions" class="font-semibold mt-1">—</p></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Rooms</p><div id="ubd-rooms"></div></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Optionals / Add-ons</p><div id="ubd-addons"></div></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Extensions</p><div id="ubd-extensions"></div></div>
+          <div><p class="text-xs text-gray-400 font-semibold">Corkage</p><div id="ubd-corkage"></div></div>
+          <div id="ubd-rough-estimate-wrap" class="hidden md:col-span-2"><p class="text-xs text-gray-400 font-semibold">Rough Additions Estimate</p><p id="ubd-rough-estimate" class="font-bold mt-1" style="color:var(--butterscotch-primary);">—</p></div>
+        </div>
+      </div>
+
+      <div id="ubd-requests-wrap" class="hidden">
+        <h4 class="text-sm font-black tracking-widest uppercase mb-3" style="color:var(--jet-primary);">Special Requests</h4>
+        <div class="rounded-xl p-4 bg-gray-50 text-sm text-gray-700" id="ubd-requests"></div>
+      </div>
+    </div>
+
+    <div class="px-7 pb-7 flex justify-end gap-3 flex-wrap">
+      <button id="ubd-pay-button" data-email-verified={String(emailVerified)} onclick="payCurrentBooking()" class="hidden px-5 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed" style="background:var(--wb-green);">Pay Now</button>
+      <button id="ubd-cancel-button" onclick="openCancelCurrentBooking()" class="hidden px-5 py-2 rounded-xl border-2 font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed" style="border-color:var(--wb-danger-border);color:var(--wb-danger-text);background:var(--wb-danger-bg);">Cancel Booking</button>
+<button onclick="closeUserBookingDetail()" class="px-5 py-2 rounded-xl border-2 font-bold text-sm" style="border-color:var(--wb-border);color:var(--wb-link);">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="cancelBookingModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:var(--wb-overlay);">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100 flex items-start justify-between">
+      <div>
+        <h3 class="text-xl font-black" style="color:var(--jet-primary);">Cancel Booking</h3>
+        <p class="text-sm text-gray-500 mt-1">Review the cancellation outcome before confirming.</p>
+      </div>
+      <button onclick="closeCancelBookingModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <p id="cancel-booking-preview" class="rounded-xl px-4 py-3 text-sm font-semibold" style="background:var(--wb-surface-soft);color:var(--jet-primary);border:1px solid var(--wb-border);">Checking cancellation policy...</p>
+      <p id="cancel-booking-policy" class="text-xs leading-5 text-gray-500"></p>
+      <div>
+        <label for="cancel-booking-reason" class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">Reason <span class="text-gray-400 font-normal">(optional)</span></label>
+        <textarea id="cancel-booking-reason" rows="3" maxlength="500" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none" style="border-color:var(--wb-border);"></textarea>
+      </div>
+      <p id="cancel-booking-error" class="hidden text-sm font-semibold rounded-xl px-4 py-3" style="background:var(--wb-danger-bg);color:var(--wb-danger-text);border:1px solid var(--wb-danger-border);"></p>
+    </div>
+    <div class="px-6 pb-6 flex justify-end gap-3 flex-wrap">
+      <button onclick="closeCancelBookingModal()" class="px-5 py-2 rounded-xl border-2 font-bold text-sm" style="border-color:var(--wb-border);color:var(--wb-link);">Keep Booking</button>
+      <button id="confirm-cancel-booking-button" onclick="confirmCancelCurrentBooking()" class="px-5 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed" style="background:var(--wb-danger-text);">Confirm Cancellation</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { startResendCooldown } from '../lib/resendVerification';
+  import { getReservationDeadlineState, hasRequiredSecuringPayment } from '../lib/reservationValidity';
+  import { formatReservationCountdown, formatReservationDeadline, getReservationRemainingMs } from '../lib/reservationDeadlineClient';
+
+  let currentUserBookingId: string | null = null;
+  let currentUserBookingRecord: any = null;
+  let paymentProcessing = false;
+  let cancellationProcessing = false;
+  let cancellationPreview: any = null;
+  const dashboardResendVerification = document.getElementById('dashboardResendVerification') as HTMLButtonElement | null;
+  const dashboardVerificationNotice = document.getElementById('dashboardVerificationNotice');
+
+  const USER_BOOKING_STATUS_CONFIG: Record<string, any> = {
+    pending: { label: 'Payment Required', bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)' },
+    booked: { label: 'Booking Secured', bg: 'var(--wb-success-bg)', text: 'var(--wb-success-text)', border: 'var(--wb-success-border)' },
+    cancelled: { label: 'Cancelled', bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)' },
+    rescheduled: { label: 'Rescheduled', bg: 'var(--wb-green-soft)', text: 'var(--wb-link)', border: 'var(--wb-green-pale)' },
+    completed: { label: 'Completed', bg: 'var(--wb-surface-soft)', text: 'var(--wb-muted)', border: 'var(--wb-border)' },
+  };
+
+  function userBookingSetText(id: string, value: string) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function userBookingFmtDate(value: string | null) {
+    return value ? new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+  }
+
+  function userBookingFmtTs(value: string | null) {
+    return value ? new Date(value).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' } as any) : '—';
+  }
+
+  function userBookingFmtLocalDateTime(value: string | null) {
+    if (!value) return '—';
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!match) return value;
+    const [, year, month, day, hour, minute] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
+      .toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' } as any);
+  }
+
+  function userBookingMoney(value: unknown) {
+    const amount = Number(value ?? 0);
+    return amount ? '₱' + amount.toLocaleString() : '—';
+  }
+
+  function userBookingMoneyExact(value: unknown) {
+    const amount = Number(value ?? 0);
+    return 'PHP ' + amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function userBookingCanCancel(booking: any) {
+    return booking?.status === 'pending' || booking?.status === 'booked' || booking?.status === 'rescheduled';
+  }
+
+  function requiredUserBookingPayment(booking: any) {
+    return Number(booking?.minimum_payment_amount ?? booking?.estimate_summary?.minimumPayment ?? 0);
+  }
+
+  function updateReservationCountdowns() {
+    document.querySelectorAll<HTMLElement>('[data-reservation-countdown]').forEach((el) => {
+      const expiresAt = el.dataset.expiresAt;
+      if (!expiresAt) return;
+      const remainingMs = getReservationRemainingMs(expiresAt);
+      const panel = el.closest<HTMLElement>('[data-reservation-panel]');
+      const bookingId = panel?.dataset.bookingId;
+      if (remainingMs !== null && remainingMs > 0) {
+        el.textContent = formatReservationCountdown(remainingMs);
+        return;
+      }
+      el.textContent = 'Deadline passed';
+      panel?.classList.remove('reservation-deadline-panel--warning', 'reservation-detail-deadline--warning');
+      panel?.classList.add(
+        panel.classList.contains('reservation-detail-deadline')
+          ? 'reservation-detail-deadline--expired'
+          : 'reservation-deadline-panel--expired',
+      );
+      const message = panel?.querySelector('p');
+      if (message) {
+        message.textContent = 'This payment deadline has passed. Online payment is no longer available for this hold.';
+      }
+      if (bookingId) {
+        document.querySelectorAll<HTMLButtonElement>(`[data-payable-for="${bookingId}"]`).forEach((button) => {
+          button.disabled = true;
+          button.classList.add('hidden');
+        });
+      }
+      if (currentUserBookingId && bookingId === currentUserBookingId) {
+        const payButton = document.getElementById('ubd-pay-button') as HTMLButtonElement | null;
+        payButton?.classList.add('hidden');
+      }
+    });
+  }
+
+  setInterval(updateReservationCountdowns, 1000);
+  updateReservationCountdowns();
+
+  function normalizeUserBookingItems(value: any): any[] {
+    if (Array.isArray(value)) return value;
+    return value === null || value === undefined || value === '' ? [] : [value];
+  }
+
+  function combinedUserBookingItems(...values: any[]): any[] {
+    return values.flatMap(normalizeUserBookingItems);
+  }
+
+  function renderUserBookingItems(id: string, value: any, emptyMessage: string) {
+    const container = document.getElementById(id);
+    if (!container) return;
+    container.replaceChildren();
+    const items = normalizeUserBookingItems(value);
+
+    if (items.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'user-booking-selection-empty';
+      empty.textContent = emptyMessage;
+      container.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement('ul');
+    list.className = 'user-booking-selection-list';
+    items.forEach((item: any) => {
+      const row = document.createElement('li');
+      const label = document.createElement('strong');
+      label.textContent = typeof item === 'string' || typeof item === 'number'
+        ? String(item)
+        : item?.label ?? item?.name ?? item?.key ?? 'Selection';
+      row.appendChild(label);
+
+      if (item && typeof item === 'object') {
+        const details: string[] = [];
+        if (item.group) details.push(String(item.group));
+        const hours = Number(item.hours ?? 0);
+        const quantity = Number(item.quantity ?? 0);
+        if (hours > 0) details.push(`${hours.toLocaleString()} ${hours === 1 ? 'hour' : 'hours'}`);
+        else if (quantity > 1) details.push(`Qty ${quantity.toLocaleString()}`);
+        if (item.included === true) details.push('Included in package');
+        const amount = Number(item.amount);
+        if (item.amount !== null && item.amount !== undefined && Number.isFinite(amount) && amount > 0) {
+          details.push(userBookingMoney(amount));
+        }
+        if (details.length > 0) {
+          const meta = document.createElement('small');
+          meta.textContent = details.join(' · ');
+          row.appendChild(meta);
+        }
+      }
+
+      list.appendChild(row);
+    });
+    container.appendChild(list);
+  }
+
+  function userBookingInclusions(value: any) {
+    if (!value) return '—';
+    if (Array.isArray(value.included)) return value.included.join(', ');
+    if (Array.isArray(value)) return value.map((item: any) => item.label ?? item).join(', ');
+    return '—';
+  }
+
+  function openUserBookingDetail(jsonStr: string) {
+    const b = JSON.parse(jsonStr);
+    currentUserBookingId = b.id ?? null;
+    currentUserBookingRecord = b;
+    const isCustomBooking = b.package_type === 'custom-booking' || b.additionals?.customBooking === true;
+    const cfg = USER_BOOKING_STATUS_CONFIG[b.status] ?? USER_BOOKING_STATUS_CONFIG.booked;
+    const badge = document.getElementById('ubd-status') as HTMLElement;
+    if (badge) {
+      badge.textContent = b.status === 'pending' && isCustomBooking
+        && (b.estimate_summary?.pricingStatus !== 'finalized' || !Number(b.total_price) || !Number(b.minimum_payment_amount))
+        ? 'Waiting for Quotation' : cfg.label;
+      badge.style.background = cfg.bg;
+      badge.style.color = cfg.text;
+      badge.style.border = '1px solid ' + cfg.border;
+    }
+
+    userBookingSetText('ubd-name', b.full_name ?? '—');
+    userBookingSetText('ubd-phone', b.customerPhone ?? b.phone ?? '—');
+    userBookingSetText('ubd-email', b.customerEmail ?? '—');
+    userBookingSetText('ubd-pax', b.pax ? b.pax + ' guests' : '—');
+    userBookingSetText('ubd-venue', b.venueName ?? '—');
+    userBookingSetText('ubd-package', isCustomBooking ? 'Custom Booking' : b.packageName ?? 'Woodberry Package');
+    userBookingSetText('ubd-event-type', b.event_type ?? '—');
+    const hasCurrentDateTimes = b.start_datetime?.slice(0, 10) === b.start_date
+      && (!b.end_datetime || b.end_datetime.slice(0, 10) === b.end_date);
+    userBookingSetText(
+      'ubd-event-date',
+      b.start_datetime && hasCurrentDateTimes
+        ? userBookingFmtLocalDateTime(b.start_datetime)
+        : userBookingFmtDate(b.event_date),
+    );
+    userBookingSetText(
+      'ubd-hold',
+      b.start_datetime && hasCurrentDateTimes
+        ? (b.end_datetime
+          ? userBookingFmtLocalDateTime(b.start_datetime) + ' → ' + userBookingFmtLocalDateTime(b.end_datetime)
+          : userBookingFmtLocalDateTime(b.start_datetime))
+        : userBookingFmtDate(b.start_date) + ' → ' + userBookingFmtDate(b.end_date),
+    );
+    userBookingSetText('ubd-package-price', isCustomBooking ? 'To be confirmed' : userBookingMoney(b.package_price ?? b.estimate_summary?.packageBase));
+    userBookingSetText('ubd-price', isCustomBooking && !Number(b.total_price) ? 'To be confirmed' : userBookingMoney(b.total_price));
+    userBookingSetText('ubd-minimum', isCustomBooking && !Number(b.minimum_payment_amount) ? 'After staff quotation' : userBookingMoney(b.minimum_payment_amount ?? b.estimate_summary?.minimumPayment));
+    userBookingSetText('ubd-balance', isCustomBooking && !Number(b.remaining_balance_amount) ? 'After staff quotation' : userBookingMoney(b.remaining_balance_amount ?? b.estimate_summary?.remainingBalance));
+    const customPricingFinalized = !isCustomBooking
+      || (b.estimate_summary?.pricingStatus === 'finalized'
+        && Number(b.total_price) > 0
+        && Number(b.minimum_payment_amount) > 0);
+    userBookingSetText(
+      'ubd-pricing-note',
+      isCustomBooking
+        ? customPricingFinalized
+          ? 'Woodberry admin has finalized the payable amount. Online checkout is now available while this unpaid reservation remains active.'
+          : 'Woodberry is finalizing your quotation. The displayed item prices are rough estimates only, and no payment is due until the final payable amount is set.'
+        : "A minimum 50% down payment is required to secure the reservation. The remaining balance is paid later according to Woodberry's process.",
+    );
+    userBookingSetText(
+      'ubd-rough-estimate',
+      userBookingMoney(b.estimate_summary?.roughAdditionsTotal ?? b.additionals?.roughAdditionsTotal),
+    );
+    document.getElementById('ubd-rough-estimate-wrap')?.classList.toggle('hidden', !isCustomBooking);
+    userBookingSetText(
+      'ubd-inclusions',
+      isCustomBooking ? 'No preset package inclusions.' : userBookingInclusions(b.package_inclusions),
+    );
+    renderUserBookingItems('ubd-rooms', b.selected_rooms ?? b.additionals?.rooms, 'No rooms selected.');
+    renderUserBookingItems(
+      'ubd-addons',
+      combinedUserBookingItems(b.add_ons ?? b.additionals?.addOns, b.additionals?.customItems),
+      'No optionals or add-ons selected.',
+    );
+    renderUserBookingItems('ubd-extensions', b.extension_selections ?? b.additionals?.extensions, 'No extensions selected.');
+    renderUserBookingItems('ubd-corkage', b.corkage_selections ?? b.additionals?.corkage, 'No corkage selected.');
+    userBookingSetText('ubd-created', userBookingFmtTs(b.created_at));
+
+    const reservationExpiration = document.getElementById('ubd-reservation-expiration');
+    const reservationMessage = document.getElementById('ubd-reservation-message');
+    const reservationDeadlineEl = document.getElementById('ubd-reservation-deadline');
+    const reservationCountdownEl = document.getElementById('ubd-reservation-countdown');
+    const reservationPaymentEl = document.getElementById('ubd-reservation-payment');
+    const reservation = getReservationDeadlineState(b);
+    if (reservationExpiration && b.id) reservationExpiration.dataset.bookingId = b.id;
+    if (isCustomBooking && !customPricingFinalized && b.status === 'pending') {
+      reservationExpiration?.classList.add('hidden');
+      userBookingSetText('ubd-reservation-message', 'Woodberry is finalizing your quotation. Your payment window has not started.');
+      reservationMessage?.setAttribute('style', 'background:var(--wb-green-soft);color:var(--wb-link);border:1px solid var(--wb-green-pale);');
+      reservationMessage?.classList.remove('hidden');
+    } else if (reservation.kind === 'expired_cancelled') {
+      userBookingSetText(
+        'ubd-reservation-message',
+        'This reservation expired because the required payment was not completed within 48 hours.',
+      );
+      reservationExpiration?.classList.add('hidden');
+      reservationMessage?.setAttribute('style', 'background:var(--wb-danger-bg);color:var(--wb-danger-text);border:1px solid var(--wb-danger-border);');
+      reservationMessage?.classList.remove('hidden');
+    } else if (reservation.kind === 'deadline_passed') {
+      userBookingSetText(
+        'ubd-reservation-message',
+        'This unpaid reservation has passed its payment deadline and is awaiting automatic cancellation.',
+      );
+      reservationExpiration?.classList.add('hidden');
+      reservationMessage?.setAttribute('style', 'background:var(--wb-danger-bg);color:var(--wb-danger-text);border:1px solid var(--wb-danger-border);');
+      reservationMessage?.classList.remove('hidden');
+    } else if ((reservation.kind === 'active_unpaid' || reservation.kind === 'expiring_soon') && b.reservation_expires_at) {
+      if (reservationDeadlineEl) reservationDeadlineEl.textContent = formatReservationDeadline(b.reservation_expires_at);
+      if (reservationCountdownEl) {
+        reservationCountdownEl.dataset.expiresAt = b.reservation_expires_at;
+        reservationCountdownEl.textContent = formatReservationCountdown(reservation.remainingMs);
+      }
+      if (reservationPaymentEl) {
+        reservationPaymentEl.textContent = userBookingMoney(requiredUserBookingPayment(b)) + ' down payment is required to secure this booking. This hold is temporary until the deadline.';
+      }
+      reservationMessage?.classList.add('hidden');
+      reservationExpiration?.classList.toggle('reservation-detail-deadline--warning', reservation.kind === 'expiring_soon');
+      reservationExpiration?.classList.remove('reservation-detail-deadline--expired');
+      reservationExpiration?.classList.remove('hidden');
+    } else {
+      reservationExpiration?.classList.add('hidden');
+      reservationMessage?.classList.add('hidden');
+    }
+
+    const payButton = document.getElementById('ubd-pay-button') as HTMLButtonElement | null;
+    if (payButton) {
+      const reservationValid = reservation.kind === 'active_unpaid' || reservation.kind === 'expiring_soon';
+      const hasPricedTotal = isCustomBooking
+        ? customPricingFinalized
+        : Number(b.total_price ?? b.estimate_summary?.total ?? 0) > 0
+          && Number(b.minimum_payment_amount ?? b.estimate_summary?.minimumPayment ?? 0) > 0;
+      const canPay = b.status === 'pending' && !hasRequiredSecuringPayment(b, b.payment) && reservationValid && hasPricedTotal;
+      payButton.classList.toggle('hidden', !canPay);
+      if (b.id) payButton.dataset.payableFor = b.id;
+      payButton.disabled = false;
+      payButton.textContent = 'Pay Now';
+    }
+
+    const cancelButton = document.getElementById('ubd-cancel-button') as HTMLButtonElement | null;
+    if (cancelButton) {
+      cancelButton.classList.toggle('hidden', !userBookingCanCancel(b));
+      cancelButton.disabled = false;
+      cancelButton.textContent = 'Cancel Booking';
+    }
+
+    const reqWrap = document.getElementById('ubd-requests-wrap');
+    if (b.special_requests) {
+      userBookingSetText('ubd-requests', b.special_requests);
+      reqWrap?.classList.remove('hidden');
+    } else {
+      reqWrap?.classList.add('hidden');
+    }
+
+    document.getElementById('userBookingDetailModal')?.classList.remove('hidden');
+    updateReservationCountdowns();
+  }
+
+  async function payUserBooking(bookingId: string | null, clickedButton?: HTMLButtonElement | null) {
+    if (!bookingId || paymentProcessing) return;
+    const modalButton = document.getElementById('ubd-pay-button') as HTMLButtonElement | null;
+    const button = clickedButton ?? modalButton;
+    if (modalButton?.dataset.emailVerified !== 'true') {
+      alert('Please verify your email before paying.');
+      return;
+    }
+    const activeBooking = currentUserBookingRecord?.id === bookingId ? currentUserBookingRecord : null;
+    if (activeBooking?.reservation_expires_at && getReservationRemainingMs(activeBooking.reservation_expires_at) !== null && Number(getReservationRemainingMs(activeBooking.reservation_expires_at)) <= 0) {
+      updateReservationCountdowns();
+      alert('This reservation payment deadline has passed.');
+      return;
+    }
+    paymentProcessing = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Opening PayMongo...';
+    }
+    try {
+      const response = await fetch('/api/payments/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.checkoutUrl) throw new Error(result.error || result.message || 'Could not start payment');
+      window.location.href = result.checkoutUrl;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not start payment');
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Pay Now';
+      }
+    } finally {
+      paymentProcessing = false;
+    }
+  }
+
+  async function payCurrentBooking() {
+    await payUserBooking(currentUserBookingId);
+  }
+
+  function setCancelBookingError(message: string | null) {
+    const errorEl = document.getElementById('cancel-booking-error');
+    if (!errorEl) return;
+    if (!message) {
+      errorEl.classList.add('hidden');
+      errorEl.textContent = '';
+      return;
+    }
+    errorEl.textContent = message;
+    errorEl.classList.remove('hidden');
+  }
+
+  function renderCancellationPreview(preview: any) {
+    const previewEl = document.getElementById('cancel-booking-preview');
+    const policyEl = document.getElementById('cancel-booking-policy');
+    if (previewEl) {
+      const refundAmount = userBookingMoneyExact(preview?.refundAmount ?? 0);
+      if (preview?.refundStatus === 'pending') {
+        previewEl.textContent = `Refund eligible. Expected manual refund: ${refundAmount}.`;
+        previewEl.setAttribute('style', 'background:var(--wb-success-bg);color:var(--wb-success-text);border:1px solid var(--wb-success-border);');
+      } else if (preview?.refundStatus === 'not_eligible') {
+        previewEl.textContent = 'No refund is available under the cancellation policy. The deposit will be forfeited.';
+        previewEl.setAttribute('style', 'background:var(--wb-warning-bg);color:var(--wb-warning-text);border:1px solid var(--wb-warning-border);');
+      } else {
+        previewEl.textContent = 'No refund is needed. Cancelling will release your reserved venue dates.';
+        previewEl.setAttribute('style', 'background:var(--wb-green-soft);color:var(--wb-link);border:1px solid var(--wb-green-pale);');
+      }
+    }
+    if (policyEl) policyEl.textContent = preview?.policySummary ?? '';
+  }
+
+  async function openCancelCurrentBooking() {
+    if (!currentUserBookingId || cancellationProcessing) return;
+    const button = document.getElementById('ubd-cancel-button') as HTMLButtonElement | null;
+    const confirmButton = document.getElementById('confirm-cancel-booking-button') as HTMLButtonElement | null;
+    cancellationPreview = null;
+    setCancelBookingError(null);
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Checking policy...';
+    }
+    if (confirmButton) confirmButton.disabled = true;
+    try {
+      const response = await fetch('/api/bookings/CancelBookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: currentUserBookingId, previewOnly: true }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || result.message || 'Could not check cancellation policy');
+      cancellationPreview = result.cancellation;
+      renderCancellationPreview(cancellationPreview);
+      const reasonInput = document.getElementById('cancel-booking-reason') as HTMLTextAreaElement | null;
+      if (reasonInput) reasonInput.value = '';
+      document.getElementById('cancelBookingModal')?.classList.remove('hidden');
+      if (confirmButton) confirmButton.disabled = false;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not check cancellation policy');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Cancel Booking';
+      }
+    }
+  }
+
+  function closeCancelBookingModal() {
+    if (cancellationProcessing) return;
+    document.getElementById('cancelBookingModal')?.classList.add('hidden');
+    setCancelBookingError(null);
+  }
+
+  async function confirmCancelCurrentBooking() {
+    if (!currentUserBookingId || cancellationProcessing || !cancellationPreview) return;
+    const confirmButton = document.getElementById('confirm-cancel-booking-button') as HTMLButtonElement | null;
+    const reason = (document.getElementById('cancel-booking-reason') as HTMLTextAreaElement | null)?.value.trim() ?? '';
+    cancellationProcessing = true;
+    setCancelBookingError(null);
+    if (confirmButton) {
+      confirmButton.disabled = true;
+      confirmButton.textContent = 'Cancelling...';
+    }
+    try {
+      const response = await fetch('/api/bookings/CancelBookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: currentUserBookingId,
+          cancellationReason: reason || null,
+          confirmedSensitiveAction: true,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || result.message || 'Could not cancel booking');
+      const outcome = result.cancellation ?? cancellationPreview;
+      const suffix = outcome?.refundStatus === 'pending'
+        ? ` Refund pending for staff processing: ${userBookingMoneyExact(outcome.refundAmount)}.`
+        : outcome?.refundStatus === 'not_eligible'
+          ? ' No refund is available under the policy.'
+          : ' No refund is needed.';
+      alert((result.message ?? 'Booking cancelled successfully') + suffix);
+      window.location.reload();
+    } catch (err) {
+      setCancelBookingError(err instanceof Error ? err.message : 'Could not cancel booking');
+    } finally {
+      cancellationProcessing = false;
+      if (confirmButton) {
+        confirmButton.disabled = false;
+        confirmButton.textContent = 'Confirm Cancellation';
+      }
+    }
+  }
+
+  function closeUserBookingDetail() {
+    currentUserBookingId = null;
+    currentUserBookingRecord = null;
+    document.getElementById('userBookingDetailModal')?.classList.add('hidden');
+  }
+
+  document.getElementById('userBookingDetailModal')?.addEventListener('click', function(e) {
+    if (e.target === document.getElementById('userBookingDetailModal')) closeUserBookingDetail();
+  });
+
+  document.getElementById('cancelBookingModal')?.addEventListener('click', function(e) {
+    if (e.target === document.getElementById('cancelBookingModal')) closeCancelBookingModal();
+  });
+
+  dashboardResendVerification?.addEventListener('click', async () => {
+    const email = dashboardResendVerification.dataset.email ?? '';
+    if (!email || !dashboardVerificationNotice) return;
+    dashboardResendVerification.disabled = true;
+    let cooldownStarted = false;
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json().catch(() => ({}));
+      dashboardVerificationNotice.textContent = data.message ?? data.error ?? 'Unable to resend verification email.';
+      dashboardVerificationNotice.classList.remove('hidden', 'text-green-700', 'text-red-600');
+      dashboardVerificationNotice.classList.add(response.ok ? 'text-green-700' : 'text-red-600');
+      if (response.ok) {
+        startResendCooldown(dashboardResendVerification);
+        cooldownStarted = true;
+      }
+    } catch {
+      dashboardVerificationNotice.textContent = 'Unable to resend verification email. Please try again.';
+      dashboardVerificationNotice.classList.remove('hidden', 'text-green-700');
+      dashboardVerificationNotice.classList.add('text-red-600');
+    } finally {
+      if (!cooldownStarted) dashboardResendVerification.disabled = false;
+    }
+  });
+
+  (window as any).openUserBookingDetail = openUserBookingDetail;
+  (window as any).payUserBooking = payUserBooking;
+  (window as any).payCurrentBooking = payCurrentBooking;
+  (window as any).openCancelCurrentBooking = openCancelCurrentBooking;
+  (window as any).closeCancelBookingModal = closeCancelBookingModal;
+  (window as any).confirmCancelCurrentBooking = confirmCancelCurrentBooking;
+  (window as any).closeUserBookingDetail = closeUserBookingDetail;
+</script>
+
+<!-- ── REVIEW MODAL ──────────────────────────────────────────────────────── -->
+<script>
+  const emailToggle = document.getElementById('emailNotificationsToggle') as HTMLInputElement | null;
+  const smsToggle = document.getElementById('smsNotificationsToggle') as HTMLInputElement | null;
+  const preferenceMessage = document.getElementById('notificationPreferenceMessage');
+
+  function setPreferenceMessage(message: string, isSuccess: boolean) {
+    if (!preferenceMessage) return;
+    preferenceMessage.textContent = message;
+    preferenceMessage.classList.remove('hidden', 'text-red-600', 'text-green-700');
+    preferenceMessage.classList.add(isSuccess ? 'text-green-700' : 'text-red-600');
+  }
+
+  async function saveNotificationPreferences(changedToggle: HTMLInputElement) {
+    if (!emailToggle || !smsToggle) return;
+
+    if (!emailToggle.checked && !smsToggle.checked) {
+      changedToggle.checked = true;
+      setPreferenceMessage('At least one notification channel must remain enabled.', false);
+      return;
+    }
+
+    const response = await fetch('/api/user/notification-preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailNotificationsEnabled: emailToggle.checked,
+        smsNotificationsEnabled: smsToggle.checked,
+      }),
+    });
+
+    if (response.ok) {
+      setPreferenceMessage('Notification preferences updated.', true);
+      return;
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    changedToggle.checked = !changedToggle.checked;
+    setPreferenceMessage(payload.error ?? 'Failed to update notification preferences.', false);
+  }
+
+  emailToggle?.addEventListener('change', () => saveNotificationPreferences(emailToggle));
+  smsToggle?.addEventListener('change', () => saveNotificationPreferences(smsToggle));
+</script>
+
+<div id="reviewModal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:var(--wb-overlay);">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div style="height:4px;background:linear-gradient(90deg,var(--wb-earth),var(--wb-warm));"></div>
+    <div class="px-6 pt-5 pb-4 border-b border-gray-100">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="text-xl font-black" style="color:var(--jet-primary);">Leave a Review</h3>
+          <p id="reviewVenueName" class="text-sm text-gray-500 mt-0.5"></p>
+        </div>
+        <button onclick="closeReviewModal()" class="text-gray-300 hover:text-gray-500 text-2xl leading-none ml-4">&times;</button>
+      </div>
+    </div>
+    <div class="px-6 py-5 space-y-5">
+      <div>
+        <label class="block text-sm font-bold mb-3" style="color:var(--jet-primary);">Your Rating</label>
+        <div class="flex gap-1">
+          {[1,2,3,4,5].map(n => (
+          <button data-star={n} class="star-btn text-4xl transition-all hover:scale-125 focus:outline-none" style="background:none;border:none;cursor:pointer;color:var(--wb-disabled-border);" aria-label={`${n} star`}>★</button>
+          ))}
+        </div>
+        <input type="hidden" id="reviewRating" value="0" />
+      </div>
+      <div>
+        <label class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">
+          Comment <span class="text-gray-400 font-normal">(optional)</span>
+        </label>
+        <textarea id="reviewComment" rows="4"
+          placeholder="Tell us about your experience at Woodberry…"
+          class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none"
+        style="border-color:var(--wb-border);"></textarea>
+      </div>
+      <p id="reviewError" class="hidden text-sm text-red-600 font-medium bg-red-50 px-3 py-2 rounded-lg"></p>
+    </div>
+    <div class="px-6 pb-6 flex gap-3">
+      <button onclick="closeReviewModal()" class="flex-1 py-3 rounded-xl border-2 font-bold text-sm" style="border-color:var(--wb-border);color:var(--wb-link);">Cancel</button>
+      <button onclick="submitReview()" id="submitReviewBtn" class="flex-1 py-3 rounded-xl text-white font-bold text-sm transition hover:opacity-90" style="background:var(--wb-green);">
+        Submit Review ⭐
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let _reviewBookingId = '';
+  let _reviewSubmitting = false;
+
+  function openReviewModal(bookingId: string, venueName: string) {
+    _reviewBookingId = bookingId;
+    const nameEl = document.getElementById('reviewVenueName');
+    if (nameEl) nameEl.textContent = venueName;
+    (document.getElementById('reviewRating') as HTMLInputElement).value = '0';
+    (document.getElementById('reviewComment') as HTMLTextAreaElement).value = '';
+    const errEl = document.getElementById('reviewError');
+    if (errEl) { errEl.classList.add('hidden'); errEl.textContent = ''; }
+    updateStars(0);
+    document.getElementById('reviewModal')?.classList.remove('hidden');
+  }
+
+  function closeReviewModal() {
+    document.getElementById('reviewModal')?.classList.add('hidden');
+  }
+
+  function updateStars(rating: number) {
+    document.querySelectorAll<HTMLElement>('.star-btn').forEach(btn => {
+      const n = parseInt(btn.dataset.star ?? '0');
+      btn.style.color = n <= rating ? 'var(--wb-earth)' : 'var(--wb-disabled-border)';
+      btn.style.transform = n === rating ? 'scale(1.2)' : '';
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>('.star-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', () => updateStars(parseInt(btn.dataset.star ?? '0')));
+    btn.addEventListener('mouseleave', () => updateStars(parseInt((document.getElementById('reviewRating') as HTMLInputElement).value)));
+    btn.addEventListener('click', () => {
+      const n = parseInt(btn.dataset.star ?? '0');
+      (document.getElementById('reviewRating') as HTMLInputElement).value = String(n);
+      updateStars(n);
+    });
+  });
+
+  async function submitReview() {
+    const rating  = parseInt((document.getElementById('reviewRating') as HTMLInputElement).value);
+    const comment = (document.getElementById('reviewComment') as HTMLTextAreaElement).value.trim();
+    const errEl   = document.getElementById('reviewError')!;
+    const btn     = document.getElementById('submitReviewBtn') as HTMLButtonElement;
+
+    if (_reviewSubmitting) return;
+    if (rating < 1) {
+      errEl.textContent = 'Please select a star rating before submitting.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    _reviewSubmitting = true;
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    try {
+      const res = await fetch('/api/reviews/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: _reviewBookingId, rating, comment: comment || null }),
+      });
+
+      if (res.ok) {
+        closeReviewModal();
+        const t = document.createElement('div');
+        t.textContent = '⭐ Review submitted! Thank you.';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--wb-action);color:var(--wb-on-action);padding:14px 20px;border:1px solid var(--wb-green-pale);border-radius:14px;font-weight:700;font-size:0.875rem;box-shadow:var(--wb-shadow-md);animation:slideUp 0.3s ease;';
+        document.body.appendChild(t);
+        setTimeout(() => { t.remove(); location.reload(); }, 2200);
+      } else {
+        const j = await res.json().catch(() => ({}));
+        errEl.textContent = j.message ?? 'Something went wrong. Please try again.';
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Submit Review ⭐';
+      }
+    } catch {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Submit Review ⭐';
+    } finally {
+      _reviewSubmitting = false;
+    }
+  }
+
+  document.getElementById('reviewModal')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('reviewModal')) closeReviewModal();
+  });
+
+  (window as any).openReviewModal  = openReviewModal;
+  (window as any).closeReviewModal = closeReviewModal;
+  (window as any).submitReview     = submitReview;
+</script>

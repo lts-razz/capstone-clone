@@ -1,0 +1,36 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+<Layout title="Payment Status">
+  <main class="min-h-[70vh] grid place-items-center px-4 wb-page-surface"><section class="max-w-xl w-full p-8 text-center wb-card">
+    <h1 class="text-3xl font-bold">Checking your payment</h1><p id="message" class="mt-3">Please keep this page open while we verify PayMongo.</p>
+    <a href="/dashboard" class="wb-btn wb-btn--primary mt-6">View My Bookings</a>
+  </section></main>
+  <script>
+    const id = new URLSearchParams(location.search).get('bookingId');
+    const el = document.getElementById('message');
+    async function check() {
+      if (!id || !el) return;
+      const response = await fetch('/api/payments/status?bookingId=' + encodeURIComponent(id));
+      const result = await response.json();
+      const status = result?.payment?.status;
+      if (status === 'paid' && result?.bookingStatus === 'booked') {
+        el.textContent = 'Payment verified. Your booking is now secured.';
+        return;
+      }
+      if (status === 'paid' && result?.bookingStatus === 'cancelled') {
+        el.textContent = 'Payment received after this reservation was cancelled. Please contact Woodberry to check your booking.';
+        return;
+      }
+      if (status === 'paid') {
+        el.textContent = 'Payment received. We are finishing verification of your booking status.';
+      }
+      if (status === 'failed') {
+        el.textContent = 'Payment failed. You may try again from My Bookings.';
+        return;
+      }
+      setTimeout(check, 2500);
+    }
+    check();
+  </script>
+</Layout>

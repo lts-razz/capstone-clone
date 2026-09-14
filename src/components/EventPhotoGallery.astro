@@ -1,0 +1,367 @@
+---
+export interface EventGalleryPhoto {
+  src: string;
+  alt: string;
+  caption: string;
+}
+
+interface Props {
+  label: string;
+  photos: EventGalleryPhoto[];
+}
+
+const { label, photos } = Astro.props;
+const [firstPhoto] = photos;
+---
+
+<div class="event-photo-gallery" data-event-gallery aria-label={`${label} photo gallery`}>
+  <figure class="event-photo-gallery__stage">
+    <img
+      src={firstPhoto.src}
+      alt={firstPhoto.alt}
+      loading="lazy"
+      decoding="async"
+      data-gallery-image
+    />
+    <figcaption>
+      <span data-gallery-caption>{firstPhoto.caption}</span>
+      <small data-gallery-count>1 of {photos.length}</small>
+    </figcaption>
+  </figure>
+
+  <div class="event-photo-gallery__controls" aria-label={`${label} gallery controls`}>
+    <button type="button" data-gallery-prev aria-label={`Previous ${label} photo`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m15 18-6-6 6-6"></path>
+      </svg>
+    </button>
+    <button type="button" data-gallery-next aria-label={`Next ${label} photo`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m9 18 6-6-6-6"></path>
+      </svg>
+    </button>
+  </div>
+
+  <div class="event-photo-gallery__thumbs" role="tablist" aria-label={`${label} photo choices`}>
+    {
+      photos.map((photo, index) => (
+        <button
+          type="button"
+          class:list={['event-photo-gallery__thumb', { 'is-active': index === 0 }]}
+          role="tab"
+          aria-selected={index === 0 ? 'true' : 'false'}
+          aria-label={`Show ${photo.caption}`}
+          data-gallery-thumb
+          data-gallery-index={index}
+          data-gallery-src={photo.src}
+          data-gallery-alt={photo.alt}
+          data-gallery-caption={photo.caption}
+        >
+          <img src={photo.src} alt="" loading="lazy" decoding="async" />
+        </button>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  type GalleryElements = {
+    image: HTMLImageElement;
+    caption: HTMLElement;
+    count: HTMLElement;
+    thumbs: HTMLButtonElement[];
+  };
+
+  const getGalleryElements = (gallery: HTMLElement): GalleryElements | null => {
+    const image = gallery.querySelector<HTMLImageElement>('[data-gallery-image]');
+    const caption = gallery.querySelector<HTMLElement>('[data-gallery-caption]');
+    const count = gallery.querySelector<HTMLElement>('[data-gallery-count]');
+    const thumbs = Array.from(gallery.querySelectorAll<HTMLButtonElement>('[data-gallery-thumb]'));
+
+    if (!image || !caption || !count || thumbs.length === 0) return null;
+
+    return { image, caption, count, thumbs };
+  };
+
+  const setGalleryPhoto = (gallery: HTMLElement, nextIndex: number) => {
+    const elements = getGalleryElements(gallery);
+    if (!elements) return;
+
+    const normalizedIndex = (nextIndex + elements.thumbs.length) % elements.thumbs.length;
+    const nextThumb = elements.thumbs[normalizedIndex];
+
+    elements.image.src = nextThumb.dataset.gallerySrc ?? elements.image.src;
+    elements.image.alt = nextThumb.dataset.galleryAlt ?? '';
+    elements.caption.textContent = nextThumb.dataset.galleryCaption ?? '';
+    elements.count.textContent = `${normalizedIndex + 1} of ${elements.thumbs.length}`;
+
+    elements.thumbs.forEach((thumb, index) => {
+      const isActive = index === normalizedIndex;
+      thumb.classList.toggle('is-active', isActive);
+      thumb.setAttribute('aria-selected', String(isActive));
+    });
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-event-gallery]').forEach((gallery) => {
+    const elements = getGalleryElements(gallery);
+    if (!elements) return;
+
+    elements.thumbs.forEach((thumb) => {
+      thumb.addEventListener('click', () => {
+        setGalleryPhoto(gallery, Number(thumb.dataset.galleryIndex ?? 0));
+      });
+    });
+
+    gallery.querySelector<HTMLButtonElement>('[data-gallery-prev]')?.addEventListener('click', () => {
+      const activeIndex = elements.thumbs.findIndex((thumb) => thumb.classList.contains('is-active'));
+      setGalleryPhoto(gallery, activeIndex - 1);
+    });
+
+    gallery.querySelector<HTMLButtonElement>('[data-gallery-next]')?.addEventListener('click', () => {
+      const activeIndex = elements.thumbs.findIndex((thumb) => thumb.classList.contains('is-active'));
+      setGalleryPhoto(gallery, activeIndex + 1);
+    });
+  });
+</script>
+
+<style>
+  .event-photo-gallery {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    gap: 0.85rem;
+  }
+
+  .event-photo-gallery__stage {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 72%, transparent);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-green-soft);
+    box-shadow: var(--wb-shadow-md);
+    margin: 0;
+  }
+
+  .event-photo-gallery__stage img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+
+  .event-photo-gallery__stage figcaption {
+    position: absolute;
+    right: 0.85rem;
+    bottom: 0.85rem;
+    left: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: var(--wb-radius-md);
+    background: rgba(8, 20, 6, 0.72);
+    color: #ffffff;
+    padding: 0.75rem 0.85rem;
+    backdrop-filter: blur(10px);
+  }
+
+  .event-photo-gallery__stage span {
+    font-size: 0.86rem;
+    font-weight: 900;
+    line-height: 1.25;
+  }
+
+  .event-photo-gallery__stage small {
+    flex: 0 0 auto;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.72rem;
+    font-weight: 800;
+  }
+
+  .event-photo-gallery__controls {
+    position: absolute;
+    z-index: 2;
+    top: min(45%, 18rem);
+    right: 0.75rem;
+    left: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .event-photo-gallery__controls button {
+    display: grid;
+    width: 2.65rem;
+    height: 2.65rem;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    border-radius: 999px;
+    background: rgba(250, 247, 239, 0.94);
+    box-shadow: 0 10px 24px rgba(6, 12, 5, 0.18);
+    color: var(--wb-green-dark);
+    cursor: pointer;
+    padding: 0;
+    pointer-events: auto;
+  }
+
+  .event-photo-gallery__controls button:hover,
+  .event-photo-gallery__controls button:focus-visible {
+    border-color: var(--wb-green);
+    background: var(--wb-green-soft);
+    transform: translateY(-1px);
+  }
+
+  .event-photo-gallery__controls svg {
+    width: 1.15rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.5;
+  }
+
+  .event-photo-gallery__thumbs {
+    display: grid;
+    min-width: 0;
+    gap: 0.55rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .event-photo-gallery__thumb {
+    min-width: 0;
+    overflow: hidden;
+    border: 2px solid transparent;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-soft);
+    box-shadow: var(--wb-shadow-sm);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .event-photo-gallery__thumb img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1.3 / 1;
+    object-fit: cover;
+    opacity: 0.72;
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .event-photo-gallery__thumb:hover img,
+  .event-photo-gallery__thumb:focus-visible img,
+  .event-photo-gallery__thumb.is-active img {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+
+  .event-photo-gallery__thumb.is-active {
+    border-color: var(--wb-green);
+  }
+
+  :global(html.dark) .event-photo-gallery__controls button {
+    border-color: var(--wb-border);
+    background: var(--wb-surface-raised);
+    color: var(--wb-text);
+  }
+
+  @media (min-width: 901px) {
+    .event-photo-gallery {
+      gap: 0.6rem;
+    }
+
+    .event-photo-gallery__stage {
+      border-radius: var(--wb-radius-md);
+    }
+
+    .event-photo-gallery__stage img {
+      aspect-ratio: 16 / 10;
+    }
+
+    .event-photo-gallery__stage figcaption {
+      right: 0.65rem;
+      bottom: 0.65rem;
+      left: 0.65rem;
+      padding: 0.58rem 0.7rem;
+    }
+
+    .event-photo-gallery__stage span {
+      font-size: 0.8rem;
+    }
+
+    .event-photo-gallery__controls {
+      right: 0.6rem;
+      left: 0.6rem;
+    }
+
+    .event-photo-gallery__controls button {
+      width: 2.35rem;
+      height: 2.35rem;
+    }
+
+    .event-photo-gallery__thumbs {
+      display: flex;
+      gap: 0.42rem;
+      overflow-x: auto;
+      padding-bottom: 0.1rem;
+      scrollbar-width: thin;
+    }
+
+    .event-photo-gallery__thumb {
+      flex: 0 0 4.8rem;
+      border-radius: var(--wb-radius-sm);
+    }
+
+    .event-photo-gallery__thumb img {
+      aspect-ratio: 4 / 3;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .event-photo-gallery__stage {
+      border-radius: var(--wb-radius-md);
+    }
+
+    .event-photo-gallery__stage img {
+      aspect-ratio: 1 / 0.85;
+    }
+
+    .event-photo-gallery__stage figcaption {
+      position: static;
+      border: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 0;
+      background: var(--wb-green-dark);
+    }
+
+    .event-photo-gallery__controls {
+      top: calc((100vw - 1.5rem) * 0.42);
+    }
+
+    .event-photo-gallery__thumbs {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 420px) {
+    .event-photo-gallery__stage figcaption {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.28rem;
+    }
+
+    .event-photo-gallery__thumbs {
+      gap: 0.45rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .event-photo-gallery__controls button,
+    .event-photo-gallery__thumb img {
+      transition: none;
+    }
+  }
+</style>

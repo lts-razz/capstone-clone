@@ -1,0 +1,640 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+import PublicPageHero from '../../components/PublicPageHero.astro';
+import EventCard from '../../components/eventCards/eventCard.astro';
+import AuthRequiredModal from '../../components/auth/AuthRequiredModal.astro';
+import { isEmailVerified } from '../../lib/auth';
+import { getUserRole } from '../../lib/adminGuard';
+import { supabase, supabaseAdmin } from '../../lib/supabase';
+import { toPackageDisplayItem } from '../../lib/packageDisplay';
+import { woodberryPhotos } from '../../data/woodberryPhotos';
+
+const roleInfo = await getUserRole(Astro.cookies);
+const user = roleInfo.user;
+const authState: 'guest' | 'unverified' | 'verified' | 'internal' = !user
+  ? 'guest'
+  : roleInfo.role === 'customer'
+    ? isEmailVerified(user) ? 'verified' : 'unverified'
+    : 'internal';
+
+const packageDb = supabaseAdmin ?? supabase;
+const { data: packageRows, error: packageRowsError } = await packageDb
+  .from('packages')
+  .select('id, name, description, price, inclusions, max_pax, min_pax, duration_label, time_options, included_facilities, rules, booking_options, venue_id, thumbnail_url')
+  .eq('is_active', true)
+  .order('price');
+if (packageRowsError) console.error('[Events] Could not load package rows:', packageRowsError.message);
+
+const packageIds = (packageRows ?? []).map((pkg) => pkg.id);
+const { data: venueAssignments, error: assignmentError } = packageIds.length > 0
+  ? await packageDb
+      .from('package_venue_assignments')
+      .select('package_id, venue_id, created_at')
+      .in('package_id', packageIds)
+      .order('created_at', { ascending: true })
+  : { data: [], error: null };
+if (assignmentError) console.error('[Events] Could not load package venue assignments:', assignmentError.message);
+
+const venueIds = [...new Set((venueAssignments ?? []).map((assignment) => assignment.venue_id))];
+const { data: venueRows, error: venueRowsError } = venueIds.length > 0
+  ? await packageDb
+      .from('venues')
+      .select('id, name, description, capacity, image_url, is_active')
+      .in('id', venueIds)
+  : { data: [], error: null };
+if (venueRowsError) console.error('[Events] Could not load package venues:', venueRowsError.message);
+const venueById = new Map((venueRows ?? []).map((venue) => [venue.id, venue]));
+const venueIdsByPackage = new Map<string, string[]>();
+for (const assignment of venueAssignments ?? []) {
+  const ids = venueIdsByPackage.get(assignment.package_id) ?? [];
+  ids.push(assignment.venue_id);
+  venueIdsByPackage.set(assignment.package_id, ids);
+}
+
+const packageOptions = (packageRows ?? []).map((pkg) => {
+  const assignedVenues = (venueIdsByPackage.get(pkg.id) ?? [])
+    .map((venueId) => venueById.get(venueId))
+    .filter((venue): venue is NonNullable<typeof venue> => Boolean(venue));
+  return toPackageDisplayItem({
+    ...pkg,
+    venues: assignedVenues,
+  });
+});
+
+const eventTypeOptions = [
+  ['wedding', 'Wedding'],
+  ['birthday', 'Birthday Party'],
+  ['reunion', 'Reunion'],
+  ['family-gathering', 'Family Gathering'],
+  ['staycation', 'Staycation'],
+  ['private-event', 'Private Event'],
+  ['corporate', 'Corporate Event'],
+  ['conference', 'Conference'],
+  ['debut', 'Debut'],
+  ['other', 'Other'],
+];
+
+const maxBrowsePrice = Math.max(
+  0,
+  ...packageOptions.map((pkg) => Number(pkg.browsePrice ?? pkg.price) || 0),
+);
+
+const customBookingUrl = '/events_and_booking/events/custom';
+---
+
+<Layout
+  title="Woodberry Packages"
+  description="Explore private resort, event pavilion, pool, staycation, and room packages at Woodberry Resorts and Events Place."
+>
+  <div class="wb-page-surface events-page">
+    <PublicPageHero
+      headingId="events-page-title"
+      title="Choose a Woodberry Package"
+      description="Explore package options for pool days, pavilion celebrations, overnight stays, and relaxed gatherings with family and friends."
+      image={woodberryPhotos.eventsHero}
+      imageAlt="Woodberry event pavilion prepared for a celebration"
+    >
+      <Fragment slot="actions">
+        <a href="#woodberry-packages" class="public-page-hero__link public-page-hero__link--primary">View Packages</a>
+        <a href="#availability-filters" class="public-page-hero__link public-page-hero__link--secondary">Refine Search</a>
+      </Fragment>
+    </PublicPageHero>
+
+    <div id="woodberry-packages" class="events-showcase">
+      <div class="events-showcase__inner">
+        <div class="wb-section-header">
+          <div class="wb-section-header__content">
+            <p class="wb-section-header__eyebrow">Woodberry packages</p>
+            <h2 class="wb-section-header__title">Choose the package that fits your event</h2>
+            <p class="wb-section-header__description">
+              Everyone is welcome to browse our packages. When you are ready to book,
+              sign in and verify your email to send a request.
+            </p>
+          </div>
+        </div>
+
+        {packageOptions.length > 0 && (
+          <section id="availability-filters" class="events-filters wb-card" aria-labelledby="events-filter-title">
+            <div class="events-filters__heading">
+              <div>
+                <p class="wb-section-header__eyebrow">Refine your search</p>
+                <h2 id="events-filter-title">Find your best fit</h2>
+              </div>
+              <p class="events-results" aria-live="polite">
+                Showing <strong data-result-count>{packageOptions.length}</strong>
+                <span data-result-label>{packageOptions.length === 1 ? ' matching package' : ' matching packages'}</span>
+              </p>
+            </div>
+
+            <form class="events-filter-form" data-events-filter-form>
+              <label>
+                <span>Package type</span>
+                <select name="package">
+                  <option value="">All packages</option>
+                  {packageOptions.map((pkg) => <option value={pkg.id}>{pkg.name}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Event type</span>
+                <select name="eventType">
+                  <option value="">All event types</option>
+                  {eventTypeOptions.map(([value, label]) => <option value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Expected guests</span>
+                <input name="guests" type="number" min="1" step="1" inputmode="numeric" placeholder="How many guests?" />
+              </label>
+              <label>
+                <span>Minimum base price</span>
+                <input name="minPrice" type="number" min="0" step="1" inputmode="decimal" placeholder="PHP 0" />
+              </label>
+              <label>
+                <span>Maximum base price</span>
+                <input name="maxPrice" type="number" min="0" step="1" inputmode="decimal" placeholder={maxBrowsePrice ? `PHP ${maxBrowsePrice.toLocaleString('en-PH')}` : 'Any price'} />
+              </label>
+              <label>
+                <span>Sort by</span>
+                <select name="sort">
+                  <option value="name-asc">Name: A to Z</option>
+                  <option value="name-desc">Name: Z to A</option>
+                  <option value="price-asc">Price: low to high</option>
+                  <option value="price-desc">Price: high to low</option>
+                  <option value="capacity-asc">Guest limit: low to high</option>
+                  <option value="capacity-desc">Guest limit: high to low</option>
+                </select>
+              </label>
+              <div class="events-filter-form__actions">
+                <button type="reset" class="events-filter-button events-filter-button--secondary" data-clear-filters>Clear Filters</button>
+              </div>
+              <p class="events-filter-form__note">
+                Package prices are starting estimates. Optional extras and your final arrangements may change the total confirmed by our team.
+              </p>
+            </form>
+          </section>
+        )}
+
+        <section class="custom-booking-entry" aria-labelledby="custom-booking-title">
+          <div>
+            <p class="wb-section-header__eyebrow">Custom Booking</p>
+            <h2 id="custom-booking-title">Build your own event or staycation request</h2>
+            <p>
+              Choose your preferred date, available venue, and custom items or services.
+              Final pricing will be reviewed by Woodberry staff.
+            </p>
+          </div>
+          {
+            authState === 'verified' ? (
+              <a href={customBookingUrl} class="custom-booking-entry__button">Start Custom Booking</a>
+            ) : authState !== 'internal' ? (
+              <button
+                type="button"
+                class="custom-booking-entry__button"
+                data-auth-required-trigger
+                data-auth-required-reason={authState === 'unverified' ? 'unverified' : 'guest'}
+                data-auth-email={user?.email ?? ''}
+                data-booking-name="Custom Booking"
+                data-booking-url={customBookingUrl}
+              >
+                {authState === 'unverified' ? 'Verify Email to Book' : 'Start Custom Booking'}
+              </button>
+            ) : (
+              <a href={customBookingUrl} class="custom-booking-entry__button custom-booking-entry__button--muted">View Custom Request</a>
+            )
+          }
+        </section>
+
+        {
+          packageOptions.length > 0 ? (
+            <>
+              <div class="events-grid" data-events-grid>
+                {packageOptions.map((pkg) => {
+                  const price = Number(pkg.browsePrice ?? pkg.price) || 0;
+                  return (
+                    <div
+                      class="events-grid__item"
+                      data-event-item
+                      data-id={pkg.id}
+                      data-type={pkg.id}
+                      data-name={pkg.name || ''}
+                      data-price={price}
+                      data-min-guests={pkg.minPax}
+                      data-max-guests={pkg.maxPax}
+                      data-event-types={JSON.stringify(pkg.eventTypes)}
+                    >
+                      <EventCard
+                        packageItem={pkg}
+                        authState={authState}
+                        authEmail={user?.email ?? ''}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div class="wb-empty-state events-no-results" data-no-results hidden>
+                <div class="wb-empty-state__icon" aria-hidden="true">WB</div>
+                <h2 class="wb-empty-state__title">No matching packages</h2>
+                <p class="wb-empty-state__text">No packages match your filters. Try adjusting your search.</p>
+                <button type="button" class="events-filter-button events-empty-reset" data-clear-filters>Clear Filters</button>
+              </div>
+            </>
+          ) : (
+            <div class="wb-empty-state events-empty-state">
+              <div class="wb-empty-state__icon" aria-hidden="true">WB</div>
+              <h2 class="wb-empty-state__title">No packages available yet.</h2>
+              <p class="wb-empty-state__text">
+                No packages available yet.
+              </p>
+            </div>
+          )
+        }
+      </div>
+    </div>
+    {(authState === 'guest' || authState === 'unverified') && <AuthRequiredModal />}
+  </div>
+  <Footer slot="footer" />
+</Layout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-events-filter-form]');
+  const grid = document.querySelector<HTMLElement>('[data-events-grid]');
+  const noResults = document.querySelector<HTMLElement>('[data-no-results]');
+  const count = document.querySelector<HTMLElement>('[data-result-count]');
+  const countLabel = document.querySelector<HTMLElement>('[data-result-label]');
+
+  if (form && grid) {
+    const items = Array.from(grid.querySelectorAll<HTMLElement>('[data-event-item]'));
+    const value = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null)?.value ?? '';
+
+    const getEventTypes = (item: HTMLElement): string[] => {
+      try {
+        return JSON.parse(item.dataset.eventTypes ?? '[]') as string[];
+      } catch {
+        return [];
+      }
+    };
+
+    const updateResults = () => {
+      const packageValue = value('package');
+      const eventType = value('eventType');
+      const guests = Math.max(0, Math.floor(Number(value('guests')) || 0));
+      const minPrice = value('minPrice') === '' ? 0 : Math.max(0, Number(value('minPrice')) || 0);
+      const maxPrice = value('maxPrice') === '' ? Number.POSITIVE_INFINITY : Math.max(0, Number(value('maxPrice')) || 0);
+      const [sortField, sortDirection] = value('sort').split('-');
+
+      const matching = items.filter((item) => {
+        const price = Number(item.dataset.price) || 0;
+        const minGuests = Number(item.dataset.minGuests) || 0;
+        const maxGuests = Number(item.dataset.maxGuests) || 0;
+        const eventTypes = getEventTypes(item);
+
+        return (!packageValue || item.dataset.type === packageValue)
+          && (!eventType || eventTypes.includes(eventType))
+          && (!guests || (guests >= minGuests && guests <= maxGuests))
+          && price >= minPrice
+          && price <= maxPrice;
+      });
+
+      items.sort((a, b) => {
+        const direction = sortDirection === 'desc' ? -1 : 1;
+        if (sortField === 'name') return (a.dataset.name ?? '').localeCompare(b.dataset.name ?? '') * direction;
+        if (sortField === 'price') return ((Number(a.dataset.price) || 0) - (Number(b.dataset.price) || 0)) * direction;
+        if (sortField === 'capacity') return ((Number(a.dataset.maxGuests) || 0) - (Number(b.dataset.maxGuests) || 0)) * direction;
+        return 0;
+      }).forEach((item) => grid.append(item));
+
+      items.forEach((item) => {
+        item.hidden = !matching.includes(item);
+      });
+      if (count) count.textContent = String(matching.length);
+      if (countLabel) countLabel.textContent = matching.length === 1 ? ' matching package' : ' matching packages';
+      if (noResults) noResults.hidden = matching.length !== 0;
+      grid.hidden = matching.length === 0;
+    };
+
+    form.addEventListener('input', updateResults);
+    form.addEventListener('submit', (event) => event.preventDefault());
+    form.addEventListener('reset', () => requestAnimationFrame(updateResults));
+    document.querySelectorAll<HTMLButtonElement>('[data-clear-filters]').forEach((button) => {
+      if (button.type === 'reset') return;
+      button.addEventListener('click', () => form.reset());
+    });
+    updateResults();
+  }
+</script>
+
+<style>
+  .events-page {
+    padding-bottom: clamp(3rem, 7vw, 5rem);
+  }
+
+  .events-showcase__inner {
+    width: min(100% - 2rem, 72rem);
+    margin: 0 auto;
+  }
+
+  .events-showcase {
+    padding-top: clamp(2rem, 5vw, 3.75rem);
+    scroll-margin-top: 6rem;
+  }
+
+  .events-grid {
+    display: grid;
+    gap: clamp(1rem, 2.5vw, 1.5rem);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  }
+
+  .events-grid__item {
+    min-width: 0;
+  }
+
+  .events-grid__item[hidden],
+  .events-no-results[hidden] {
+    display: none;
+  }
+
+  .events-filters {
+    margin: 1.5rem 0;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    scroll-margin-top: 6rem;
+  }
+
+  .custom-booking-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    margin: 1.5rem 0;
+    border: 1px solid rgba(21, 122, 69, 0.22);
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(135deg, rgba(232, 242, 227, 0.92), rgba(247, 249, 244, 0.98)),
+      var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-md);
+    padding: clamp(1rem, 3vw, 1.5rem);
+  }
+
+  .custom-booking-entry h2 {
+    margin: 0.2rem 0 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.35rem, 3vw, 1.9rem);
+    letter-spacing: 0;
+  }
+
+  .custom-booking-entry p:not(.wb-section-header__eyebrow) {
+    max-width: 44rem;
+    margin: 0.5rem 0 0;
+    color: var(--wb-muted);
+    line-height: 1.55;
+  }
+
+  .custom-booking-entry__button {
+    display: inline-flex;
+    min-height: 2.9rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--wb-action);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-action);
+    box-shadow: 0 12px 22px rgba(21, 122, 69, 0.16);
+    color: var(--wb-on-action);
+    cursor: pointer;
+    font-size: 0.84rem;
+    font-weight: 900;
+    line-height: 1.2;
+    padding: 0.85rem 1rem;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .custom-booking-entry__button:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .custom-booking-entry__button--muted {
+    border-color: var(--wb-border);
+    background: var(--wb-surface-soft);
+    box-shadow: none;
+    color: var(--wb-link);
+  }
+
+  .events-filters__heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .events-filters__heading h2 {
+    margin: 0.2rem 0 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.35rem, 3vw, 1.75rem);
+  }
+
+  .events-results {
+    margin: 0;
+    color: var(--wb-muted);
+    white-space: nowrap;
+  }
+
+  .events-results strong {
+    color: var(--wb-green);
+    font-size: 1.35rem;
+  }
+
+  .events-filter-form {
+    display: grid;
+    gap: 0.9rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .events-filter-form label {
+    display: grid;
+    gap: 0.4rem;
+    color: var(--wb-green-dark);
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  .events-filter-form input,
+  .events-filter-form select {
+    width: 100%;
+    min-height: 2.75rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-input-bg);
+    color: var(--wb-text);
+    padding: 0.7rem 0.8rem;
+  }
+
+  .events-filter-form input:focus,
+  .events-filter-form select:focus {
+    border-color: var(--wb-green);
+    outline: 3px solid var(--wb-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .events-filter-form__actions {
+    display: flex;
+    align-items: end;
+    gap: 0.6rem;
+  }
+
+  .events-filter-form__note {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--wb-muted);
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+
+  .events-filter-button {
+    min-height: 2.75rem;
+    flex: 1;
+    border: 1px solid var(--wb-action);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+    cursor: pointer;
+    font-weight: 900;
+    padding: 0.65rem 0.8rem;
+  }
+
+  .events-filter-button--secondary {
+    background: transparent;
+    border-color: var(--wb-link);
+    color: var(--wb-link);
+  }
+
+  .events-filter-button:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .events-filter-button--secondary:hover {
+    background: var(--wb-green-soft);
+    color: var(--wb-green-dark);
+  }
+
+  .events-empty-reset {
+    width: min(100%, 12rem);
+    flex: none;
+    margin-top: 0.35rem;
+  }
+
+  .events-no-results {
+    margin-top: 1rem;
+  }
+
+  .events-empty-state {
+    margin-top: 0.5rem;
+  }
+
+  @media (max-width: 640px) {
+    .events-showcase__inner {
+      width: min(100% - 1.5rem, 72rem);
+    }
+
+    .events-filters__heading {
+      align-items: start;
+      flex-direction: column;
+    }
+
+    .events-filter-form {
+      grid-template-columns: 1fr;
+    }
+
+    .events-filter-form__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .custom-booking-entry {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .custom-booking-entry__button {
+      width: 100%;
+    }
+  }
+
+  @media (min-width: 641px) and (max-width: 960px) {
+    .events-filter-form {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 961px) {
+    .events-page {
+      padding-bottom: clamp(2.5rem, 4vw, 3.5rem);
+    }
+
+    .events-showcase__inner {
+      width: min(100% - 3rem, 88rem);
+      max-width: 88rem;
+    }
+
+    .events-showcase {
+      padding-top: clamp(1.5rem, 3.5vw, 2.75rem);
+    }
+
+    .events-grid {
+      gap: 0.95rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 16.75rem), 1fr));
+    }
+
+    .events-filters,
+    .custom-booking-entry {
+      margin: 1rem 0;
+      padding: 1.1rem;
+    }
+
+    .custom-booking-entry {
+      border-radius: var(--wb-radius-md);
+    }
+
+    .custom-booking-entry h2 {
+      font-size: clamp(1.3rem, 2vw, 1.65rem);
+    }
+
+    .custom-booking-entry p:not(.wb-section-header__eyebrow) {
+      max-width: 56rem;
+      line-height: 1.45;
+    }
+
+    .custom-booking-entry__button {
+      min-height: 2.55rem;
+      padding: 0.68rem 0.9rem;
+    }
+
+    .events-filters__heading {
+      margin-bottom: 0.85rem;
+    }
+
+    .events-filters__heading h2 {
+      font-size: clamp(1.25rem, 2vw, 1.55rem);
+    }
+
+    .events-filter-form {
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    }
+
+    .events-filter-form__actions {
+      align-self: end;
+    }
+
+    .events-filter-form input,
+    .events-filter-form select,
+    .events-filter-button {
+      min-height: 2.5rem;
+      padding-block: 0.58rem;
+    }
+  }
+</style>

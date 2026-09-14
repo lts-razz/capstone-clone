@@ -1,0 +1,152 @@
+---
+
+---
+
+<button
+  id="themeButton"
+  class="text-[0.8em] flex gap-2 items-center hover:cursor-pointer select-none"
+  type="button"
+  aria-label="Toggle color theme"
+>
+  <span
+    class="relative inline-flex w-[10ch] h-full items-center justify-center text-center"
+  >
+    <span
+      id="lightText"
+      class="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-100"
+    >
+      Light mode
+    </span>
+    <span
+      id="darkText"
+      class="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-0"
+    >
+      Dark mode
+    </span>
+  </span>
+
+  <div class="theme-toggle-track rounded-full w-12 h-6 bg-gray-300 flex items-center px-1">
+    <div
+      id="btnToggle"
+      class="theme-toggle-knob rounded-full w-[22px] h-[22px] bg-butterscotch-500 transition-all duration-300"
+    >
+    </div>
+  </div>
+</button>
+
+<script>
+  (function () {
+    // Don't run on server
+    if (typeof window === 'undefined') return;
+
+    function init() {
+      const btn = document.getElementById('themeButton');
+      const toggle = document.getElementById('btnToggle');
+      const lightText = document.getElementById('lightText');
+      const darkText = document.getElementById('darkText');
+
+      // Detect saved theme OR default to light
+      let savedTheme;
+      try {
+        savedTheme = localStorage.getItem('theme');
+      } catch (e) {
+        savedTheme = null;
+      }
+      let lightMode = savedTheme !== 'dark'; // default true unless saved as dark
+
+      // Apply saved theme on load
+      function applyTheme() {
+        // clearer intent: add/remove the 'dark' class
+        if (lightMode) {
+          document.documentElement.classList.remove('dark');
+        } else {
+          document.documentElement.classList.add('dark');
+        }
+
+        if (lightText) lightText.style.opacity = lightMode ? '1' : '0';
+        if (darkText) darkText.style.opacity = lightMode ? '0' : '1';
+
+        if (toggle) {
+          // remove any positional/color classes we might have set before
+          toggle.classList.remove(
+            'translate-x-5',
+            'translate-x-0',
+            'bg-butterscotch-500',
+            'bg-jet-500'
+          );
+          if (lightMode) {
+            toggle.classList.add('translate-x-0', 'bg-butterscotch-500');
+          } else {
+            toggle.classList.add('translate-x-5', 'bg-jet-500');
+          }
+        }
+      }
+
+      applyTheme();
+
+      if (btn) {
+        btn.addEventListener('click', () => {
+          lightMode = !lightMode;
+          try {
+            localStorage.setItem('theme', lightMode ? 'light' : 'dark');
+          } catch (e) {}
+          applyTheme();
+          try {
+            if (typeof window !== 'undefined' && window.dispatchEvent) {
+              window.dispatchEvent(
+                new CustomEvent('theme-changed', {
+                  detail: lightMode ? 'light' : 'dark',
+                })
+              );
+            }
+          } catch (e) {
+            /* ignore dispatch errors */
+          }
+        });
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+</script>
+
+<style>
+  #themeButton {
+    color: var(--wb-green-dark);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  #themeButton:focus-visible {
+    border-radius: 999px;
+    outline: 3px solid var(--wb-focus-ring);
+    outline-offset: 4px;
+  }
+
+  .theme-toggle-track {
+    border: 1px solid rgba(74, 124, 63, 0.22);
+    background: var(--wb-green-soft) !important;
+  }
+
+  .theme-toggle-knob {
+    background: var(--wb-warm) !important;
+    box-shadow: 0 2px 8px rgba(26, 46, 16, 0.18);
+  }
+
+  :global(html.dark) #themeButton {
+    color: var(--wb-muted);
+  }
+
+  :global(html.dark) .theme-toggle-track {
+    border-color: var(--wb-border);
+    background: #10170e !important;
+  }
+
+  :global(html.dark) .theme-toggle-knob {
+    background: var(--wb-green-mid) !important;
+  }
+</style>

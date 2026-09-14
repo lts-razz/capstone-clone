@@ -1,0 +1,724 @@
+---
+import Footer from '../components/Footer.astro';
+import PublicPageHero from '../components/PublicPageHero.astro';
+import Layout from '../layouts/Layout.astro';
+import { galleryPhotoGroups, woodberryPhotos, type WoodberryGalleryPhoto } from '../data/woodberryPhotos';
+
+interface AmenitySection {
+  id: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  details: string[];
+  photos: WoodberryGalleryPhoto[];
+  reverse?: boolean;
+}
+
+const galleryPhotosByName = (name: 'Pool' | 'Pavilion') =>
+  galleryPhotoGroups.find((group) => group.name === name)?.photos ?? [];
+
+const treeHousePhoto: WoodberryGalleryPhoto = {
+  src: '/woodbery_pics/property_photos/day/tree_house.jpg',
+  alt: 'Woodberry tree house nestled among the resort greenery',
+  caption: 'Garden Tree House',
+  featured: 'wide',
+};
+
+const amenitySections: AmenitySection[] = [
+  {
+    id: 'pavilion',
+    eyebrow: 'Event-Ready Venue',
+    title: 'Pavilion',
+    description:
+      'A covered gathering space for birthdays, debuts, weddings, reunions, and catered celebrations. The pavilion can shift from open hall layouts to styled banquet arrangements while keeping guests close to the pool and garden areas.',
+    details: [
+      'Covered hall for seated programs and receptions',
+      'Flexible stage area for backdrops, speakers, and celebrants',
+      'Banquet and open-floor layouts for different event sizes',
+      'Convenient connection to food service and poolside spaces',
+    ],
+    photos: galleryPhotosByName('Pavilion'),
+  },
+  {
+    id: 'swimming-pool',
+    eyebrow: 'Resort Leisure',
+    title: 'Swimming Pool',
+    description:
+      "The pool is Woodberry's refreshing centerpiece for daytime swims, staycation visits, and relaxed event moments. It gives guests an easy place to cool down, gather between program segments, and enjoy the resort atmosphere.",
+    details: [
+      'Bright daytime pool access for family and group visits',
+      'Poolside views that complement celebrations and staycations',
+      'Evening lighting for a warm resort feel after sunset',
+      'Close to the pavilion for event-day convenience',
+    ],
+    photos: galleryPhotosByName('Pool').filter((photo) => photo.caption !== 'Poolside Stage'),
+    reverse: true,
+  },
+  {
+    id: 'tree-house',
+    eyebrow: 'Garden Corner',
+    title: 'Tree House',
+    description:
+      'A charming outdoor spot tucked into the greenery, suited for quiet pauses, playful guest photos, and a little extra Woodberry character. It adds a natural, homey detail to the resort grounds without pulling attention away from the main event areas.',
+    details: [
+      'Relaxed garden landmark for casual photos',
+      'Nature-forward setting near the resort grounds',
+      'Inviting stop for families and younger guests',
+      'Warm outdoor accent beside the larger amenity spaces',
+    ],
+    photos: [treeHousePhoto],
+  },
+];
+
+const amenityNavItems = amenitySections.map((section) => ({
+  href: `#${section.id}`,
+  label: section.title,
+}));
+---
+
+<Layout
+  title="Amenities"
+  description="Explore amenities at Woodberry Resorts and Events Place."
+>
+  <div class="wb-page-surface">
+    <PublicPageHero
+      headingId="amenities-title"
+      title="Amenities"
+      description="Explore guest-friendly Woodberry amenities, from the swimming pool to food service areas and event-ready resort spaces."
+      image={woodberryPhotos.amenitiesHero}
+      imageAlt="Woodberry swimming pool available for resort guests"
+      compact
+    >
+      <a slot="actions" href="#pavilion" class="public-page-hero__link public-page-hero__link--primary">
+        Explore amenities
+      </a>
+      <a slot="actions" href="/accommodations#rooms" class="public-page-hero__link public-page-hero__link--secondary">
+        View rooms
+      </a>
+    </PublicPageHero>
+
+    <section id="amenities-list" class="amenities-showcase" aria-labelledby="amenities-list-title">
+      <div class="amenities-showcase__inner">
+        <div class="amenities-intro">
+          <div>
+            <p class="amenities-eyebrow">Resort Amenities</p>
+            <h2 id="amenities-list-title">Spaces that make every Woodberry visit feel complete</h2>
+          </div>
+          <p>
+            Rooms remain the main stay-focused experience, while the pavilion, swimming pool, and tree house round out the resort with event-ready, family-friendly places to gather.
+          </p>
+        </div>
+
+        <nav class="amenity-anchor-nav" aria-label="Amenity navigation">
+          {amenityNavItems.map((item) => (
+            <a href={item.href}>{item.label}</a>
+          ))}
+        </nav>
+
+        <div class="amenity-section-list">
+          {amenitySections.map((section, index) => (
+            <article
+              id={section.id}
+              class:list={['amenity-card', { 'amenity-card--reverse': section.reverse }]}
+              aria-labelledby={`${section.id}-title`}
+            >
+              <div class="amenity-card__media" aria-label={`${section.title} photos`}>
+                <figure class="amenity-card__hero-image">
+                  <img
+                    src={section.photos[0].src}
+                    alt={section.photos[0].alt}
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                  />
+                  <figcaption>{section.photos[0].caption}</figcaption>
+                </figure>
+
+                {section.photos.length > 1 && (
+                  <div class="amenity-card__gallery">
+                    {section.photos.slice(1).map((photo) => (
+                      <figure>
+                        <img src={photo.src} alt={photo.alt} loading="lazy" decoding="async" />
+                        <figcaption>{photo.caption}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div class="amenity-card__content">
+                <div class="amenity-card__header">
+                  <span class="amenity-card__number">{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <p class="amenity-card__eyebrow">{section.eyebrow}</p>
+                    <h3 id={`${section.id}-title`} class="amenity-card__title">{section.title}</h3>
+                  </div>
+                </div>
+
+                <p class="amenity-card__description">{section.description}</p>
+
+                <ul class="amenity-card__features">
+                  {section.details.map((detail) => (
+                    <li>{detail}</li>
+                  ))}
+                </ul>
+
+                <div class="amenity-card__actions">
+                  <a href="/events_and_booking/events" class="amenity-card__book-link">Plan with this space</a>
+                  <a href="#amenities-list" class="amenity-card__text-link">Back to amenities</a>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  </div>
+  <Footer slot="footer" />
+</Layout>
+
+<style>
+  .amenities-showcase {
+    scroll-margin-top: calc(var(--site-header-height) + 1rem);
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+    padding: clamp(3rem, 7vw, 6rem) clamp(0.9rem, 4vw, 3rem);
+    background:
+      linear-gradient(180deg, var(--wb-surface) 0%, var(--wb-surface-soft) 48%, var(--wb-surface) 100%);
+  }
+
+  .amenities-showcase__inner {
+    width: min(100%, 82rem);
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .amenities-intro {
+    display: grid;
+    min-width: 0;
+    align-items: end;
+    gap: clamp(1rem, 4vw, 3rem);
+    grid-template-columns: minmax(0, 0.95fr) minmax(18rem, 0.78fr);
+  }
+
+  .amenities-eyebrow,
+  .amenity-card__eyebrow {
+    margin: 0;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .amenities-eyebrow {
+    margin-bottom: 0.55rem;
+    letter-spacing: 0.16em;
+  }
+
+  .amenities-intro h2 {
+    max-width: 47rem;
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(2rem, 5vw, 4rem);
+    letter-spacing: 0;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  .amenities-intro > p {
+    min-width: 0;
+    margin: 0;
+    color: var(--wb-muted);
+    line-height: 1.75;
+  }
+
+  .amenity-anchor-nav {
+    position: sticky;
+    z-index: 3;
+    top: calc(var(--site-header-height) + 0.75rem);
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    gap: 0.55rem;
+    margin: clamp(1.5rem, 4vw, 2.35rem) 0;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 76%, transparent);
+    border-radius: var(--wb-radius-md);
+    background: color-mix(in srgb, var(--wb-surface-raised) 92%, transparent);
+    box-shadow: var(--wb-shadow-sm);
+    padding: 0.65rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    backdrop-filter: blur(16px);
+  }
+
+  .amenity-anchor-nav a {
+    display: inline-flex;
+    min-height: 2.65rem;
+    align-items: center;
+    justify-content: center;
+    flex: 1 0 max-content;
+    border: 1px solid transparent;
+    border-radius: var(--wb-radius-sm);
+    color: var(--wb-link);
+    font-size: 0.82rem;
+    font-weight: 900;
+    padding: 0.7rem 0.9rem;
+    text-decoration: none;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .amenity-anchor-nav a:hover,
+  .amenity-anchor-nav a:focus-visible {
+    border-color: color-mix(in srgb, var(--wb-green) 38%, var(--wb-border));
+    background: var(--wb-green-soft);
+    color: var(--wb-link-hover);
+    transform: translateY(-1px);
+  }
+
+  .amenity-section-list {
+    display: grid;
+    min-width: 0;
+    gap: clamp(1.25rem, 3vw, 2.2rem);
+  }
+
+  .amenity-card {
+    scroll-margin-top: calc(var(--site-header-height) + 6rem);
+    display: grid;
+    min-width: 0;
+    max-width: 100%;
+    align-items: stretch;
+    gap: 0;
+    grid-template-columns: minmax(0, 1.15fr) minmax(21rem, 0.85fr);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 82%, transparent);
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(244, 241, 232, 0.94)),
+      var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-md);
+    color: var(--wb-text);
+  }
+
+  .amenity-card--reverse {
+    grid-template-columns: minmax(21rem, 0.85fr) minmax(0, 1.15fr);
+  }
+
+  .amenity-card--reverse .amenity-card__media {
+    grid-column: 2;
+  }
+
+  .amenity-card--reverse .amenity-card__content {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .amenity-card__media {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 0.65rem;
+    min-height: 100%;
+    padding: clamp(0.7rem, 1.5vw, 1rem);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--wb-green-dark) 10%, transparent), transparent),
+      color-mix(in srgb, var(--wb-green-soft) 54%, var(--wb-surface-raised));
+  }
+
+  .amenity-card__hero-image,
+  .amenity-card__gallery figure {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 62%, transparent);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-soft);
+    margin: 0;
+  }
+
+  .amenity-card__hero-image {
+    min-height: clamp(22rem, 38vw, 32rem);
+  }
+
+  .amenity-card__hero-image img,
+  .amenity-card__gallery img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .amenity-card__hero-image img {
+    object-position: center 62%;
+  }
+
+  .amenity-card__hero-image figcaption,
+  .amenity-card__gallery figcaption {
+    position: absolute;
+    right: 0.7rem;
+    bottom: 0.7rem;
+    max-width: calc(100% - 1.4rem);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 999px;
+    background: rgba(16, 53, 31, 0.78);
+    color: #fffdf8;
+    font-size: 0.72rem;
+    font-weight: 850;
+    line-height: 1.2;
+    padding: 0.42rem 0.65rem;
+    backdrop-filter: blur(8px);
+  }
+
+  .amenity-card__gallery {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.75rem), 1fr));
+  }
+
+  .amenity-card__gallery figure {
+    min-height: 8.75rem;
+  }
+
+  .amenity-card__content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.35rem, 3vw, 2.6rem);
+  }
+
+  .amenity-card__header {
+    display: grid;
+    align-items: start;
+    gap: 0.85rem;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .amenity-card__number {
+    display: grid;
+    width: 2.65rem;
+    height: 2.65rem;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--wb-warm) 46%, var(--wb-border));
+    border-radius: 999px;
+    background: var(--wb-warm-soft);
+    color: var(--wb-earth);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+  }
+
+  .amenity-card__title {
+    margin: 0.28rem 0 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.9rem, 4vw, 3.25rem);
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.02;
+  }
+
+  .amenity-card__description {
+    margin: 0.95rem 0 0;
+    color: var(--wb-muted);
+    line-height: 1.75;
+  }
+
+  .amenity-card__features {
+    display: grid;
+    gap: 0.55rem;
+    margin: 1.2rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .amenity-card__features li {
+    position: relative;
+    color: var(--wb-text);
+    font-size: 0.94rem;
+    line-height: 1.55;
+    padding-left: 1.35rem;
+  }
+
+  .amenity-card__features li::before {
+    position: absolute;
+    top: 0.58rem;
+    left: 0;
+    width: 0.52rem;
+    height: 0.52rem;
+    border: 2px solid color-mix(in srgb, var(--wb-surface-raised) 80%, transparent);
+    border-radius: 999px;
+    background: var(--wb-green);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--wb-green) 32%, transparent);
+    content: "";
+  }
+
+  .amenity-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.4rem;
+    flex-wrap: wrap;
+  }
+
+  .amenity-card__book-link,
+  .amenity-card__text-link {
+    display: inline-flex;
+    min-height: 2.8rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--wb-radius-sm);
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .amenity-card__book-link {
+    border: 1px solid var(--wb-action);
+    background: var(--wb-action);
+    box-shadow: 0 10px 20px rgba(21, 122, 69, 0.14);
+    color: var(--wb-on-action);
+    padding: 0.75rem 1rem;
+  }
+
+  .amenity-card__book-link:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .amenity-card__text-link {
+    color: var(--wb-link);
+    padding: 0.75rem 0.35rem;
+  }
+
+  .amenity-card__text-link:hover {
+    color: var(--wb-link-hover);
+  }
+
+  :global(.public-page-hero),
+  :global(.public-page-hero__inner) {
+    max-width: 100vw;
+  }
+
+  @media (max-width: 640px) {
+    :global(.public-page-hero__inner) {
+      width: calc(100vw - 1.5rem);
+    }
+  }
+
+  :global(html.dark) .amenity-anchor-nav,
+  :global(html.dark) .amenity-card {
+    background: var(--wb-surface-raised);
+  }
+
+  :global(html.dark) .amenity-card__media {
+    background:
+      linear-gradient(180deg, rgba(139, 200, 154, 0.1), transparent),
+      var(--wb-surface-soft);
+  }
+
+  @media (min-width: 901px) {
+    .amenities-showcase {
+      padding: clamp(2.6rem, 4.6vw, 4.5rem) clamp(1.5rem, 4vw, 4rem);
+    }
+
+    .amenities-showcase__inner {
+      width: min(100%, 88rem);
+    }
+
+    .amenities-intro {
+      gap: clamp(1.25rem, 3vw, 2rem);
+      grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.7fr);
+    }
+
+    .amenities-intro h2 {
+      max-width: 42rem;
+      font-size: clamp(2rem, 3.3vw, 3rem);
+    }
+
+    .amenities-intro > p,
+    .amenity-card__description {
+      line-height: 1.58;
+    }
+
+    .amenity-anchor-nav {
+      gap: 0.45rem;
+      margin: 1.25rem 0 1.5rem;
+      padding: 0.5rem;
+    }
+
+    .amenity-anchor-nav a {
+      min-height: 2.35rem;
+      padding: 0.55rem 0.75rem;
+    }
+
+    .amenity-section-list {
+      gap: 1.15rem;
+    }
+
+    .amenity-card,
+    .amenity-card--reverse {
+      grid-template-columns: minmax(0, 0.96fr) minmax(22rem, 1.04fr);
+    }
+
+    .amenity-card--reverse {
+      grid-template-columns: minmax(22rem, 1.04fr) minmax(0, 0.96fr);
+    }
+
+    .amenity-card__media {
+      gap: 0.5rem;
+      padding: 0.7rem;
+    }
+
+    .amenity-card__hero-image {
+      min-height: 0;
+      aspect-ratio: 16 / 10;
+    }
+
+    .amenity-card__gallery {
+      gap: 0.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+    }
+
+    .amenity-card__gallery figure {
+      min-height: 0;
+      aspect-ratio: 4 / 3;
+    }
+
+    .amenity-card__content {
+      justify-content: start;
+      padding: clamp(1.35rem, 2.4vw, 2rem);
+    }
+
+    .amenity-card__number {
+      width: 2.35rem;
+      height: 2.35rem;
+      font-size: 0.9rem;
+    }
+
+    .amenity-card__title {
+      font-size: clamp(1.7rem, 2.7vw, 2.45rem);
+    }
+
+    .amenity-card__description {
+      margin-top: 0.8rem;
+      font-size: 0.98rem;
+      line-height: 1.65;
+    }
+
+    .amenity-card__features {
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .amenity-card__features li {
+      font-size: 0.96rem;
+    }
+
+    .amenity-card__actions {
+      margin-top: 1rem;
+    }
+
+    .amenity-card__book-link,
+    .amenity-card__text-link {
+      min-height: 2.55rem;
+      padding-block: 0.65rem;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .amenities-intro,
+    .amenity-card,
+    .amenity-card--reverse {
+      grid-template-columns: 1fr;
+    }
+
+    .amenity-card--reverse .amenity-card__media,
+    .amenity-card--reverse .amenity-card__content {
+      grid-column: auto;
+      grid-row: auto;
+    }
+
+    .amenity-anchor-nav {
+      position: static;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .amenities-showcase {
+      padding-inline: 0.75rem;
+    }
+
+    .amenity-anchor-nav {
+      margin-block: 1.25rem;
+      padding: 0.5rem;
+      flex-wrap: wrap;
+      overflow-x: visible;
+    }
+
+    .amenity-anchor-nav a {
+      min-height: 2.5rem;
+      min-width: 0;
+      flex: 1 1 100%;
+    }
+
+    .amenity-section-list {
+      gap: 1rem;
+    }
+
+    .amenity-card {
+      border-radius: var(--wb-radius-md);
+    }
+
+    .amenity-card__media {
+      padding: 0.6rem;
+    }
+
+    .amenity-card__hero-image {
+      min-height: 15.5rem;
+    }
+
+    .amenity-card__gallery {
+      grid-template-columns: 1fr;
+    }
+
+    .amenity-card__gallery figure {
+      min-height: 10rem;
+    }
+
+    .amenity-card__hero-image figcaption,
+    .amenity-card__gallery figcaption {
+      right: 0.55rem;
+      bottom: 0.55rem;
+      max-width: calc(100% - 1.1rem);
+      font-size: 0.68rem;
+    }
+
+    .amenity-card__content {
+      padding: 1.1rem;
+    }
+
+    .amenity-card__header {
+      grid-template-columns: 1fr;
+    }
+
+    .amenity-card__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .amenity-card__book-link,
+    .amenity-card__text-link {
+      width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .amenity-anchor-nav a {
+      transition: none;
+    }
+  }
+</style>

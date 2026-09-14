@@ -1,0 +1,373 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Footer from '../components/Footer.astro';
+import LocationMap from '../components/LocationMap.astro';
+import PublicPageHero from '../components/PublicPageHero.astro';
+import { woodberryPhotos } from '../data/woodberryPhotos';
+---
+
+<Layout
+  title="Contact"
+  description="Contact Woodberry Resorts and Events Place about private resort stays, event packages, pool and pavilion gatherings, rooms, and venue visits."
+>
+  <div class="wb-page-surface contact-page">
+    <PublicPageHero
+      headingId="contact-title"
+      title="Let's Plan Your Woodberry Visit"
+      description="Ask about a private resort stay, pool and pavilion packages, rooms, venue viewings, or an upcoming celebration. Our team will help you with the next details."
+      image={woodberryPhotos.contactHero}
+      imageAlt="Entrance to Woodberry Resorts and Events Place"
+      compact
+    >
+      <Fragment slot="actions">
+        <a href="/events_and_booking/events" class="public-page-hero__link public-page-hero__link--primary">View Packages</a>
+        <a href="/events_and_booking/events#availability-filters" class="public-page-hero__link public-page-hero__link--secondary">Check Availability</a>
+      </Fragment>
+    </PublicPageHero>
+
+    <section class="contact-shell" aria-label="Contact Woodberry">
+      <div class="wb-card contact-form-card">
+        <div class="contact-section-heading">
+          <p>Message us</p>
+          <h2>Tell us about your plans</h2>
+        </div>
+
+        <form id="contact-form" class="wb-form">
+          <div class="wb-field">
+            <label for="email" class="wb-label">Email address</label>
+            <input
+              id="email"
+              type="email"
+              class="wb-input contact-input"
+              placeholder="your@email.com"
+              autocomplete="email"
+              required
+            />
+          </div>
+
+          <div class="wb-field">
+            <label for="reason" class="wb-label">Reason for contacting us</label>
+            <input
+              id="reason"
+              type="text"
+              class="wb-input contact-input"
+              placeholder="Venue inquiry, resort stay, event reservation"
+              required
+            />
+          </div>
+
+          <div class="wb-field">
+            <label for="message" class="wb-label">Message</label>
+            <textarea
+              id="message"
+              class="wb-textarea contact-input"
+              rows="6"
+              placeholder="Share your preferred date, guest count, event type, or any questions for Woodberry Resorts and Events Place."
+              required></textarea>
+          </div>
+
+          <div
+            id="contactNotice"
+            class="contact-notice hidden"
+            role="status"
+            aria-live="polite"
+          >
+            Thank you for reaching out. Woodberry Resorts and Events Place will
+            get back to you soon.
+          </div>
+
+          <button
+            id="contactFormSubmit"
+            type="submit"
+            class="wb-btn wb-btn--lg contact-submit"
+          >
+            Send Inquiry
+          </button>
+        </form>
+      </div>
+
+      <aside class="wb-card contact-methods-card" aria-label="Contact details">
+        <div class="contact-section-heading">
+          <p>Contact methods</p>
+          <h2>Reach Woodberry</h2>
+        </div>
+
+        <div id="contact-types" class="contact-methods">
+          <div class="contact-method">
+            <span class="contact-method__label">Cellphone</span>
+            <a class="contact-method__value contact-method__link" href="tel:09223746235">
+              0922-374-6235
+            </a>
+          </div>
+          <div class="contact-method">
+            <span class="contact-method__label">Telephone</span>
+            <a class="contact-method__value contact-method__link" href="tel:+63447367161">
+              (044) 736-7161
+            </a>
+          </div>
+          <div class="contact-method">
+            <span class="contact-method__label">Email</span>
+            <a
+              class="contact-method__value contact-method__link"
+              href="mailto:thewoodberryresorteventsplace@gmail.com"
+            >
+              thewoodberryresorteventsplace@gmail.com
+            </a>
+          </div>
+          <div class="contact-method">
+            <span class="contact-method__label">Venue viewings</span>
+            <span class="contact-method__value">Resort and event-venue visits are available by arrangement.</span>
+          </div>
+        </div>
+      </aside>
+
+      <div class="contact-location">
+        <LocationMap compact horizontal />
+      </div>
+    </section>
+  </div>
+  <Footer slot="footer" />
+</Layout>
+
+<script>
+  const form = document.getElementById('contact-form') as HTMLFormElement | null;
+  const notice = document.getElementById('contactNotice');
+
+  if (form && notice) {
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      notice.classList.remove('hidden');
+      form.reset();
+
+      window.setTimeout(function () {
+        notice.classList.add('hidden');
+      }, 5000);
+    });
+  }
+</script>
+
+<style>
+  .contact-page {
+    padding-bottom: clamp(3rem, 7vw, 5rem);
+  }
+
+  .contact-section-heading p {
+    margin: 0;
+    color: var(--wb-green);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .contact-section-heading h2 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, 'Times New Roman', serif;
+    letter-spacing: 0;
+  }
+
+  .contact-shell {
+    display: grid;
+    width: min(100% - 2rem, 72rem);
+    grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+    gap: clamp(1rem, 3vw, 1.5rem);
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.75rem) 0 0;
+  }
+
+  .contact-form-card,
+  .contact-methods-card {
+    padding: clamp(1.25rem, 3vw, 2rem);
+  }
+
+  .contact-section-heading {
+    display: grid;
+    gap: 0.3rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .contact-section-heading h2 {
+    font-size: clamp(1.45rem, 3vw, 2rem);
+  }
+
+  .contact-location {
+    min-width: 0;
+    grid-column: 1 / -1;
+  }
+
+  .contact-input {
+    background: var(--wb-input-bg);
+  }
+
+  .contact-submit {
+    width: 100%;
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+    box-shadow: var(--wb-shadow-sm);
+  }
+
+  .contact-submit:hover {
+    background: var(--wb-action-hover);
+    color: var(--wb-on-action);
+  }
+
+  .contact-notice {
+    border: 1px solid var(--wb-success-border);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-success-bg);
+    color: var(--wb-success-text);
+    padding: 0.85rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .contact-methods {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .contact-method {
+    display: grid;
+    gap: 0.25rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-surface);
+    padding: 0.8rem 0.9rem;
+    box-shadow: 0 0.2rem 0.75rem rgba(54, 53, 55, 0.05);
+  }
+
+  .contact-method__label {
+    color: var(--wb-earth);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .contact-method__value {
+    color: var(--wb-muted);
+    font-size: 0.96rem;
+    line-height: 1.55;
+  }
+
+  .contact-method__link {
+    width: fit-content;
+    max-width: 100%;
+    color: var(--wb-link);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+    text-decoration-color: rgba(74, 124, 63, 0.38);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+    transition: color 160ms ease, text-decoration-color 160ms ease;
+  }
+
+  .contact-method__link:hover {
+    color: var(--wb-link-hover);
+    text-decoration-color: currentColor;
+  }
+
+  .contact-method__link:focus-visible {
+    border-radius: 0.2rem;
+    outline: 3px solid var(--wb-focus-ring);
+    outline-offset: 3px;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  :global(html.dark) .contact-submit {
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+  }
+
+  :global(html.dark) .contact-submit:hover {
+    background: var(--wb-action-hover);
+    color: var(--wb-on-action);
+  }
+
+  :global(html.dark) .contact-notice {
+    border-color: var(--wb-success-border);
+    background: var(--wb-success-bg);
+    color: var(--wb-success-text);
+  }
+
+  :global(html.dark) .contact-method__label {
+    color: var(--wb-earth);
+  }
+
+  :global(html.dark) .contact-method__link {
+    color: var(--wb-link);
+    text-decoration-color: rgba(213, 239, 201, 0.42);
+  }
+
+  :global(html.dark) .contact-method__link:hover {
+    color: var(--wb-link-hover);
+  }
+
+  @media (max-width: 900px) {
+    .contact-shell {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .contact-shell {
+      width: min(100% - 1.5rem, 72rem);
+    }
+  }
+
+  @media (min-width: 901px) {
+    .contact-page {
+      padding-bottom: clamp(2.5rem, 4vw, 3.5rem);
+    }
+
+    .contact-shell {
+      width: min(100% - 3rem, 88rem);
+      max-width: 88rem;
+      grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
+      gap: 1rem;
+      padding-top: clamp(1.5rem, 3.5vw, 2.75rem);
+    }
+
+    .contact-form-card,
+    .contact-methods-card {
+      padding: 1.25rem;
+    }
+
+    .contact-form-card .wb-form {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .contact-form-card .wb-field:nth-child(3),
+    .contact-notice,
+    .contact-submit {
+      grid-column: 1 / -1;
+    }
+
+    .contact-submit {
+      width: fit-content;
+      min-width: 11rem;
+      justify-self: start;
+    }
+
+    .contact-section-heading {
+      margin-bottom: 1rem;
+    }
+
+    .contact-section-heading h2 {
+      font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+    }
+
+    .contact-methods {
+      gap: 0.65rem;
+    }
+
+    .contact-method {
+      padding: 0.7rem 0.8rem;
+    }
+  }
+</style>

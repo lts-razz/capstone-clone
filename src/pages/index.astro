@@ -1,0 +1,1738 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Footer from '../components/Footer.astro';
+import LocationMap from '../components/LocationMap.astro';
+import { homepageGalleryPhotos, woodberryPhotos } from '../data/woodberryPhotos';
+
+const features = [
+  {
+    label: 'Private Resort Venue',
+    icon: 'home',
+  },
+  {
+    label: 'Pool Access',
+    icon: 'waves',
+  },
+  {
+    label: 'Event Pavilion',
+    icon: 'pavilion',
+  },
+  {
+    label: 'Staycation Packages',
+    icon: 'bed',
+  },
+  {
+    label: 'Sound System / Videoke',
+    icon: 'music',
+  },
+];
+
+const reasons = [
+  {
+    title: 'Pool and pavilion access',
+    description: 'Enjoy spaces for both relaxing and celebrating in one venue.',
+  },
+  {
+    title: 'A private place for your event',
+    description: 'Gather with the people who matter in a more personal setting.',
+  },
+  {
+    title: 'Flexible staycation options',
+    description: 'Choose a quick escape with friends or quality time with family.',
+  },
+  {
+    title: 'Parking and security support',
+    description: 'Welcome your guests with practical on-site support for the occasion.',
+  },
+  {
+    title: 'Caterer-friendly preparation time',
+    description: 'Give your chosen caterer time to prepare the celebration with care.',
+  },
+  {
+    title: 'Made for families and groups',
+    description: 'A warm setting for birthdays, reunions, weddings, and shared milestones.',
+  },
+];
+
+const bookingSteps = [
+  {
+    number: '01',
+    title: 'Choose a package',
+    description: 'Find the event or staycation option that suits your plans.',
+  },
+  {
+    number: '02',
+    title: 'Create your reservation',
+    description: 'Sign in with a verified email, then share your date, package, guests, and contact details.',
+  },
+  {
+    number: '03',
+    title: 'Review payment and terms',
+    description: 'Check the 50% down payment, 48-hour unpaid reservation hold, and cancellation terms before you submit.',
+  },
+];
+
+const carouselPhotos = homepageGalleryPhotos;
+const carouselTrackPhotos = [...carouselPhotos, ...carouselPhotos];
+
+---
+
+<Layout>
+  <div class="home-page">
+    <section class="home-hero" aria-labelledby="home-hero-title">
+      <div class="home-hero__image" aria-hidden="true">
+        <img
+          src={woodberryPhotos.homeHero}
+          alt=""
+          width="905"
+          height="1280"
+          fetchpriority="high"
+          data-photo-fallback={woodberryPhotos.fallback}
+        />
+      </div>
+
+      <div class="home-hero__shade" aria-hidden="true"></div>
+
+      <div class="home-hero__inner">
+        <div class="home-hero__content">
+          <h1 id="home-hero-title">
+            Celebrate Your Special Moments at Woodberry Resorts and Events Place
+          </h1>
+
+          <p class="home-hero__lead">
+            A private resort and events venue for gatherings, celebrations,
+            staycations, and special occasions.
+          </p>
+
+          <div class="home-hero__actions" aria-label="Explore Woodberry">
+            <a href="#packages" class="hero-button hero-button--glass">
+              View Packages
+            </a>
+            <a
+              href="/events_and_booking/events"
+              class="hero-button hero-button--primary"
+            >
+              Book an Event
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"></path>
+              </svg>
+            </a>
+            <a href="/events_and_booking/events" class="hero-button hero-button--text" data-home-availability>
+              Check Availability
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"></path>
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <div class="home-hero__features" aria-label="Venue features">
+          <p class="home-hero__features-title">Everything for your gathering</p>
+          <ul>
+            {
+              features.map((feature) => (
+                <li>
+                  <span class="feature-icon" aria-hidden="true">
+                    {feature.icon === 'home' && (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M3 11.5 12 4l9 7.5"></path>
+                        <path d="M5.5 10v10h13V10M9.5 20v-6h5v6"></path>
+                      </svg>
+                    )}
+                    {feature.icon === 'waves' && (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M2 9c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2"></path>
+                        <path d="M2 15c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2"></path>
+                      </svg>
+                    )}
+                    {feature.icon === 'pavilion' && (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M3 10h18M5 10v10M19 10v10M9 10v10M15 10v10"></path>
+                        <path d="m2 10 10-6 10 6M3 20h18"></path>
+                      </svg>
+                    )}
+                    {feature.icon === 'bed' && (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M3 19v-9M21 19v-6a3 3 0 0 0-3-3H9v6h12"></path>
+                        <path d="M3 16h18M9 10a3 3 0 1 0-6 0v6"></path>
+                      </svg>
+                    )}
+                    {feature.icon === 'music' && (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M9 18V5l11-2v13"></path>
+                        <ellipse cx="6" cy="18" rx="3" ry="2"></ellipse>
+                        <ellipse cx="17" cy="16" rx="3" ry="2"></ellipse>
+                      </svg>
+                    )}
+                  </span>
+                  <span>{feature.label}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+
+      <a class="home-hero__scroll" href="#packages" aria-label="Explore packages">
+        <span>Discover more</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 9 6 6 6-6"></path>
+        </svg>
+      </a>
+    </section>
+
+    <section class="photo-carousel-section" aria-labelledby="photo-carousel-title">
+      <div class="photo-carousel-section__heading">
+        <p class="section-eyebrow">A glimpse of Woodberry</p>
+        <h2 id="photo-carousel-title">Picture your celebration here</h2>
+        <p>
+          Move through poolside evenings, prepared event spaces, and cozy resort
+          rooms that help every gathering feel settled in.
+        </p>
+      </div>
+
+      <div class="photo-carousel" aria-label="Woodberry resort photo carousel">
+        <div class="photo-carousel__track">
+          {
+            carouselTrackPhotos.map((image, index) => (
+              <figure
+                class="photo-carousel__card"
+                tabindex={index < carouselPhotos.length ? '0' : undefined}
+                role={index < carouselPhotos.length ? 'button' : undefined}
+                aria-label={index < carouselPhotos.length ? `Enlarge ${image.caption}` : undefined}
+                aria-hidden={index >= carouselPhotos.length ? 'true' : undefined}
+                data-carousel-clone={index >= carouselPhotos.length ? 'true' : undefined}
+                data-enlarge-photo
+                data-photo-src={image.src}
+                data-photo-alt={image.alt}
+                data-photo-caption={image.caption}
+              >
+                <img
+                  src={image.src}
+                  alt={index < carouselPhotos.length ? image.alt : ''}
+                  width="640"
+                  height="480"
+                  loading="lazy"
+                  draggable="false"
+                  data-photo-fallback={woodberryPhotos.fallback}
+                />
+                <figcaption>{image.caption}</figcaption>
+              </figure>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section id="packages" class="packages-preview" aria-labelledby="packages-title">
+      <div class="packages-preview__cta">
+        <p class="section-eyebrow">Woodberry packages</p>
+        <h2 id="packages-title">Explore Woodberry Packages</h2>
+        <p>
+          View available event, pool, staycation, and room packages, then
+          choose the option that fits your group.
+        </p>
+
+      <div class="packages-preview__actions">
+        <a href="/events_and_booking/events" class="packages-link">
+          View Packages
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6"></path>
+          </svg>
+        </a>
+      </div>
+      </div>
+    </section>
+
+    <section class="why-section" aria-labelledby="why-title">
+      <div class="section-heading section-heading--center">
+        <p class="section-eyebrow">Why choose Woodberry</p>
+        <h2 id="why-title">One welcoming place, thoughtfully prepared</h2>
+        <p>
+          Bring everyone together with the resort spaces and practical support
+          that help your celebration feel easier.
+        </p>
+      </div>
+
+      <div class="reasons-grid">
+        {
+          reasons.map((reason) => (
+            <article class="reason-card">
+              <span class="reason-card__check" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="m6 12 4 4 8-9"></path>
+                </svg>
+              </span>
+              <div>
+                <h3>{reason.title}</h3>
+                <p>{reason.description}</p>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="booking-process" aria-labelledby="booking-process-title">
+      <div class="booking-process__inner">
+        <div class="booking-process__intro">
+          <p class="section-eyebrow">Simple booking process</p>
+          <h2 id="booking-process-title">From your plans to a reserved date</h2>
+          <p>
+            Start with the experience you want, choose your preferred details,
+            and complete the required down payment when your payment step opens.
+          </p>
+          <div class="reservation-note">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 7v5l3 2"></path>
+            </svg>
+            <p>
+              <strong>Please remember:</strong> unpaid reservations are held
+              for 48 hours. Pay the minimum 50% down payment within that period
+              to secure your reservation.
+            </p>
+          </div>
+        </div>
+
+        <ol class="booking-steps">
+          {
+            bookingSteps.map((step) => (
+              <li>
+                <span class="booking-step__number">{step.number}</span>
+                <div>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    <LocationMap />
+  </div>
+
+  <Footer slot="footer" />
+
+  <div id="photoLightbox" class="photo-lightbox" aria-hidden="true">
+    <div class="photo-lightbox__panel" role="dialog" aria-modal="true" aria-labelledby="photoLightboxTitle">
+      <button id="photoLightboxClose" class="photo-lightbox__close" type="button" aria-label="Close enlarged photo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18"></path>
+        </svg>
+      </button>
+
+      <figure class="photo-lightbox__figure">
+        <img id="photoLightboxImage" src="" alt="" />
+        <figcaption class="photo-lightbox__caption">
+          <p class="section-eyebrow">Woodberry photo</p>
+          <h3 id="photoLightboxTitle"></h3>
+          <p id="photoLightboxDescription"></p>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  document.querySelectorAll<HTMLImageElement>('img[data-photo-fallback]').forEach((image) => {
+    image.addEventListener('error', () => {
+      const fallback = image.dataset.photoFallback;
+      if (!fallback) return;
+      const fallbackUrl = new URL(fallback, window.location.href).href;
+      if (image.src !== fallbackUrl) image.src = fallback;
+    });
+  });
+
+  document.querySelector<HTMLElement>('[data-home-availability]')?.addEventListener('click', (event) => {
+    const availabilityButton = document.getElementById('preview');
+    if (!availabilityButton) return;
+    event.preventDefault();
+    availabilityButton.click();
+  });
+
+  const photoLightbox = document.getElementById('photoLightbox');
+  const photoLightboxImage = document.getElementById('photoLightboxImage') as HTMLImageElement | null;
+  const photoLightboxTitle = document.getElementById('photoLightboxTitle');
+  const photoLightboxDescription = document.getElementById('photoLightboxDescription');
+  const photoLightboxClose = document.getElementById('photoLightboxClose') as HTMLButtonElement | null;
+  let lastFocusedPhotoCard: HTMLElement | null = null;
+
+  const photoCarousel = document.querySelector<HTMLElement>('.photo-carousel');
+  const photoCarouselTrack = photoCarousel?.querySelector<HTMLElement>('.photo-carousel__track');
+  const firstCarouselCard = photoCarouselTrack?.querySelector<HTMLElement>('.photo-carousel__card');
+  const firstCarouselClone = photoCarouselTrack?.querySelector<HTMLElement>('[data-carousel-clone]');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const carouselLoopDuration = 34_000;
+  let carouselCycleWidth = 0;
+  let carouselPosition = 0;
+  let previousFrameTime: number | null = null;
+  let pointerInsideCarousel = false;
+  let carouselHasFocus = false;
+  let draggingCarousel = false;
+  let lightboxIsOpen = false;
+  let dragStartX = 0;
+  let dragStartPosition = 0;
+  let dragMoved = false;
+  let suppressClickUntil = 0;
+  let resumeCarouselAt = 0;
+
+  function normalizeCarouselPosition(position: number) {
+    if (!carouselCycleWidth) return position;
+    const distance = ((-position % carouselCycleWidth) + carouselCycleWidth) % carouselCycleWidth;
+    return -distance;
+  }
+
+  function renderCarouselPosition() {
+    if (!photoCarouselTrack) return;
+    photoCarouselTrack.style.transform = reducedMotion.matches
+      ? 'none'
+      : `translate3d(${carouselPosition}px, 0, 0)`;
+  }
+
+  function measureCarousel() {
+    if (!firstCarouselCard || !firstCarouselClone) return;
+
+    const previousCycleWidth = carouselCycleWidth;
+    const nextCycleWidth = firstCarouselClone.offsetLeft - firstCarouselCard.offsetLeft;
+    if (nextCycleWidth <= 0) return;
+
+    if (previousCycleWidth > 0) {
+      const progress = -normalizeCarouselPosition(carouselPosition) / previousCycleWidth;
+      carouselPosition = -(progress * nextCycleWidth);
+    }
+
+    carouselCycleWidth = nextCycleWidth;
+    carouselPosition = normalizeCarouselPosition(carouselPosition);
+    renderCarouselPosition();
+  }
+
+  function carouselIsPaused(timestamp: number) {
+    return reducedMotion.matches
+      || document.hidden
+      || pointerInsideCarousel
+      || carouselHasFocus
+      || draggingCarousel
+      || lightboxIsOpen
+      || timestamp < resumeCarouselAt;
+  }
+
+  function animateCarousel(timestamp: number) {
+    if (previousFrameTime === null) previousFrameTime = timestamp;
+    const elapsed = Math.min(timestamp - previousFrameTime, 100);
+    previousFrameTime = timestamp;
+
+    if (!carouselIsPaused(timestamp) && carouselCycleWidth > 0) {
+      carouselPosition -= (carouselCycleWidth / carouselLoopDuration) * elapsed;
+      carouselPosition = normalizeCarouselPosition(carouselPosition);
+      renderCarouselPosition();
+    }
+
+    window.requestAnimationFrame(animateCarousel);
+  }
+
+  function resumeCarouselAfterInteraction() {
+    resumeCarouselAt = performance.now() + 700;
+  }
+
+  if (photoCarousel && photoCarouselTrack) {
+    measureCarousel();
+    new ResizeObserver(measureCarousel).observe(photoCarousel);
+
+    photoCarousel.addEventListener('mouseenter', () => {
+      pointerInsideCarousel = true;
+    });
+    photoCarousel.addEventListener('mouseleave', () => {
+      pointerInsideCarousel = false;
+      resumeCarouselAfterInteraction();
+    });
+    photoCarousel.addEventListener('focusin', () => {
+      carouselHasFocus = true;
+    });
+    photoCarousel.addEventListener('focusout', (event) => {
+      if (photoCarousel.contains(event.relatedTarget as Node | null)) return;
+      carouselHasFocus = false;
+      resumeCarouselAfterInteraction();
+    });
+    photoCarousel.addEventListener('pointerdown', (event) => {
+      if (!event.isPrimary || event.button !== 0 || reducedMotion.matches) return;
+      draggingCarousel = true;
+      dragMoved = false;
+      dragStartX = event.clientX;
+      dragStartPosition = carouselPosition;
+      photoCarousel.setPointerCapture(event.pointerId);
+      photoCarousel.classList.add('is-dragging');
+    });
+    photoCarousel.addEventListener('pointermove', (event) => {
+      if (!draggingCarousel || !event.isPrimary) return;
+      const distance = event.clientX - dragStartX;
+      if (Math.abs(distance) > 5) dragMoved = true;
+      if (!dragMoved) return;
+      if (event.cancelable) event.preventDefault();
+      carouselPosition = normalizeCarouselPosition(dragStartPosition + distance);
+      renderCarouselPosition();
+    });
+
+    const finishCarouselDrag = (event: PointerEvent) => {
+      if (!draggingCarousel || !event.isPrimary) return;
+      draggingCarousel = false;
+      photoCarousel.classList.remove('is-dragging');
+      if (photoCarousel.hasPointerCapture(event.pointerId)) {
+        photoCarousel.releasePointerCapture(event.pointerId);
+      }
+      if (dragMoved) suppressClickUntil = performance.now() + 300;
+      resumeCarouselAfterInteraction();
+    };
+
+    photoCarousel.addEventListener('pointerup', finishCarouselDrag);
+    photoCarousel.addEventListener('pointercancel', finishCarouselDrag);
+    photoCarousel.addEventListener('dragstart', (event) => event.preventDefault());
+    reducedMotion.addEventListener('change', () => {
+      previousFrameTime = null;
+      renderCarouselPosition();
+    });
+    window.requestAnimationFrame(animateCarousel);
+  }
+
+  function closePhotoLightbox() {
+    if (!photoLightbox) return;
+    photoLightbox.classList.remove('is-open');
+    photoLightbox.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('photo-lightbox-open');
+    lightboxIsOpen = false;
+    resumeCarouselAfterInteraction();
+    lastFocusedPhotoCard?.focus();
+  }
+
+  function openPhotoLightbox(card: HTMLElement) {
+    if (!photoLightbox || !photoLightboxImage || !photoLightboxTitle || !photoLightboxDescription) return;
+
+    lastFocusedPhotoCard = card.matches('[tabindex]') ? card : null;
+    photoLightboxImage.src = card.dataset.photoSrc ?? '';
+    photoLightboxImage.alt = card.dataset.photoAlt ?? '';
+    photoLightboxTitle.textContent = card.dataset.photoCaption ?? 'Woodberry photo';
+    photoLightboxDescription.textContent = card.dataset.photoAlt ?? '';
+    photoLightbox.classList.add('is-open');
+    photoLightbox.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('photo-lightbox-open');
+    lightboxIsOpen = true;
+    photoLightboxClose?.focus();
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-enlarge-photo]').forEach((card) => {
+    card.addEventListener('click', () => {
+      if (performance.now() < suppressClickUntil) return;
+      openPhotoLightbox(card);
+    });
+    card.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openPhotoLightbox(card);
+    });
+  });
+
+  photoLightboxClose?.addEventListener('click', closePhotoLightbox);
+  photoLightbox?.addEventListener('click', (event) => {
+    if (event.target === photoLightbox) closePhotoLightbox();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && photoLightbox?.classList.contains('is-open')) {
+      closePhotoLightbox();
+    }
+  });
+</script>
+
+<style>
+  .home-page {
+    background: var(--wb-surface);
+    color: var(--wb-text);
+  }
+
+  .home-hero {
+    position: relative;
+    display: flex;
+    min-height: max(50rem, calc(100svh - 70px));
+    align-items: center;
+    isolation: isolate;
+    overflow: hidden;
+    padding: clamp(4.75rem, 8vw, 7rem) clamp(1rem, 6vw, 5.5rem) 5rem;
+    color: #ffffff;
+  }
+
+  .home-hero__image,
+  .home-hero__shade {
+    position: absolute;
+    inset: 0;
+  }
+
+  .home-hero__image {
+    z-index: -3;
+    background: var(--wb-green-dark);
+  }
+
+  .home-hero__image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 58%;
+    transform: scale(1.01);
+  }
+
+  .home-hero__shade {
+    z-index: -2;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(8, 20, 6, 0.64) 0%,
+        rgba(8, 20, 6, 0.78) 52%,
+        rgba(7, 17, 5, 0.9) 100%
+      ),
+      radial-gradient(circle at center, rgba(27, 55, 20, 0.18), rgba(7, 17, 5, 0.48));
+  }
+
+  .home-hero::before {
+    position: absolute;
+    z-index: -1;
+    top: -10rem;
+    left: -8rem;
+    width: 30rem;
+    height: 30rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    content: '';
+  }
+
+  .home-hero::after {
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: clamp(7rem, 16vw, 12rem);
+    background:
+      linear-gradient(
+        180deg,
+        rgba(250, 247, 239, 0.34) 0%,
+        rgba(238, 229, 215, 0.18) 34%,
+        rgba(238, 229, 215, 0) 100%
+      );
+    content: '';
+    pointer-events: none;
+  }
+
+  .home-hero__inner {
+    display: flex;
+    width: min(100%, 76rem);
+    align-items: center;
+    flex-direction: column;
+    gap: clamp(1.75rem, 4vw, 2.75rem);
+    margin: 0 auto;
+  }
+
+  .home-hero__content {
+    display: flex;
+    width: 100%;
+    max-width: 64rem;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .section-eyebrow {
+    margin: 0 0 1rem;
+    color: var(--wb-warm);
+    font-size: clamp(0.7rem, 1.3vw, 0.8rem);
+    font-weight: 800;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
+  }
+
+  .home-hero h1 {
+    max-width: 62rem;
+    margin: 0;
+    color: #ffffff;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(2.45rem, 5.3vw, 4.85rem);
+    font-weight: 700;
+    letter-spacing: -0.045em;
+    line-height: 1.02;
+    text-wrap: balance;
+  }
+
+  .home-hero__lead {
+    max-width: 44rem;
+    margin: clamp(1.25rem, 3vw, 1.75rem) 0 0;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: clamp(1rem, 1.8vw, 1.18rem);
+    line-height: 1.7;
+  }
+
+  .home-hero__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: clamp(1.75rem, 4vw, 2.4rem);
+    flex-wrap: wrap;
+  }
+
+  .hero-button {
+    display: inline-flex;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 0.78rem 1.25rem;
+    color: #ffffff;
+    font-size: 0.84rem;
+    font-weight: 800;
+    letter-spacing: 0.035em;
+    text-decoration: none;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .hero-button:hover {
+    transform: translateY(-2px);
+  }
+
+  .hero-button svg,
+  .packages-link svg {
+    width: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+  }
+
+  .hero-button--primary {
+    background: var(--wb-action);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+    color: var(--wb-on-action);
+  }
+
+  .hero-button--primary:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .hero-button--glass {
+    border-color: rgba(255, 255, 255, 0.48);
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(12px);
+  }
+
+  .hero-button--glass:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.72);
+  }
+
+  .hero-button--text {
+    padding-inline: 0.65rem;
+  }
+
+  .hero-button--text:hover {
+    color: var(--wb-warm);
+  }
+
+  .home-hero__features {
+    width: min(100%, 68rem);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--wb-radius-lg);
+    background: rgba(12, 27, 9, 0.6);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.2);
+    padding: 1.4rem;
+    backdrop-filter: blur(14px);
+  }
+
+  .home-hero__features-title {
+    margin: 0 0 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  .home-hero__features ul {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+    list-style: none;
+  }
+
+  .home-hero__features li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 0;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.88rem;
+    font-weight: 700;
+    padding: 0.35rem 1rem;
+  }
+
+  .home-hero__features li + li {
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .feature-icon {
+    display: grid;
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--wb-warm);
+  }
+
+  .feature-icon svg {
+    width: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+  }
+
+  .home-hero__scroll {
+    position: absolute;
+    bottom: 1.4rem;
+    left: 50%;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-decoration: none;
+    text-transform: uppercase;
+    transform: translateX(-50%);
+  }
+
+  .home-hero__scroll svg {
+    width: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+  }
+
+  .packages-preview {
+    padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 6vw, 5.5rem);
+    background:
+      radial-gradient(circle at top right, rgba(231, 239, 232, 0.92), transparent 34rem),
+      var(--wb-surface);
+    scroll-margin-top: 70px;
+  }
+
+  .packages-preview__cta,
+  .packages-preview__actions {
+    width: min(100%, 76rem);
+    margin-inline: auto;
+  }
+
+  .packages-preview__cta {
+    max-width: 54rem;
+    text-align: center;
+  }
+
+  .section-eyebrow {
+    margin-bottom: 0.55rem;
+    color: var(--wb-green);
+  }
+
+  .booking-process .section-eyebrow {
+    color: var(--wb-warm);
+  }
+
+  .packages-preview h2 {
+    max-width: 42rem;
+    margin: 0;
+    margin-inline: auto;
+    color: var(--wb-green-dark);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(2rem, 4.8vw, 3.65rem);
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  .packages-preview__cta > p:not(.section-eyebrow) {
+    max-width: 42rem;
+    margin: 1rem auto 0;
+    color: var(--wb-muted);
+    line-height: 1.7;
+  }
+
+  .packages-preview__actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.75rem;
+  }
+
+  .packages-link {
+    display: inline-flex;
+    min-height: 3rem;
+    align-items: center;
+    gap: 0.6rem;
+    justify-content: center;
+    border: 1px solid var(--wb-action);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-action);
+    box-shadow: 0 12px 24px rgba(21, 122, 69, 0.18);
+    color: var(--wb-on-action);
+    font-size: 0.86rem;
+    font-weight: 900;
+    padding: 0.85rem 1.15rem;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition:
+      background-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .packages-link:hover {
+    background: var(--wb-action-hover);
+    box-shadow: var(--wb-shadow-md);
+    color: var(--wb-on-action);
+    transform: translateY(-1px);
+  }
+
+  .packages-link svg {
+    width: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    transition: transform 0.2s ease;
+  }
+
+  .packages-link:hover svg {
+    transform: translateX(3px);
+  }
+
+  .why-section,
+  .photo-carousel-section {
+    padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 6vw, 5.5rem);
+  }
+
+  .why-section {
+    border-top: 1px solid var(--wb-border);
+    background: var(--wb-surface-soft);
+  }
+
+  .section-heading,
+  .reasons-grid,
+  .booking-process__inner,
+  .photo-carousel-section__heading {
+    width: min(100%, 76rem);
+    margin-inline: auto;
+  }
+
+  .section-heading--center {
+    max-width: 46rem;
+    text-align: center;
+  }
+
+  .section-heading h2,
+  .booking-process h2,
+  .photo-carousel-section h2 {
+    margin: 0;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(2rem, 4.8vw, 3.65rem);
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  .section-heading h2,
+  .photo-carousel-section h2 {
+    color: var(--wb-green-dark);
+  }
+
+  .section-heading > p:last-child {
+    margin: 1rem 0 0;
+    color: var(--wb-muted);
+    line-height: 1.7;
+  }
+
+  .reasons-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: clamp(2rem, 5vw, 3.25rem);
+  }
+
+  .reason-card {
+    display: flex;
+    gap: 1rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    padding: 1.25rem;
+  }
+
+  .reason-card__check {
+    display: grid;
+    width: 2.3rem;
+    height: 2.3rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--wb-green-soft);
+    color: var(--wb-green);
+  }
+
+  .reason-card__check svg {
+    width: 1.15rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.4;
+  }
+
+  .reason-card h3 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.12rem;
+    letter-spacing: -0.01em;
+  }
+
+  .reason-card p {
+    margin: 0.4rem 0 0;
+    color: var(--wb-muted);
+    font-size: 0.88rem;
+    line-height: 1.55;
+  }
+
+  .booking-process {
+    padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 6vw, 5.5rem);
+    background: var(--wb-green-dark);
+    color: #ffffff;
+  }
+
+  .booking-process__inner {
+    display: grid;
+    align-items: start;
+    gap: clamp(2.5rem, 7vw, 6rem);
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+
+  .booking-process h2 {
+    color: #ffffff;
+  }
+
+  .booking-process__intro > p:not(.section-eyebrow) {
+    margin: 1rem 0 0;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.7;
+  }
+
+  .reservation-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    border: 1px solid rgba(170, 143, 102, 0.45);
+    border-radius: var(--wb-radius-md);
+    background: rgba(170, 143, 102, 0.14);
+    padding: 1rem;
+  }
+
+  .reservation-note svg {
+    width: 1.35rem;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--wb-warm);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
+  .reservation-note p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+
+  .booking-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .booking-steps li {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: 3rem 1fr;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 1.5rem 0;
+  }
+
+  .booking-steps li:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .booking-step__number {
+    color: var(--wb-warm);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+
+  .booking-steps h3 {
+    margin: 0;
+    color: #ffffff;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.2rem, 2.5vw, 1.55rem);
+  }
+
+  .booking-steps p {
+    margin: 0.35rem 0 0;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.92rem;
+  }
+
+  .photo-carousel-section {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    overflow: hidden;
+    border-block: 1px solid var(--wb-border);
+    background:
+      linear-gradient(180deg, var(--wb-surface-soft) 0%, var(--wb-surface) 100%);
+  }
+
+  .photo-carousel-section__heading {
+    max-width: 46rem;
+    margin-bottom: clamp(1.75rem, 4vw, 2.6rem);
+    text-align: center;
+  }
+
+  .photo-carousel-section__heading > p:last-child {
+    margin: 1rem 0 0;
+    color: var(--wb-muted);
+    line-height: 1.7;
+  }
+
+  .photo-carousel {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+
+  .photo-carousel__track {
+    display: flex;
+    width: max-content;
+    gap: clamp(0.85rem, 2vw, 1.25rem);
+    will-change: transform;
+  }
+
+  .photo-carousel.is-dragging,
+  .photo-carousel.is-dragging .photo-carousel__card {
+    cursor: grabbing;
+    user-select: none;
+  }
+
+  .photo-carousel__card {
+    position: relative;
+    flex: 0 0 clamp(17rem, 29vw, 26rem);
+    aspect-ratio: 4 / 3;
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 82%, transparent);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-soft);
+    box-shadow: var(--wb-shadow-sm);
+    cursor: zoom-in;
+    outline: none;
+    transition:
+      border-color 0.25s ease,
+      box-shadow 0.25s ease,
+      transform 0.25s ease;
+  }
+
+  .photo-carousel__card::after {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(18, 60, 36, 0.58), rgba(18, 60, 36, 0.28)),
+      color-mix(in srgb, var(--wb-green-mid) 30%, var(--wb-warm-soft));
+    content: '';
+    mix-blend-mode: multiply;
+    opacity: 0.68;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .photo-carousel__card img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.82) sepia(0.08);
+    transition:
+      filter 0.3s ease,
+      transform 0.45s ease;
+  }
+
+  .photo-carousel__card figcaption {
+    position: absolute;
+    z-index: 1;
+    right: 0.9rem;
+    bottom: 0.85rem;
+    left: 0.9rem;
+    margin: 0;
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+    text-shadow: 0 2px 10px rgba(6, 12, 5, 0.5);
+    text-transform: uppercase;
+  }
+
+  .photo-carousel__card:is(:hover, :focus-visible) {
+    border-color: rgba(21, 122, 69, 0.42);
+    box-shadow: var(--wb-shadow-md);
+    transform: translateY(-3px);
+  }
+
+  .photo-carousel__card:is(:hover, :focus-visible)::after {
+    opacity: 0.08;
+  }
+
+  .photo-carousel__card:is(:hover, :focus-visible) img {
+    filter: saturate(1) sepia(0);
+    transform: scale(1.035);
+  }
+
+  .photo-carousel__card:focus-visible {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--wb-green) 26%, transparent),
+      var(--wb-shadow-md);
+  }
+
+  .photo-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    min-height: 100dvh;
+    place-items: center;
+    background:
+      linear-gradient(180deg, rgba(8, 20, 6, 0.86), rgba(8, 20, 6, 0.92)),
+      rgba(18, 60, 36, 0.9);
+    padding: clamp(1rem, 4vw, 2.5rem);
+  }
+
+  .photo-lightbox.is-open {
+    display: grid;
+  }
+
+  :global(body.photo-lightbox-open) {
+    overflow: hidden;
+  }
+
+  .photo-lightbox__panel {
+    position: relative;
+    width: min(100%, 68rem);
+    max-height: calc(100dvh - clamp(2rem, 8vw, 5rem));
+    overflow: hidden;
+    border: 1px solid rgba(216, 201, 178, 0.48);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-raised);
+    box-shadow: 0 24px 70px rgba(6, 12, 5, 0.42);
+  }
+
+  .photo-lightbox__close {
+    position: absolute;
+    z-index: 2;
+    top: 0.9rem;
+    right: 0.9rem;
+    display: grid;
+    width: 2.8rem;
+    height: 2.8rem;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.52);
+    border-radius: 999px;
+    background: rgba(250, 247, 239, 0.94);
+    box-shadow: 0 10px 24px rgba(6, 12, 5, 0.2);
+    color: var(--wb-green-dark);
+    cursor: pointer;
+    padding: 0;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .photo-lightbox__close:hover,
+  .photo-lightbox__close:focus-visible {
+    border-color: var(--wb-green);
+    background: var(--wb-green-soft);
+    transform: translateY(-1px);
+  }
+
+  .photo-lightbox__close:focus-visible {
+    outline: 3px solid var(--wb-focus-ring);
+    outline-offset: 3px;
+  }
+
+  .photo-lightbox__close svg {
+    width: 1.15rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.3;
+  }
+
+  .photo-lightbox__figure {
+    display: grid;
+    max-height: inherit;
+    margin: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .photo-lightbox__figure img {
+    display: block;
+    width: 100%;
+    max-height: min(72vh, 46rem);
+    object-fit: contain;
+    background: var(--wb-green-dark);
+  }
+
+  .photo-lightbox__caption {
+    border-top: 1px solid var(--wb-border);
+    background:
+      linear-gradient(180deg, rgba(250, 247, 239, 0.96), rgba(244, 241, 232, 0.96)),
+      var(--wb-surface);
+    padding: clamp(1rem, 3vw, 1.35rem);
+  }
+
+  .photo-lightbox__caption .section-eyebrow {
+    margin-bottom: 0.35rem;
+  }
+
+  .photo-lightbox__caption h3 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    letter-spacing: 0;
+    line-height: 1.12;
+  }
+
+  .photo-lightbox__caption p:last-child {
+    margin: 0.45rem 0 0;
+    color: var(--wb-muted);
+    line-height: 1.55;
+  }
+
+  :global(html.dark) .packages-preview {
+    background:
+      radial-gradient(circle at top right, rgba(37, 56, 35, 0.75), transparent 34rem),
+      var(--wb-surface);
+  }
+
+  :global(html.dark) .packages-preview h2,
+  :global(html.dark) .photo-carousel-section h2 {
+    color: var(--wb-text);
+  }
+
+  :global(html.dark) .why-section {
+    background: var(--wb-surface-soft);
+  }
+
+  :global(html.dark) .photo-carousel-section {
+    background:
+      linear-gradient(180deg, var(--wb-surface-soft) 0%, var(--wb-surface) 100%);
+  }
+
+  :global(html.dark) .photo-lightbox__panel,
+  :global(html.dark) .photo-lightbox__caption {
+    background: var(--wb-surface-raised);
+  }
+
+  :global(html.dark) .photo-lightbox__close {
+    border-color: var(--wb-border);
+    background: var(--wb-surface-raised);
+    color: var(--wb-text);
+  }
+
+  :global(html.dark) .booking-process {
+    background: #0a110c;
+  }
+
+  :global(html.dark) .home-hero .hero-button {
+    color: #ffffff !important;
+  }
+
+  :global(html.dark) .home-hero .hero-button--primary {
+    background: var(--wb-action) !important;
+    color: var(--wb-on-action) !important;
+  }
+
+  :global(html.dark) .home-hero::after {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(15, 20, 15, 0.42) 0%,
+        rgba(197, 164, 112, 0.08) 38%,
+        rgba(15, 20, 15, 0) 100%
+      );
+  }
+
+  @media (min-width: 961px) {
+    .home-hero {
+      min-height: clamp(35rem, calc(100svh - var(--site-header-height)), 39rem);
+      padding: clamp(3.25rem, 5vw, 4.5rem) clamp(1.5rem, 4vw, 4rem) 3.25rem;
+    }
+
+    .home-hero__inner,
+    .section-heading,
+    .reasons-grid,
+    .booking-process__inner,
+    .photo-carousel-section__heading,
+    .packages-preview__cta,
+    .packages-preview__actions {
+      width: min(100%, 88rem);
+    }
+
+    .home-hero__inner {
+      gap: 1.55rem;
+    }
+
+    .home-hero__content {
+      max-width: 58rem;
+    }
+
+    .home-hero h1 {
+      max-width: 57rem;
+      font-size: clamp(2.85rem, 4.4vw, 4.25rem);
+      letter-spacing: 0;
+    }
+
+    .home-hero__lead {
+      max-width: 39rem;
+      margin-top: 1rem;
+      font-size: clamp(1rem, 1.2vw, 1.08rem);
+      line-height: 1.58;
+    }
+
+    .home-hero__actions {
+      margin-top: 1.25rem;
+    }
+
+    .hero-button {
+      min-height: 2.75rem;
+      padding: 0.7rem 1.05rem;
+    }
+
+    .home-hero__features {
+      width: min(100%, 76rem);
+      padding: 0.9rem 1rem;
+    }
+
+    .home-hero__features-title {
+      margin-bottom: 0.55rem;
+    }
+
+    .home-hero__features li {
+      font-size: 0.84rem;
+      padding: 0.28rem 0.8rem;
+    }
+
+    .packages-preview,
+    .why-section,
+    .photo-carousel-section,
+    .booking-process {
+      padding: clamp(2.9rem, 4.8vw, 4.8rem) clamp(1.5rem, 4vw, 4rem);
+    }
+
+    .packages-preview__cta {
+      display: grid;
+      max-width: 88rem;
+      align-items: center;
+      gap: 1rem 2rem;
+      grid-template-columns: minmax(0, 0.78fr) minmax(18rem, 1fr) auto;
+      text-align: left;
+    }
+
+    .packages-preview__cta .section-eyebrow {
+      grid-column: 1 / -1;
+      margin-bottom: -0.3rem;
+    }
+
+    .packages-preview h2 {
+      max-width: 34rem;
+      margin-inline: 0;
+      font-size: clamp(2rem, 3.2vw, 3rem);
+      letter-spacing: 0;
+    }
+
+    .packages-preview__cta > p:not(.section-eyebrow) {
+      max-width: 38rem;
+      margin: 0;
+      line-height: 1.58;
+    }
+
+    .packages-preview__actions {
+      width: auto;
+      margin-top: 0;
+    }
+
+    .section-heading--center {
+      max-width: 64rem;
+    }
+
+    .section-heading h2,
+    .booking-process h2,
+    .photo-carousel-section h2 {
+      font-size: clamp(2rem, 3.2vw, 3rem);
+      letter-spacing: 0;
+    }
+
+    .section-heading > p:last-child,
+    .photo-carousel-section__heading > p:last-child,
+    .booking-process__intro > p:not(.section-eyebrow) {
+      margin-top: 0.75rem;
+      line-height: 1.58;
+    }
+
+    .reasons-grid {
+      gap: 0.8rem;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      margin-top: 1.6rem;
+    }
+
+    .reason-card {
+      grid-column: span 2;
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+
+    .reason-card__check {
+      width: 2rem;
+      height: 2rem;
+    }
+
+    .booking-process__inner {
+      gap: clamp(1.5rem, 4vw, 3rem);
+      grid-template-columns: minmax(18rem, 0.65fr) minmax(0, 1.35fr);
+    }
+
+    .reservation-note {
+      margin-top: 1rem;
+      padding: 0.85rem;
+    }
+
+    .booking-steps {
+      display: grid;
+      gap: 0.8rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .booking-steps li {
+      border-top: 0;
+      border-left: 1px solid rgba(255, 255, 255, 0.14);
+      gap: 0.75rem;
+      grid-template-columns: 2.5rem minmax(0, 1fr);
+      padding: 0 0 0 1rem;
+    }
+
+    .booking-steps li:first-child {
+      border-left: 0;
+      padding-left: 0;
+    }
+
+    .photo-carousel-section__heading {
+      max-width: 64rem;
+      margin-bottom: 1.55rem;
+    }
+
+    .photo-carousel__card {
+      flex-basis: clamp(16rem, 23vw, 22rem);
+    }
+  }
+
+  @media (max-width: 960px) {
+    .home-hero {
+      align-items: center;
+      padding-bottom: 5rem;
+    }
+
+    .home-hero__inner {
+      gap: 2rem;
+    }
+
+    .home-hero__content {
+      max-width: 54rem;
+    }
+
+    .home-hero__features {
+      width: 100%;
+      max-width: 54rem;
+    }
+
+    .reasons-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .booking-process__inner {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .home-hero {
+      min-height: auto;
+      padding-top: 5.5rem;
+    }
+
+    .home-hero__image img {
+      object-position: 57% center;
+    }
+
+    .home-hero__shade {
+      background:
+        linear-gradient(180deg, rgba(8, 20, 6, 0.6), rgba(8, 20, 6, 0.88)),
+        linear-gradient(90deg, rgba(8, 20, 6, 0.7), transparent);
+    }
+
+    .home-hero__scroll {
+      display: none;
+    }
+
+    .photo-carousel__card {
+      flex-basis: clamp(15rem, 58vw, 22rem);
+    }
+
+    .photo-lightbox__panel {
+      width: min(100%, 48rem);
+    }
+  }
+
+  @media (max-width: 520px) {
+    .home-hero {
+      padding: 4.75rem 1rem 2rem;
+    }
+
+    .home-hero h1 {
+      font-size: clamp(2.1rem, 11vw, 3rem);
+    }
+
+    .home-hero__lead {
+      font-size: 0.98rem;
+    }
+
+    .home-hero__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .hero-button {
+      width: 100%;
+    }
+
+    .hero-button--text {
+      min-height: 2.5rem;
+    }
+
+    .home-hero__features {
+      padding: 1.1rem;
+    }
+
+    .home-hero__features ul {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .home-hero__features li {
+      justify-content: flex-start;
+      padding: 0.55rem 0;
+    }
+
+    .home-hero__features li + li {
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
+      border-left: 0;
+    }
+
+    .packages-preview {
+      padding-inline: 1rem;
+    }
+
+    .reasons-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .photo-carousel-section {
+      padding-inline: 1rem;
+    }
+
+    .photo-carousel {
+      margin-left: -1rem;
+      width: calc(100vw + 2rem);
+    }
+
+    .photo-carousel__card {
+      flex-basis: min(76vw, 19rem);
+    }
+
+    .photo-lightbox {
+      padding: 0.75rem;
+    }
+
+    .photo-lightbox__panel {
+      max-height: calc(100dvh - 1.5rem);
+      border-radius: var(--wb-radius-md);
+    }
+
+    .photo-lightbox__figure img {
+      max-height: 62vh;
+    }
+
+    .booking-steps li {
+      gap: 0.75rem;
+      grid-template-columns: 2.4rem 1fr;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-button,
+    .packages-link,
+    .photo-carousel__card,
+    .photo-carousel__card img,
+    .photo-carousel__card::after,
+    .photo-lightbox__close {
+      transition: none;
+    }
+
+    .photo-carousel__track {
+      animation: none;
+      transform: none !important;
+    }
+  }
+</style>

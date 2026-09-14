@@ -1,0 +1,760 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import Footer from '../../../components/Footer.astro';
+import PublicPageHero from '../../../components/PublicPageHero.astro';
+import BookingForm from '../../../components/bookingForm.astro';
+import { isEmailVerified } from '../../../lib/auth';
+import { getDashboardPathForRole, getUserRole } from '../../../lib/adminGuard';
+import { supabase, supabaseAdmin } from '../../../lib/supabase';
+import { toPackageDisplayItem } from '../../../lib/packageDisplay';
+import type { PackageDisplayItem, PackageVenueSummary } from '../../../lib/packageDisplay';
+import type { WoodberryPackage } from '../../../lib/woodberryPackages';
+import { resolveWoodberryPhotoSrc, woodberryPhotos } from '../../../data/woodberryPhotos';
+
+const { packageId } = Astro.params;
+
+if (!packageId) return Astro.redirect('/events_and_booking/events');
+
+const roleInfo = await getUserRole(Astro.cookies);
+const user = roleInfo.user;
+const emailVerified = user ? isEmailVerified(user) : false;
+const hasBookingAccess = Boolean(user && emailVerified && roleInfo.role === 'customer');
+const isInternalUser = roleInfo.role === 'admin' || roleInfo.role === 'staff';
+const accountDashboardPath = getDashboardPathForRole(roleInfo.role);
+const bookingPath = `/events_and_booking/events/${packageId}`;
+const encodedBookingPath = encodeURIComponent(bookingPath);
+
+const accountMetadata = user?.user_metadata ?? {};
+const firstAccountString = (...values: unknown[]) => {
+  const value = values.find((candidate) => typeof candidate === 'string' && candidate.trim());
+  return typeof value === 'string' ? value.trim() : '';
+};
+const profileFullName = roleInfo.profile
+  ? [roleInfo.profile.first_name, roleInfo.profile.last_name].filter(Boolean).join(' ').trim()
+  : '';
+const metadataFullName = [accountMetadata.first_name, accountMetadata.last_name]
+  .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+  .join(' ')
+  .trim();
+const accountDetails = {
+  fullName: firstAccountString(profileFullName, accountMetadata.full_name, accountMetadata.name, metadataFullName),
+  email: firstAccountString(roleInfo.profile?.email, user?.email, accountMetadata.email),
+  phone: firstAccountString(roleInfo.profile?.phone, accountMetadata.phone, accountMetadata.phone_number),
+  address: firstAccountString(accountMetadata.address, accountMetadata.street_address, accountMetadata.billing_address),
+};
+
+const customBookingEventTypes = [
+  'wedding',
+  'birthday',
+  'reunion',
+  'family-gathering',
+  'staycation',
+  'private-event',
+  'corporate',
+  'conference',
+  'debut',
+  'other',
+];
+
+const packageDb = supabaseAdmin ?? supabase;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isCustomBookingPage = packageId === 'custom';
+
+let selectedPackage: PackageDisplayItem | WoodberryPackage;
+let assignedVenues: PackageVenueSummary[] = [];
+let assignedVenueReady = false;
+let bookingVenueId = '';
+let heroImage = resolveWoodberryPhotoSrc(null, woodberryPhotos.eventCardFallback);
+
+if (isCustomBookingPage) {
+  const { data: customVenues, error: venueError } = await packageDb
+    .from('venues')
+    .select('id, name, description, location, capacity, image_url, is_active')
+    .eq('is_active', true)
+    .order('name');
+  if (venueError) console.error('[Custom Booking] Could not load venues:', venueError.message);
+  assignedVenues = (customVenues ?? []).map((venue) => ({
+    id: venue.id,
+    name: venue.name,
+    description: venue.description,
+    capacity: venue.capacity,
+    image_url: venue.image_url,
+    is_active: venue.is_active,
+  }));
+  selectedPackage = {
+    type: 'custom-booking',
+    name: 'Custom Booking',
+    description: 'Build your own event or staycation request with your preferred date, venue, and Woodberry items or services.',
+    price: 0,
+    duration: 'Your preferred date and time',
+    schedule: 'Custom schedule reviewed by staff',
+    minPax: 1,
+    maxPax: 999,
+    inclusions: ['Venue selected by availability', 'Custom items/services', 'Staff quotation review'],
+    facilityKeys: [],
+    eventTypes: customBookingEventTypes,
+    pricingNote: 'Final pricing will be reviewed by Woodberry staff.',
+  };
+  assignedVenueReady = assignedVenues.length > 0;
+} else {
+  if (!uuidPattern.test(packageId)) return Astro.redirect('/events_and_booking/events');
+  const packageQuery = packageDb
+    .from('packages')
+    .select('id, name, description, price, inclusions, max_pax, min_pax, duration_label, time_options, included_facilities, rules, booking_options, venue_id, thumbnail_url, is_active')
+    .eq('is_active', true);
+  const { data: managedPackage, error: packageError } = await packageQuery.eq('id', packageId).maybeSingle();
+
+  if (packageError) console.error('[Package Details] Could not load package:', packageError.message);
+  if (!managedPackage) return Astro.redirect('/events_and_booking/events');
+
+  const { data: venueAssignments, error: assignmentError } = await packageDb
+    .from('package_venue_assignments')
+    .select('venue_id, created_at')
+    .eq('package_id', managedPackage.id)
+    .order('created_at', { ascending: true });
+  if (assignmentError) console.error('[Package Details] Could not load venue assignments:', assignmentError.message);
+
+  const assignedVenueIds = [...new Set([
+    managedPackage.venue_id,
+    ...(venueAssignments ?? []).map((assignment) => assignment.venue_id),
+  ].filter((id): id is string => Boolean(id)))];
+  const { data: venueRows, error: venueError } = assignedVenueIds.length > 0
+    ? await packageDb
+        .from('venues')
+        .select('id, name, description, capacity, image_url, is_active')
+        .in('id', assignedVenueIds)
+        .eq('is_active', true)
+    : { data: [], error: null };
+  if (venueError) console.error('[Package Details] Could not load assigned venues:', venueError.message);
+  const venueById = new Map((venueRows ?? []).map((venue) => [venue.id, venue]));
+  assignedVenues = assignedVenueIds
+    .map((venueId) => venueById.get(venueId))
+    .filter((venue): venue is NonNullable<typeof venue> => Boolean(venue));
+
+  selectedPackage = toPackageDisplayItem({
+    ...managedPackage,
+    venues: assignedVenues,
+  });
+  assignedVenueReady = assignedVenueIds.length > 0 && assignedVenues.length === assignedVenueIds.length;
+  bookingVenueId = assignedVenueIds[0] ?? '';
+  heroImage = resolveWoodberryPhotoSrc(
+    managedPackage.thumbnail_url,
+    woodberryPhotos.eventCardFallback,
+  );
+}
+
+const bookingAccessTitle = isInternalUser
+  ? 'Booking requests are for guests'
+  : user && !emailVerified
+    ? 'Verify your email to book'
+    : 'Sign in to book';
+const bookingAccessMessage = isInternalUser
+  ? 'Your work account can manage existing bookings from its booking workspace. To send a new booking request, please use a guest account.'
+  : user && !emailVerified
+    ? 'Please verify your email before booking. A verified email is required before submitting requests or making the 50% down payment.'
+    : 'Sign in with a verified customer account to submit a booking request and make payments.';
+
+const describePackageVenue = (venue: PackageVenueSummary) =>
+  venue.description?.trim()
+  || `${venue.name} is prepared as part of this Woodberry package, giving guests a comfortable setting for the schedule, dining flow, and gathering size.`;
+---
+
+<Layout
+  title={`${selectedPackage.name} Details`}
+  description={`View package details for ${selectedPackage.name} at Woodberry Resorts and Events Place, then check availability and send a booking request.`}
+>
+  <main class="wb-page-surface booking-page">
+    <PublicPageHero
+      headingId="package-page-title"
+      eyebrow="Package Details"
+      title={selectedPackage.name}
+      description={isCustomBookingPage
+        ? "Build your own event or staycation request, choose an available venue, and share the items or services you want Woodberry staff to quote."
+        : "Review the package, included spaces, guest range, and schedule before sending your preferred date to the Woodberry team."}
+      image={heroImage}
+      imageAlt={`${selectedPackage.name} at Woodberry Resorts and Events Place`}
+      compact
+    >
+      <Fragment slot="breadcrumb">
+        <a href="/events_and_booking/events" class="public-page-hero__back">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+          Back to Packages
+        </a>
+      </Fragment>
+      <Fragment slot="actions">
+        <a href="#booking-request" class="public-page-hero__link public-page-hero__link--primary">{isCustomBookingPage ? 'Start Custom Booking' : 'Book Package'}</a>
+        <a href="/events_and_booking/events" class="public-page-hero__link public-page-hero__link--secondary">View Packages</a>
+      </Fragment>
+    </PublicPageHero>
+
+    <div class="w-full py-10 md:py-12">
+      <div class="max-w-6xl mx-auto px-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div class="lg:col-span-1">
+            <div class="booking-page__package-card">
+              <img
+                src={heroImage}
+                alt={`${selectedPackage.name} package spaces at Woodberry Resorts and Events Place`}
+                class="w-full h-48 object-cover"
+                loading="lazy"
+                decoding="async"
+                data-photo-fallback={woodberryPhotos.venueDetailFallback}
+              />
+              <div class="p-6">
+                <h3 class="booking-page__card-title">Package Summary</h3>
+
+                <div class="space-y-4">
+                  <div class="booking-page__detail-row">
+                    <span>{isCustomBookingPage ? 'Pricing' : selectedPackage.browsePrice ? 'Starts from' : 'Base price'}</span>
+                    <span class="booking-page__price">
+                      {isCustomBookingPage
+                        ? 'To be confirmed'
+                        : new Intl.NumberFormat('en-PH', {
+                          style: 'currency',
+                          currency: 'PHP',
+                          maximumFractionDigits: 0,
+                        }).format(selectedPackage.browsePrice ?? selectedPackage.price)}
+                    </span>
+                  </div>
+
+                  <div class="booking-page__detail-block">
+                    <span>Guest range</span>
+                    <p>{selectedPackage.minPax}-{selectedPackage.maxPax} guests</p>
+                  </div>
+
+                  <div class="booking-page__detail-block">
+                    <span>Duration</span>
+                    <p>{selectedPackage.duration}</p>
+                  </div>
+
+                  <div class="booking-page__detail-block">
+                    <span>Schedule</span>
+                    <p>{selectedPackage.schedule}</p>
+                  </div>
+
+                  <div class="booking-page__about">
+                    <span>Included facilities</span>
+                    <p>{selectedPackage.inclusions.join(', ')}</p>
+                  </div>
+
+                  {selectedPackage.description && (
+                    <div class="booking-page__about">
+                      <span>About this package</span>
+                      <p>{selectedPackage.description}</p>
+                    </div>
+                  )}
+
+                  {assignedVenues.length > 0 && (
+                    <div class="booking-page__about">
+                      <span>{isCustomBookingPage ? 'Available venue choices' : assignedVenues.length === 1 ? 'Included venue' : 'Included venues'}</span>
+                      <p>{isCustomBookingPage ? 'Choose one available venue after selecting your preferred date.' : assignedVenues.map((venue) => venue.name).join(', ')}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div class="booking-page__note">
+                  <p>
+                    {isCustomBookingPage
+                      ? 'Final pricing will be reviewed by Woodberry staff. Online checkout is not opened for this request until a final quotation is confirmed.'
+                      : 'Package and optional-extra prices in the form determine the payable estimate. A minimum 50% down payment is required within the 48-hour hold to secure the reservation, and the remaining balance is due on or before the reservation date.'}
+                  </p>
+                </div>
+
+                <div class="booking-page__info-list" aria-label="Booking information">
+                  <div>
+                    <strong>Payment</strong>
+                    <p>{isCustomBookingPage
+                      ? 'Priced selections show rough estimates only. Admin reviews the complete request and sets the final payable amount before online checkout opens.'
+                      : 'The form shows an estimated total, estimated 50% down payment, and estimated remaining balance before submission. Woodberry confirms the final price.'}</p>
+                  </div>
+                  <div>
+                    <strong>{isCustomBookingPage ? 'Admin price review' : '48-hour validity'}</strong>
+                    <p>{isCustomBookingPage
+                      ? 'The rough estimate is not payable. Staff will confirm when the final price and payment step are ready.'
+                      : 'Unpaid reservations are valid for 48 hours only. If the minimum down payment is not made in time, the reservation may be automatically cancelled and the date may become available to others.'}</p>
+                  </div>
+                  <div>
+                    <strong>Cancellation</strong>
+                    <p>Cancellation requests are coordinated with staff and follow the terms shown before submission.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="booking-request" class="lg:col-span-2 booking-page__request">
+            <section class="booking-page__spaces" aria-labelledby="package-spaces-title">
+              <div class="booking-page__spaces-header">
+                <p class="booking-page__login-eyebrow">{isCustomBookingPage ? 'Venue Selection' : 'Included Venues'}</p>
+                <h2 id="package-spaces-title">{isCustomBookingPage ? 'Choose an Available Venue' : 'Venues for this Package'}</h2>
+              </div>
+              {
+                assignedVenues.length > 0 ? (
+                  <div class="booking-page__spaces-grid">
+                    {assignedVenues.map((venue) => (
+                      <article class="booking-page__space-card">
+                        {venue.image_url && (
+                          <img
+                            src={resolveWoodberryPhotoSrc(venue.image_url, woodberryPhotos.eventCardFallback)}
+                            alt={`${venue.name} included in ${selectedPackage.name}`}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        )}
+                        <div>
+                          <h3>{venue.name}</h3>
+                          <p>{describePackageVenue(venue)}</p>
+                          {venue.capacity && <span>Up to {venue.capacity} guests</span>}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p class="booking-page__spaces-empty">
+                    Venue assignment for this package is still being configured. Please contact Woodberry before booking this package.
+                  </p>
+                )
+              }
+            </section>
+
+            {
+              hasBookingAccess && assignedVenueReady ? (
+                <div class="booking-page__form-card">
+                    <BookingForm
+                      venueId={bookingVenueId}
+                      venueName={isCustomBookingPage ? 'Selected custom venue' : assignedVenues.map((venue) => venue.name).join(', ') || selectedPackage.name}
+                    packageOptions={isCustomBookingPage ? [] : [selectedPackage]}
+                    initialPackageType={selectedPackage.type}
+                    packageId={isCustomBookingPage ? '' : 'id' in selectedPackage ? selectedPackage.id : ''}
+                    accountDetails={accountDetails}
+                    customBooking={isCustomBookingPage}
+                    venueOptions={assignedVenues}
+                  />
+                </div>
+              ) : hasBookingAccess ? (
+                <section class="booking-page__login-panel" aria-labelledby="booking-setup-title">
+                  <p class="booking-page__login-eyebrow">Booking Setup</p>
+                  <h2 id="booking-setup-title">Booking calendar is being configured</h2>
+                  <p class="booking-page__login-message">
+                    This package is visible, but it needs an assigned active venue before guests can book it. Please contact Woodberry to book this package.
+                  </p>
+                </section>
+              ) : (
+                <section class="booking-page__login-panel" aria-labelledby="booking-login-required-title">
+                  <p class="booking-page__login-eyebrow">Booking Access</p>
+                  <h2 id="booking-login-required-title">{bookingAccessTitle}</h2>
+                  <p class="booking-page__login-message">{bookingAccessMessage}</p>
+                  {roleInfo.role === 'customer' && user && !emailVerified && (
+                    <div class="booking-page__verification-box">
+                      <p>Didn't receive the email? <button type="button" id="resendVenueVerification" data-email={user.email ?? ''}>Resend verification email.</button></p>
+                      <p id="venueVerificationNotice" class="hidden"></p>
+                    </div>
+                  )}
+                  <div class="booking-page__login-actions">
+                    {isInternalUser ? (
+                      <a href={accountDashboardPath} class="booking-page__login-button booking-page__login-button--primary">
+                        Return to Booking Workspace
+                      </a>
+                    ) : (
+                      <>
+                        <a
+                          href={`/signin?redirect=${encodedBookingPath}`}
+                          class="booking-page__login-button booking-page__login-button--primary"
+                        >
+                          Log In
+                        </a>
+                        <a href={`/signup?redirect=${encodedBookingPath}`} class="booking-page__login-button booking-page__login-button--secondary">Sign Up</a>
+                      </>
+                    )}
+                    <a
+                      href="/events_and_booking/events"
+                      class="booking-page__login-button booking-page__login-button--ghost"
+                    >
+                      Back to Packages
+                    </a>
+                  </div>
+                </section>
+              )
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <Footer slot="footer" />
+</Layout>
+
+<script>
+  import { startResendCooldown } from '../../../lib/resendVerification';
+
+  document.querySelectorAll<HTMLImageElement>('img[data-photo-fallback]').forEach((image) => {
+    image.addEventListener('error', () => {
+      const fallback = image.dataset.photoFallback;
+      if (!fallback) return;
+      const fallbackUrl = new URL(fallback, window.location.href).href;
+      if (image.src !== fallbackUrl) image.src = fallback;
+    });
+  });
+
+  const resendVenueVerification = document.getElementById('resendVenueVerification') as HTMLButtonElement | null;
+  const venueVerificationNotice = document.getElementById('venueVerificationNotice');
+
+  function showVenueVerificationNotice(message: string, success: boolean) {
+    if (!venueVerificationNotice) return;
+    venueVerificationNotice.textContent = message;
+    venueVerificationNotice.className = success
+      ? 'booking-page__verification-message booking-page__verification-message--success'
+      : 'booking-page__verification-message booking-page__verification-message--error';
+  }
+
+  resendVenueVerification?.addEventListener('click', async () => {
+    const email = resendVenueVerification.dataset.email ?? '';
+    if (!email) return showVenueVerificationNotice('Enter your email on the sign-in page to resend verification.', false);
+    resendVenueVerification.disabled = true;
+    let cooldownStarted = false;
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json().catch(() => ({}));
+      showVenueVerificationNotice(data.message ?? data.error ?? 'Unable to resend verification email.', response.ok);
+      if (response.ok) {
+        startResendCooldown(resendVenueVerification);
+        cooldownStarted = true;
+      }
+    } catch {
+      showVenueVerificationNotice('Unable to resend verification email. Please try again.', false);
+    } finally {
+      if (!cooldownStarted) resendVenueVerification.disabled = false;
+    }
+  });
+</script>
+
+<style>
+  .booking-page {
+    padding-bottom: 3rem;
+  }
+
+  .booking-page__request {
+    display: grid;
+    min-width: 0;
+    gap: 1.5rem;
+    scroll-margin-top: 6rem;
+  }
+
+  .booking-page__package-card,
+  .booking-page__form-card,
+  .booking-page__spaces {
+    overflow: hidden;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background: color-mix(in srgb, var(--wb-surface-raised) 92%, transparent);
+    box-shadow: var(--wb-shadow-md);
+  }
+
+  .booking-page__form-card {
+    padding: clamp(1rem, 3vw, 2rem);
+  }
+
+  .booking-page__spaces {
+    padding: clamp(1rem, 3vw, 1.5rem);
+  }
+
+  .booking-page__spaces-header h2,
+  .booking-page__login-panel h2 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.55rem, 4vw, 2.15rem);
+    letter-spacing: 0;
+    line-height: 1.1;
+  }
+
+  .booking-page__spaces-grid {
+    display: grid;
+    gap: 0.9rem;
+    margin-top: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  }
+
+  .booking-page__space-card {
+    overflow: hidden;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-soft);
+  }
+
+  .booking-page__space-card img {
+    width: 100%;
+    height: 8.25rem;
+    object-fit: cover;
+  }
+
+  .booking-page__space-card div {
+    padding: 0.95rem;
+  }
+
+  .booking-page__space-card h3 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.15rem;
+  }
+
+  .booking-page__space-card p,
+  .booking-page__spaces-empty {
+    margin: 0.45rem 0 0;
+    color: var(--wb-muted);
+    font-size: 0.92rem;
+    line-height: 1.58;
+  }
+
+  .booking-page__space-card span {
+    display: inline-flex;
+    margin-top: 0.75rem;
+    border-radius: 999px;
+    background: var(--wb-green-soft);
+    color: var(--wb-green-mid);
+    font-size: 0.75rem;
+    font-weight: 900;
+    padding: 0.35rem 0.6rem;
+  }
+
+  .booking-page__login-panel {
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-lg);
+    background:
+      radial-gradient(circle at top right, rgba(231, 239, 232, 0.98), transparent 16rem),
+      color-mix(in srgb, var(--wb-surface-raised) 94%, transparent);
+    box-shadow: var(--wb-shadow-md);
+    color: var(--wb-text);
+    padding: clamp(1.5rem, 4vw, 2.35rem);
+  }
+
+  .booking-page__login-eyebrow {
+    margin: 0 0 0.4rem;
+    color: var(--wb-green);
+    font-size: 0.74rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .booking-page__login-message {
+    max-width: 34rem;
+    margin: 0.85rem 0 0;
+    color: var(--wb-muted);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  .booking-page__login-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .booking-page__login-button {
+    display: inline-flex;
+    min-height: 2.9rem;
+    flex: 1 1 10rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--wb-radius-md);
+    font-size: 0.84rem;
+    font-weight: 900;
+    line-height: 1.2;
+    padding: 0.85rem 1rem;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .booking-page__login-button:hover {
+    transform: translateY(-1px);
+  }
+
+  .booking-page__login-button--primary {
+    background: var(--wb-action);
+    box-shadow: 0 12px 22px rgba(21, 122, 69, 0.18);
+    color: var(--wb-on-action);
+  }
+
+  .booking-page__login-button--primary:hover {
+    background: var(--wb-action-hover);
+  }
+
+  .booking-page__login-button--secondary {
+    border-color: var(--wb-border);
+    background: var(--wb-surface-soft);
+    color: var(--wb-link);
+  }
+
+  .booking-page__login-button--secondary:hover,
+  .booking-page__login-button--ghost:hover {
+    background: var(--wb-green-soft);
+    color: var(--wb-green-dark);
+  }
+
+  .booking-page__login-button--ghost {
+    border-color: transparent;
+    background: transparent;
+    color: var(--wb-green-mid);
+  }
+
+  .booking-page__card-title {
+    margin: 0 0 1rem;
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.45rem;
+    letter-spacing: 0;
+  }
+
+  .booking-page__detail-row,
+  .booking-page__detail-block {
+    border-bottom: 1px solid var(--wb-border);
+    padding-bottom: 1rem;
+  }
+
+  .booking-page__detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .booking-page__detail-row span:first-child,
+  .booking-page__detail-block span,
+  .booking-page__about span {
+    color: var(--wb-muted);
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .booking-page__price {
+    color: var(--wb-earth);
+    font-size: 1.35rem;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .booking-page__detail-block p,
+  .booking-page__about p {
+    margin: 0.4rem 0 0;
+    color: var(--wb-text);
+    font-size: 0.95rem;
+  }
+
+  .booking-page__note {
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--wb-border);
+    padding-top: 1.25rem;
+  }
+
+  .booking-page__note p {
+    margin: 0;
+    color: var(--wb-muted);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .booking-page__info-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+
+  .booking-page__info-list div {
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-soft);
+    padding: 0.85rem;
+  }
+
+  .booking-page__info-list strong {
+    color: var(--wb-green-dark);
+    font-size: 0.82rem;
+  }
+
+  .booking-page__info-list p {
+    margin: 0.25rem 0 0;
+    color: var(--wb-muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
+  .booking-page__verification-box {
+    margin-top: 1rem;
+    border: 1px solid var(--wb-warning-border);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-warning-bg);
+    color: var(--wb-warning-text);
+    padding: 0.9rem 1rem;
+  }
+
+  .booking-page__verification-box p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .booking-page__verification-box button {
+    border: 0;
+    background: transparent;
+    color: var(--wb-green-mid);
+    cursor: pointer;
+    font-weight: 900;
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  .booking-page__verification-box button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+
+  :global(.booking-page__verification-message) {
+    margin-top: 0.55rem !important;
+    font-weight: 800;
+  }
+
+  :global(.booking-page__verification-message--success) {
+    color: var(--wb-success-text);
+  }
+
+  :global(.booking-page__verification-message--error) {
+    color: var(--wb-danger-text);
+  }
+
+  :global(html.dark) .booking-page__package-card,
+  :global(html.dark) .booking-page__form-card,
+  :global(html.dark) .booking-page__spaces,
+  :global(html.dark) .booking-page__login-panel {
+    background: var(--wb-surface-raised) !important;
+    border-color: var(--wb-border) !important;
+  }
+
+  :global(html.dark) .booking-page__login-button--secondary {
+    background: var(--wb-surface-soft);
+    border-color: var(--wb-border);
+  }
+
+  :global(html.dark) .booking-page__note,
+  :global(html.dark) .booking-page__detail-row,
+  :global(html.dark) .booking-page__detail-block {
+    border-color: var(--wb-border) !important;
+  }
+</style>

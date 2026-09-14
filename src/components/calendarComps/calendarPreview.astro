@@ -1,0 +1,1225 @@
+---
+import {
+  ADVANCE_BOOKING_DAYS,
+  getMinimumBookingDateValue,
+} from "../../lib/bookingDateRules";
+
+const initialMinimumBookingDateValue = getMinimumBookingDateValue();
+const { showBookingCta = true } = Astro.props;
+---
+
+<div
+  id="availabilityPanel"
+  class="fixed left-0 right-0 z-50 opacity-0 pointer-events-none transition-all duration-300 -translate-y-2"
+  style="top: var(--site-header-height);"
+  data-minimum-booking-date={initialMinimumBookingDateValue}
+  data-advance-booking-days={ADVANCE_BOOKING_DAYS}
+>
+  <div class="availability-panel__inner">
+    <section
+      class="availability-calendar"
+      aria-labelledby="availability-calendar-title"
+      aria-describedby="availability-calendar-help"
+    >
+      <header class="availability-calendar__hero">
+        <p class="availability-calendar__eyebrow">Woodberry Availability</p>
+        <h2 id="availability-calendar-title">Check Available Dates</h2>
+        <p id="availability-calendar-help">
+          Select a date at least 1 week before your event.
+        </p>
+      </header>
+
+      <div class="availability-calendar__nav" aria-label="Calendar month navigation">
+        <button
+          id="prevMonth"
+          class="availability-calendar__nav-button"
+          type="button"
+          aria-label="Show previous month"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <div class="availability-calendar__month-wrap" aria-live="polite" aria-atomic="true">
+          <p id="calMonthYear" class="availability-calendar__month"></p>
+          <p id="calMinimumText" class="availability-calendar__minimum"></p>
+        </div>
+        <button
+          id="nextMonth"
+          class="availability-calendar__nav-button"
+          type="button"
+          aria-label="Show next month"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <div class="availability-calendar__weekdays" aria-hidden="true">
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+          <div>{day}</div>
+        ))}
+      </div>
+
+      <div id="calGrid" class="availability-calendar__grid" aria-label="Monthly availability"></div>
+
+      <div
+        id="calStatus"
+        class="availability-calendar__status"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <div class="availability-calendar__legend" aria-label="Calendar legend">
+        <span class="availability-calendar__legend-title">Legend</span>
+        <span class="availability-calendar__legend-item">
+          <span class="availability-calendar__swatch availability-calendar__swatch--available"></span>
+          Available
+        </span>
+        <span class="availability-calendar__legend-item">
+          <span class="availability-calendar__swatch availability-calendar__swatch--reserved"></span>
+          Reserved
+        </span>
+        <span class="availability-calendar__legend-item">
+          <span class="availability-calendar__swatch availability-calendar__swatch--blocked"></span>
+          Blocked
+        </span>
+        <span class="availability-calendar__legend-item">
+          <span class="availability-calendar__swatch availability-calendar__swatch--too-soon"></span>
+          Too soon
+        </span>
+        <span class="availability-calendar__legend-item">
+          <span class="availability-calendar__swatch availability-calendar__swatch--past"></span>
+          Past date
+        </span>
+        <span class="availability-calendar__legend-item">
+          <span class="availability-calendar__swatch availability-calendar__swatch--selected"></span>
+          Selected date
+        </span>
+      </div>
+
+      {showBookingCta && (
+        <div class="availability-calendar__cta">
+          <a href="/events_and_booking/events" class="availability-calendar__book-link">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+            </svg>
+            Book a Date
+          </a>
+        </div>
+      )}
+    </section>
+  </div>
+</div>
+
+<script>
+  const panel = document.getElementById("availabilityPanel")!;
+  const grid = document.getElementById("calGrid")!;
+  const statusEl = document.getElementById("calStatus")!;
+  const monthLabel = document.getElementById("calMonthYear")!;
+  const minimumText = document.getElementById("calMinimumText")!;
+  const prevBtn = document.getElementById("prevMonth")!;
+  const nextBtn = document.getElementById("nextMonth")!;
+
+  const MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  type AvailabilitySet = {
+    reservedDates: Set<string>;
+    woodberryBlockedDates: Set<string>;
+    failed: boolean;
+  };
+
+  function parseDateOnly(value: string) {
+    const parts = value.split("-").map(Number);
+    if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (
+      date.getFullYear() !== parts[0] ||
+      date.getMonth() !== parts[1] - 1 ||
+      date.getDate() !== parts[2]
+    ) {
+      return null;
+    }
+
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+
+  function formatDateOnly(date: Date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  function formatFriendlyDate(value: string) {
+    const date = parseDateOnly(value);
+    if (!date) return value;
+    return date.toLocaleDateString("en-PH", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  const today = new Date();
+  const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayISO = formatDateOnly(todayDateOnly);
+  const advanceBookingDays = Number(panel.dataset.advanceBookingDays || "0");
+  const fallbackMinimumBookingDateISO = formatDateOnly(
+    new Date(
+      todayDateOnly.getFullYear(),
+      todayDateOnly.getMonth(),
+      todayDateOnly.getDate() + advanceBookingDays,
+    ),
+  );
+
+  let minimumBookingDateISO =
+    panel.dataset.minimumBookingDate || fallbackMinimumBookingDateISO;
+  let minimumBookingDate =
+    parseDateOnly(minimumBookingDateISO) || parseDateOnly(fallbackMinimumBookingDateISO)!;
+  let viewYear = minimumBookingDate.getFullYear();
+  let viewMonth = minimumBookingDate.getMonth();
+  let selectedDateISO = "";
+
+  const cache: Record<string, AvailabilitySet> = {};
+
+  function setStatus(message: string, tone: "loading" | "error" | "empty" | "idle" = "idle") {
+    statusEl.textContent = message;
+    statusEl.dataset.tone = tone;
+    statusEl.hidden = !message;
+  }
+
+  function applyMinimumBookingDate(nextMinimumBookingDateISO: string) {
+    const nextMinimumBookingDate = parseDateOnly(nextMinimumBookingDateISO);
+    if (!nextMinimumBookingDate) return;
+
+    minimumBookingDateISO = nextMinimumBookingDateISO;
+    minimumBookingDate = nextMinimumBookingDate;
+    panel.dataset.minimumBookingDate = nextMinimumBookingDateISO;
+  }
+
+  function addDateRangeToSet(set: Set<string>, startISO: string, endISO?: string) {
+    const start = parseDateOnly(String(startISO || "").slice(0, 10));
+    const end = parseDateOnly(String(endISO || startISO || "").slice(0, 10));
+    if (!start || !end) return;
+
+    for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+      set.add(formatDateOnly(day));
+    }
+  }
+
+  async function fetchBlockedDates(year: number, month: number): Promise<AvailabilitySet> {
+    const key = `${year}-${month}`;
+    if (cache[key]) return cache[key];
+
+    setStatus("Loading availability...", "loading");
+
+    try {
+      const res = await fetch(`/api/bookings/availability?year=${year}&month=${month + 1}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || json.message || "Availability request failed.");
+      if (json.minimumBookingDate) applyMinimumBookingDate(json.minimumBookingDate);
+
+      const reservedDates = new Set<string>();
+      const woodberryBlockedDates = new Set<string>();
+
+      for (const booking of json.bookings ?? []) {
+        addDateRangeToSet(reservedDates, booking.start_date, booking.end_date);
+        if (booking.event_date) reservedDates.add(String(booking.event_date).slice(0, 10));
+      }
+
+      for (const blockedDate of json.blockedDates ?? []) {
+        const start =
+          blockedDate.date ||
+          blockedDate.blocked_date ||
+          blockedDate.start_date ||
+          blockedDate.startDate;
+        const end = blockedDate.end_date || blockedDate.endDate || start;
+        if (start) addDateRangeToSet(woodberryBlockedDates, start, end);
+      }
+
+      const result = { reservedDates, woodberryBlockedDates, failed: false };
+      cache[key] = result;
+      return result;
+    } catch {
+      return { reservedDates: new Set(), woodberryBlockedDates: new Set(), failed: true };
+    }
+  }
+
+  function getDateState(
+    dateISO: string,
+    reservedDates: Set<string>,
+    woodberryBlockedDates: Set<string>,
+    failed: boolean,
+  ) {
+    if (dateISO < todayISO) return "past";
+    if (dateISO < minimumBookingDateISO) return "too-soon";
+    if (failed) return "unavailable";
+    if (reservedDates.has(dateISO)) return "reserved";
+    if (woodberryBlockedDates.has(dateISO)) return "blocked";
+    return "available";
+  }
+
+  function getDateStateLabel(state: string) {
+    if (state === "past") return "Past date";
+    if (state === "too-soon") return "Too soon to book";
+    if (state === "reserved") return "Reserved";
+    if (state === "blocked") return "Blocked by Woodberry";
+    if (state === "unavailable") return "Availability unavailable";
+    return "Available";
+  }
+
+  function getDateDescription(dateISO: string, state: string) {
+    const dateLabel = formatFriendlyDate(dateISO);
+    if (state === "past") return `${dateLabel}. Past date.`;
+    if (state === "too-soon") {
+      return `${dateLabel}. Too soon to book. Bookings must be made at least 1 week in advance.`;
+    }
+    if (state === "reserved") return `${dateLabel}. Reserved.`;
+    if (state === "blocked") return `${dateLabel}. Blocked by Woodberry.`;
+    if (state === "unavailable") return `${dateLabel}. Availability could not be loaded.`;
+    if (dateISO === selectedDateISO) return `${dateLabel}. Selected available date.`;
+    return `${dateLabel}. Available.`;
+  }
+
+  function selectDate(dateISO: string) {
+    selectedDateISO = selectedDateISO === dateISO ? "" : dateISO;
+
+    grid.querySelectorAll<HTMLButtonElement>(".availability-calendar__date").forEach((button) => {
+      const isSelected = button.dataset.date === selectedDateISO;
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-pressed", String(isSelected));
+      if (button.dataset.date) {
+        button.setAttribute(
+          "aria-label",
+          getDateDescription(button.dataset.date, button.dataset.state || "available"),
+        );
+      }
+    });
+  }
+
+  async function renderCalendar() {
+    monthLabel.textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+    minimumText.textContent = `Earliest bookable date: ${formatFriendlyDate(minimumBookingDateISO)}`;
+    grid.innerHTML = "";
+
+    const { reservedDates, woodberryBlockedDates, failed } = await fetchBlockedDates(
+      viewYear,
+      viewMonth,
+    );
+
+    const firstDow = new Date(viewYear, viewMonth, 1).getDay();
+    const offset = (firstDow + 6) % 7;
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+    let availableCount = 0;
+
+    for (let i = 0; i < totalCells; i++) {
+      const dayNum = i - offset + 1;
+
+      if (dayNum < 1 || dayNum > daysInMonth) {
+        const emptyCell = document.createElement("div");
+        emptyCell.className = "availability-calendar__date availability-calendar__date--empty";
+        emptyCell.setAttribute("role", "presentation");
+        grid.appendChild(emptyCell);
+        continue;
+      }
+
+      const dateISO = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+      const state = getDateState(dateISO, reservedDates, woodberryBlockedDates, failed);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "availability-calendar__date";
+      button.dataset.date = dateISO;
+      button.dataset.state = state;
+      button.setAttribute("aria-label", getDateDescription(dateISO, state));
+      button.setAttribute("aria-pressed", String(dateISO === selectedDateISO));
+      button.title = getDateStateLabel(state);
+
+      if (dateISO === todayISO) button.classList.add("is-today");
+      if (dateISO === selectedDateISO) button.classList.add("is-selected");
+
+      const number = document.createElement("span");
+      number.className = "availability-calendar__date-number";
+      number.textContent = String(dayNum);
+      button.appendChild(number);
+
+      const marker = document.createElement("span");
+      marker.className = "availability-calendar__date-marker";
+      marker.setAttribute("aria-hidden", "true");
+      button.appendChild(marker);
+
+      if (state === "available") {
+        availableCount++;
+        button.addEventListener("click", () => selectDate(dateISO));
+      } else {
+        button.disabled = true;
+        button.setAttribute("aria-disabled", "true");
+      }
+
+      grid.appendChild(button);
+    }
+
+    if (failed) {
+      setStatus("Failed to load availability. Please try another month or check again shortly.", "error");
+    } else if (availableCount === 0) {
+      setStatus("No available dates in this month. Try the next month.", "empty");
+    } else {
+      setStatus("", "idle");
+    }
+  }
+
+  function setButtonOpen(open: boolean) {
+    const txt = document.getElementById("previewText");
+    const iconCal = document.getElementById("previewIconCal") as HTMLElement | null;
+    const iconX = document.getElementById("previewIconX") as HTMLElement | null;
+    const toggle = document.getElementById("preview");
+    if (txt) txt.textContent = open ? "Close" : "Availability";
+    if (iconCal) iconCal.style.display = open ? "none" : "block";
+    if (iconX) iconX.style.display = open ? "block" : "none";
+    if (toggle) toggle.setAttribute("aria-expanded", String(open));
+  }
+
+  function openPanel() {
+    panel.classList.remove("opacity-0", "pointer-events-none", "-translate-y-2");
+    panel.classList.add("opacity-100", "pointer-events-auto", "translate-y-0");
+    setButtonOpen(true);
+  }
+
+  function closePanel() {
+    panel.classList.add("opacity-0", "pointer-events-none", "-translate-y-2");
+    panel.classList.remove("opacity-100", "pointer-events-auto", "translate-y-0");
+    setButtonOpen(false);
+  }
+
+  prevBtn.addEventListener("click", () => {
+    if (viewMonth === 0) {
+      viewMonth = 11;
+      viewYear--;
+    } else {
+      viewMonth--;
+    }
+    renderCalendar();
+  });
+
+  nextBtn.addEventListener("click", () => {
+    if (viewMonth === 11) {
+      viewMonth = 0;
+      viewYear++;
+    } else {
+      viewMonth++;
+    }
+    renderCalendar();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    const clickedToggle = event.target.closest("#preview");
+    const clickedInPanel = panel.contains(event.target);
+    const isOpen = panel.classList.contains("opacity-100");
+    if (clickedToggle) {
+      isOpen ? closePanel() : openPanel();
+      return;
+    }
+    if (!clickedInPanel && isOpen) closePanel();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closePanel();
+  });
+
+  document.getElementById("preview")?.setAttribute("aria-controls", "availabilityPanel");
+  document.getElementById("preview")?.setAttribute("aria-expanded", "false");
+
+  renderCalendar();
+</script>
+
+<style>
+  .availability-panel__inner {
+    width: min(100% - 2rem, 33rem);
+    margin: 0.9rem 1.5rem 0 auto;
+  }
+
+  .availability-calendar {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 84%, var(--wb-warm));
+    border-radius: var(--wb-radius-lg);
+    background:
+      linear-gradient(180deg, rgba(250, 247, 239, 0.98), rgba(244, 241, 232, 0.96)),
+      var(--wb-surface-soft);
+    box-shadow: var(--wb-shadow-lg);
+    color: var(--wb-text);
+  }
+
+  .availability-calendar__hero {
+    overflow: hidden;
+    background:
+      linear-gradient(135deg, rgba(18, 60, 36, 0.92), rgba(31, 107, 67, 0.94)),
+      var(--wb-green-dark);
+    padding: 1.1rem 1.25rem;
+  }
+
+  .availability-calendar__eyebrow,
+  .availability-calendar__hero h2,
+  .availability-calendar__hero p,
+  .availability-calendar__month,
+  .availability-calendar__minimum {
+    margin: 0;
+  }
+
+  .availability-calendar__eyebrow {
+    color: var(--wb-warm);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .availability-calendar__hero h2 {
+    margin-top: 0.25rem;
+    color: #ffffff;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.35rem, 5vw, 1.75rem);
+    line-height: 1.12;
+    letter-spacing: 0;
+  }
+
+  .availability-calendar__hero p:last-child {
+    margin-top: 0.4rem;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  .availability-calendar__nav {
+    display: grid;
+    align-items: center;
+    gap: 0.8rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    border-bottom: 1px solid var(--wb-border);
+    background: rgba(255, 255, 255, 0.46);
+    padding: 0.9rem 1rem;
+  }
+
+  .availability-calendar__nav-button {
+    display: grid;
+    width: 2.45rem;
+    height: 2.45rem;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--wb-green) 36%, var(--wb-border));
+    border-radius: 999px;
+    background: var(--wb-green-soft);
+    color: var(--wb-green-mid);
+    cursor: pointer;
+    padding: 0;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .availability-calendar__nav-button:hover {
+    border-color: var(--wb-action);
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+    transform: translateY(-1px);
+  }
+
+  .availability-calendar__nav-button:focus-visible,
+  .availability-calendar__date:focus-visible,
+  .availability-calendar__book-link:focus-visible {
+    outline: 3px solid var(--wb-focus-ring);
+    outline-offset: 3px;
+  }
+
+  .availability-calendar__nav-button svg,
+  .availability-calendar__book-link svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.3;
+  }
+
+  .availability-calendar__month-wrap {
+    min-width: 0;
+    text-align: center;
+  }
+
+  .availability-calendar__month {
+    color: var(--wb-green-dark);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.25rem;
+    font-weight: 900;
+    line-height: 1.15;
+  }
+
+  .availability-calendar__minimum {
+    margin-top: 0.28rem;
+    color: var(--wb-muted);
+    font-size: 0.76rem;
+    font-weight: 750;
+    line-height: 1.35;
+  }
+
+  .availability-calendar__weekdays,
+  .availability-calendar__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .availability-calendar__weekdays {
+    gap: 0.35rem;
+    padding: 0.85rem 1rem 0.35rem;
+  }
+
+  .availability-calendar__weekdays div {
+    color: var(--wb-earth);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .availability-calendar__grid {
+    gap: 0.35rem;
+    padding: 0 1rem 0.95rem;
+  }
+
+  .availability-calendar__date {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 3.15rem;
+    aspect-ratio: 1;
+    align-content: center;
+    gap: 0.12rem;
+    border: 2px solid transparent;
+    border-radius: 0.8rem;
+    background: var(--wb-green-soft);
+    color: var(--wb-green-dark);
+    cursor: pointer;
+    font: inherit;
+    overflow: hidden;
+    padding: 0.36rem 0.18rem;
+    text-align: center;
+    text-transform: none;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      color 0.2s ease,
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .availability-calendar__date:not(:disabled):hover {
+    border-color: #157a45;
+    box-shadow:
+      0 0 0 3px rgba(21, 122, 69, 0.12),
+      0 8px 18px rgba(18, 60, 36, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .availability-calendar__date-number {
+    color: inherit;
+    font-size: 1.12rem;
+    font-weight: 900;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+  }
+
+  .availability-calendar__date-marker {
+    position: absolute;
+    right: 0.34rem;
+    bottom: 0.32rem;
+    z-index: 1;
+    display: none;
+    width: 0.52rem;
+    height: 0.52rem;
+    opacity: 0.95;
+    pointer-events: none;
+  }
+
+  .availability-calendar__date--empty {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  .availability-calendar__date[data-state="available"] {
+    border-color: #157a45;
+    background:
+      linear-gradient(180deg, rgba(249, 255, 248, 0.96), rgba(213, 236, 215, 0.98)),
+      var(--wb-green-soft);
+    color: #123c24;
+    box-shadow:
+      inset 0 -3px 0 rgba(21, 122, 69, 0.18),
+      0 3px 8px rgba(18, 60, 36, 0.09);
+  }
+
+  .availability-calendar__date[data-state="available"]::before {
+    position: absolute;
+    inset: 0.28rem;
+    border: 1px solid rgba(21, 122, 69, 0.18);
+    border-radius: 0.55rem;
+    content: "";
+    pointer-events: none;
+  }
+
+  .availability-calendar__date[data-state="available"] .availability-calendar__date-marker {
+    display: none;
+  }
+
+  .availability-calendar__date[data-state="reserved"] {
+    border-color: #bd6a5a;
+    background:
+      linear-gradient(135deg, rgba(251, 231, 223, 0.96), rgba(249, 218, 209, 0.86));
+    color: #713025;
+  }
+
+  .availability-calendar__date[data-state="reserved"] .availability-calendar__date-marker {
+    display: block;
+    background: #b75d4b;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px rgba(251, 231, 223, 0.9);
+  }
+
+  .availability-calendar__date[data-state="blocked"] {
+    border-color: #8f6e43;
+    background:
+      linear-gradient(180deg, rgba(239, 229, 211, 0.95), rgba(216, 196, 162, 0.9));
+    color: #5f4934;
+  }
+
+  .availability-calendar__date[data-state="blocked"] .availability-calendar__date-marker {
+    display: block;
+    background: #7c6246;
+    border: 1px solid #5f4934;
+    border-radius: 0.16rem;
+  }
+
+  .availability-calendar__date[data-state="too-soon"] {
+    border-color: #aeb9a9;
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        rgba(100, 113, 95, 0.16) 0,
+        rgba(100, 113, 95, 0.16) 5px,
+        rgba(232, 236, 226, 0.92) 5px,
+        rgba(232, 236, 226, 0.92) 10px
+      ),
+      #e8ece2;
+    color: #64715f;
+  }
+
+  .availability-calendar__date[data-state="too-soon"] .availability-calendar__date-marker {
+    display: block;
+    width: 0.66rem;
+    height: 0.14rem;
+    border-radius: 999px;
+    background: #64715f;
+    transform: rotate(-45deg);
+    transform-origin: center;
+  }
+
+  .availability-calendar__date[data-state="past"] {
+    border-color: #ddd8cc;
+    background: #f0eee8;
+    color: #a69c8b;
+    opacity: 0.72;
+  }
+
+  .availability-calendar__date[data-state="past"] .availability-calendar__date-marker {
+    display: block;
+    width: 0.48rem;
+    height: 0.1rem;
+    border-radius: 999px;
+    background: #b9b0a0;
+  }
+
+  .availability-calendar__date[data-state="unavailable"] {
+    border-color: color-mix(in srgb, var(--wb-border) 78%, transparent);
+    background: #f1eee6;
+    color: var(--wb-muted);
+  }
+
+  .availability-calendar__date[data-state="unavailable"] .availability-calendar__date-marker {
+    display: block;
+    background: var(--wb-muted);
+    border-radius: 0.16rem;
+    color: var(--wb-muted);
+  }
+
+  .availability-calendar__date:disabled {
+    cursor: not-allowed;
+  }
+
+  .availability-calendar__date.is-today {
+    box-shadow:
+      inset 0 0 0 2px var(--wb-warm),
+      0 0 0 2px rgba(170, 143, 102, 0.18);
+  }
+
+  .availability-calendar__date.is-selected,
+  .availability-calendar__date.is-selected:not(:disabled):hover {
+    border-color: var(--wb-action);
+    background: var(--wb-action);
+    box-shadow:
+      0 0 0 3px rgba(21, 122, 69, 0.16),
+      0 10px 20px rgba(18, 60, 36, 0.16);
+    color: var(--wb-on-action);
+  }
+
+  .availability-calendar__date.is-selected.is-today,
+  .availability-calendar__date.is-selected.is-today:not(:disabled):hover {
+    box-shadow:
+      inset 0 0 0 2px var(--wb-warm),
+      0 0 0 4px rgba(21, 122, 69, 0.2),
+      0 10px 20px rgba(18, 60, 36, 0.16);
+  }
+
+  .availability-calendar__date.is-selected .availability-calendar__date-marker {
+    display: none;
+  }
+
+  .availability-calendar__date.is-selected::before {
+    display: none;
+  }
+
+  .availability-calendar__status {
+    margin: 0 1rem 0.95rem;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: rgba(255, 255, 255, 0.62);
+    color: var(--wb-muted);
+    font-size: 0.82rem;
+    font-weight: 750;
+    line-height: 1.45;
+    padding: 0.75rem 0.85rem;
+    text-align: center;
+  }
+
+  .availability-calendar__status[data-tone="loading"] {
+    border-color: var(--wb-green-pale);
+    background: var(--wb-green-soft);
+    color: var(--wb-green-dark);
+  }
+
+  .availability-calendar__status[data-tone="error"] {
+    border-color: #d8afa5;
+    background: #fbe7df;
+    color: #713c2f;
+  }
+
+  .availability-calendar__status[data-tone="empty"] {
+    border-color: color-mix(in srgb, var(--wb-warm) 46%, var(--wb-border));
+    background: var(--wb-warm-soft);
+    color: var(--wb-earth);
+  }
+
+  .availability-calendar__legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem 0.9rem;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--wb-border);
+    background: rgba(255, 255, 255, 0.42);
+    padding: 0.85rem 1rem;
+  }
+
+  .availability-calendar__legend-title {
+    color: var(--wb-earth);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .availability-calendar__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    color: var(--wb-muted);
+    font-size: 0.72rem;
+    font-weight: 750;
+  }
+
+  .availability-calendar__swatch {
+    position: relative;
+    width: 0.72rem;
+    height: 0.72rem;
+    flex: 0 0 auto;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+  }
+
+  .availability-calendar__swatch--available {
+    border-color: var(--wb-green);
+    background: var(--wb-green-soft);
+  }
+
+  .availability-calendar__swatch--reserved {
+    border-color: #bd6a5a;
+    background: #fbe7df;
+  }
+
+  .availability-calendar__swatch--reserved::after {
+    position: absolute;
+    right: -0.12rem;
+    bottom: -0.12rem;
+    width: 0.34rem;
+    height: 0.34rem;
+    border-radius: 999px;
+    background: #b75d4b;
+    content: "";
+  }
+
+  .availability-calendar__swatch--blocked {
+    border-color: #8f6e43;
+    background: #ded0b8;
+  }
+
+  .availability-calendar__swatch--blocked::after {
+    position: absolute;
+    right: -0.1rem;
+    bottom: -0.1rem;
+    width: 0.34rem;
+    height: 0.34rem;
+    border: 1px solid #5f4934;
+    border-radius: 0.08rem;
+    background: #7c6246;
+    content: "";
+  }
+
+  .availability-calendar__swatch--too-soon {
+    border-color: #aeb9a9;
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        rgba(100, 113, 95, 0.22) 0,
+        rgba(100, 113, 95, 0.22) 3px,
+        rgba(232, 236, 226, 0.92) 3px,
+        rgba(232, 236, 226, 0.92) 6px
+      );
+  }
+
+  .availability-calendar__swatch--past {
+    border-color: #ddd8cc;
+    background: #f0eee8;
+    opacity: 0.72;
+  }
+
+  .availability-calendar__swatch--selected {
+    border-color: var(--wb-green-dark);
+    background: var(--wb-green);
+  }
+
+  .availability-calendar__cta {
+    padding: 0.2rem 1rem 1rem;
+  }
+
+  .availability-calendar__book-link {
+    display: inline-flex;
+    width: 100%;
+    min-height: 2.8rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid var(--wb-action);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-action);
+    box-shadow: 0 10px 22px rgba(21, 122, 69, 0.18);
+    color: var(--wb-on-action);
+    font-size: 0.86rem;
+    font-weight: 900;
+    text-decoration: none;
+    transition:
+      background-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .availability-calendar__book-link:hover {
+    background: var(--wb-action-hover);
+    box-shadow: 0 12px 26px rgba(31, 107, 67, 0.24);
+    transform: translateY(-1px);
+  }
+
+  :global(html.dark) .availability-calendar {
+    border-color: var(--wb-border);
+    background:
+      linear-gradient(180deg, rgba(32, 39, 29, 0.98), rgba(23, 29, 22, 0.98)),
+      var(--wb-surface-raised);
+    color: var(--wb-text);
+  }
+
+  :global(html.dark) .availability-calendar__hero {
+    background:
+      linear-gradient(135deg, rgba(15, 20, 15, 0.96), rgba(37, 53, 40, 0.96)),
+      var(--wb-surface);
+  }
+
+  :global(html.dark) .availability-calendar__nav,
+  :global(html.dark) .availability-calendar__legend {
+    background: rgba(23, 29, 22, 0.7);
+    border-color: var(--wb-border);
+  }
+
+  :global(html.dark) .availability-calendar__month {
+    color: var(--wb-text);
+  }
+
+  :global(html.dark) .availability-calendar__nav-button {
+    border-color: var(--wb-border);
+    background: var(--wb-green-soft);
+    color: var(--wb-green-mid);
+  }
+
+  :global(html.dark) .availability-calendar__nav-button:hover {
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+  }
+
+  :global(html.dark) .availability-calendar__weekdays div,
+  :global(html.dark) .availability-calendar__legend-title {
+    color: var(--wb-warm);
+  }
+
+  :global(html.dark) .availability-calendar__date[data-state="available"] {
+    border-color: #6fbe85;
+    background:
+      linear-gradient(180deg, rgba(38, 82, 47, 0.98), rgba(25, 58, 34, 0.98)),
+      var(--wb-green-soft);
+    color: #d8f5dd;
+    box-shadow:
+      inset 0 -3px 0 rgba(111, 190, 133, 0.22),
+      0 3px 9px rgba(0, 0, 0, 0.24);
+  }
+
+  :global(html.dark) .availability-calendar__date[data-state="available"]::before {
+    border-color: rgba(216, 245, 221, 0.18);
+  }
+
+  :global(html.dark)
+    .availability-calendar__date[data-state="available"]
+    .availability-calendar__date-marker {
+    display: none;
+  }
+
+  :global(html.dark) .availability-calendar__date[data-state="reserved"] {
+    border-color: #9b5145;
+    background:
+      linear-gradient(135deg, rgba(58, 33, 28, 0.98), rgba(74, 39, 33, 0.94));
+    color: #efb0a2;
+  }
+
+  :global(html.dark)
+    .availability-calendar__date[data-state="reserved"]
+    .availability-calendar__date-marker {
+    background: #efb0a2;
+    box-shadow: 0 0 0 2px rgba(58, 33, 28, 0.92);
+  }
+
+  :global(html.dark) .availability-calendar__date[data-state="blocked"] {
+    border-color: #aa8f66;
+    background:
+      linear-gradient(180deg, rgba(61, 47, 31, 0.98), rgba(50, 41, 28, 0.96));
+    color: #d4bd94;
+  }
+
+  :global(html.dark)
+    .availability-calendar__date[data-state="blocked"]
+    .availability-calendar__date-marker {
+    background: #d4bd94;
+    border-color: #aa8f66;
+  }
+
+  :global(html.dark) .availability-calendar__date[data-state="too-soon"] {
+    border-color: #4f5e48;
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        rgba(125, 144, 116, 0.2) 0,
+        rgba(125, 144, 116, 0.2) 5px,
+        rgba(23, 29, 22, 0.9) 5px,
+        rgba(23, 29, 22, 0.9) 10px
+      ),
+      var(--wb-surface-soft);
+    color: #8f9d86;
+  }
+
+  :global(html.dark)
+    .availability-calendar__date[data-state="too-soon"]
+    .availability-calendar__date-marker {
+    background: #8f9d86;
+  }
+
+  :global(html.dark) .availability-calendar__date[data-state="past"] {
+    border-color: #313a2d;
+    background: #1a2118;
+    color: #65705f;
+  }
+
+  :global(html.dark)
+    .availability-calendar__date[data-state="past"]
+    .availability-calendar__date-marker {
+    background: #65705f;
+  }
+
+  :global(html.dark) .availability-calendar__date[data-state="unavailable"],
+  :global(html.dark) .availability-calendar__status {
+    border-color: var(--wb-border);
+    background: var(--wb-surface-soft);
+    color: var(--wb-muted);
+  }
+
+  :global(html.dark)
+    .availability-calendar__date[data-state="unavailable"]
+    .availability-calendar__date-marker {
+    background: var(--wb-muted);
+    color: var(--wb-muted);
+  }
+
+  :global(html.dark) .availability-calendar__date.is-selected,
+  :global(html.dark) .availability-calendar__date.is-selected:not(:disabled):hover,
+  :global(html.dark) .availability-calendar__book-link {
+    background: var(--wb-action);
+    color: var(--wb-on-action) !important;
+  }
+
+  :global(html.dark) .availability-calendar__date.is-selected .availability-calendar__date-marker {
+    display: none;
+  }
+
+  :global(html.dark) .availability-calendar__status[data-tone="loading"] {
+    border-color: var(--wb-green-pale);
+    background: var(--wb-green-soft);
+    color: var(--wb-green-mid);
+  }
+
+  :global(html.dark) .availability-calendar__status[data-tone="error"] {
+    border-color: #69382e;
+    background: #3a211c;
+    color: #efb0a2;
+  }
+
+  :global(html.dark) .availability-calendar__status[data-tone="empty"] {
+    border-color: rgba(197, 164, 112, 0.44);
+    background: var(--wb-warm-soft);
+    color: var(--wb-warm);
+  }
+
+  :global(html.dark) .availability-calendar__swatch--available {
+    border-color: var(--wb-green-mid);
+    background: var(--wb-green-soft);
+  }
+
+  :global(html.dark) .availability-calendar__swatch--reserved {
+    border-color: #9b5145;
+    background: #3a211c;
+  }
+
+  :global(html.dark) .availability-calendar__swatch--reserved::after {
+    background: #efb0a2;
+  }
+
+  :global(html.dark) .availability-calendar__swatch--blocked {
+    border-color: #aa8f66;
+    background: #33291c;
+  }
+
+  :global(html.dark) .availability-calendar__swatch--blocked::after {
+    border-color: #aa8f66;
+    background: #d4bd94;
+  }
+
+  :global(html.dark) .availability-calendar__swatch--too-soon {
+    border-color: #4f5e48;
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        rgba(125, 144, 116, 0.24) 0,
+        rgba(125, 144, 116, 0.24) 3px,
+        rgba(23, 29, 22, 0.92) 3px,
+        rgba(23, 29, 22, 0.92) 6px
+      );
+  }
+
+  :global(html.dark) .availability-calendar__swatch--past {
+    border-color: #313a2d;
+    background: #1a2118;
+  }
+
+  :global(html.dark) .availability-calendar__swatch--selected {
+    border-color: var(--wb-green-mid);
+    background: var(--wb-green-mid);
+  }
+
+  @media (max-width: 560px) {
+    #availabilityPanel {
+      padding-inline: 0.75rem;
+    }
+
+    .availability-panel__inner {
+      width: 100%;
+      margin: 0.75rem auto 0;
+    }
+
+    .availability-calendar__hero,
+    .availability-calendar__nav,
+    .availability-calendar__weekdays,
+    .availability-calendar__grid,
+    .availability-calendar__legend,
+    .availability-calendar__cta {
+      padding-inline: 0.8rem;
+    }
+
+    .availability-calendar__grid,
+    .availability-calendar__weekdays {
+      gap: 0.22rem;
+    }
+
+    .availability-calendar__date {
+      min-height: 2.7rem;
+      border-radius: 0.62rem;
+    }
+
+    .availability-calendar__date-number {
+      font-size: 0.96rem;
+    }
+
+    .availability-calendar__date-marker {
+      width: 0.46rem;
+      height: 0.46rem;
+    }
+
+    .availability-calendar__legend {
+      justify-content: flex-start;
+    }
+  }
+</style>

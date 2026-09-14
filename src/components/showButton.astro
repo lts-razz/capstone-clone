@@ -1,0 +1,21 @@
+<button
+  type="button"
+  id="showPassword"
+  class="col-start-3 col-end-4 row-start-2 row-end-3 text-sm font-semibold hover:cursor-pointer"
+>
+  SHOW
+</button>
+
+<script>
+  const showButton = document.getElementById('showPassword') as HTMLButtonElement | null;
+  const passwordInput = document.querySelector('input[type="password"], input[name="password"]') as HTMLInputElement | null;
+
+  if (showButton && passwordInput) {
+    showButton.addEventListener('click', () => {
+      const type =
+        passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      passwordInput.setAttribute('type', type);
+      showButton.textContent = type === 'password' ? 'SHOW' : 'HIDE';
+    });
+  }
+</script>
