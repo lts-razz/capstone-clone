@@ -7,6 +7,11 @@ import {
 import { error, ok } from "../../../lib/response";
 import { supabase, supabaseAdmin } from "../../../lib/supabase";
 import { calculateSalesReport, getSalesReportRange, type SalesReportPeriod } from "../../../services/salesReports";
+import {
+  calculateIntelligentSalesForecast,
+  getForecastTargetStartIso,
+  getNextMonthForecastTarget,
+} from "../../../services/intelligentForecast";
 import { normalizeBookingPaymentStatus } from "../../../lib/reservationValidity";
 
 export const prerender = false;
@@ -28,15 +33,27 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   } catch (rangeError) {
     return error(rangeError instanceof Error ? rangeError.message : "Invalid report range", 400);
   }
+  const forecastTargetMonth = getNextMonthForecastTarget(range.start);
+  const forecastTargetStart = getForecastTargetStartIso(forecastTargetMonth);
 
-  const { data: bookings, error: bookingsError } = await db
-    .from("bookings")
-    .select("id, full_name, status, created_at, event_date, start_date, total_price, package_id, package_type, venue_id, pax")
-    .gte("created_at", range.start)
-    .lt("created_at", range.endExclusive)
-    .order("created_at", { ascending: true });
-  if (bookingsError) {
-    console.error("[SalesReport] bookings:", bookingsError.message);
+  const [
+    { data: bookings, error: bookingsError },
+    { data: forecastBookings, error: forecastBookingsError },
+  ] = await Promise.all([
+    db
+      .from("bookings")
+      .select("id, full_name, status, created_at, event_date, start_date, total_price, package_id, package_type, venue_id, pax")
+      .gte("created_at", range.start)
+      .lt("created_at", range.endExclusive)
+      .order("created_at", { ascending: true }),
+    db
+      .from("bookings")
+      .select("id, status, created_at, total_price, package_type")
+      .lt("created_at", forecastTargetStart)
+      .order("created_at", { ascending: true }),
+  ]);
+  if (bookingsError || forecastBookingsError) {
+    console.error("[SalesReport] bookings:", bookingsError?.message ?? forecastBookingsError?.message);
     return error("Could not load report bookings", 500);
   }
 
@@ -47,11 +64,21 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       status: normalizeBookingStatus(booking.status),
     }));
   const bookingIds = validBookings.map((booking) => booking.id);
+  const validForecastBookings = (forecastBookings ?? [])
+    .filter((booking) => isRecognizedBookingStatus(booking.status))
+    .map((booking) => ({
+      ...booking,
+      status: normalizeBookingStatus(booking.status),
+    }));
+  const forecastBookingIds = validForecastBookings.map((booking) => booking.id);
   const packageIds = [...new Set(validBookings.map((booking) => booking.package_id).filter((id): id is string => Boolean(id)))];
   const venueIds = [...new Set(validBookings.map((booking) => booking.venue_id).filter((id): id is string => Boolean(id)))];
-  const [{ data: payments, error: paymentsError }, { data: packages, error: packagesError }, { data: venueAssignments, error: venueAssignmentsError }, { data: venues, error: venuesError }] = await Promise.all([
+  const [{ data: payments, error: paymentsError }, { data: forecastPayments, error: forecastPaymentsError }, { data: packages, error: packagesError }, { data: venueAssignments, error: venueAssignmentsError }, { data: venues, error: venuesError }] = await Promise.all([
     bookingIds.length
       ? db.from("booking_payments").select("booking_id, total_booking_amount, amount_paid, payment_status").in("booking_id", bookingIds)
+      : Promise.resolve({ data: [], error: null }),
+    forecastBookingIds.length
+      ? db.from("booking_payments").select("booking_id, total_booking_amount, amount_paid, payment_status").in("booking_id", forecastBookingIds)
       : Promise.resolve({ data: [], error: null }),
     packageIds.length
       ? db.from("packages").select("id, name").in("id", packageIds)
@@ -63,8 +90,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       ? db.from("venues").select("id, name").in("id", venueIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
-  if (paymentsError || packagesError || venueAssignmentsError || venuesError) {
-    console.error("[SalesReport] related data:", paymentsError?.message ?? packagesError?.message ?? venueAssignmentsError?.message ?? venuesError?.message);
+  if (paymentsError || forecastPaymentsError || packagesError || venueAssignmentsError || venuesError) {
+    console.error("[SalesReport] related data:", paymentsError?.message ?? forecastPaymentsError?.message ?? packagesError?.message ?? venueAssignmentsError?.message ?? venuesError?.message);
     return error("Could not load report payment or package data", 500);
   }
 
@@ -96,6 +123,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     ...item,
     payment_status: normalizeBookingPaymentStatus(item.payment_status),
   }));
+  const normalizedForecastPayments = (forecastPayments ?? []).map((item) => ({
+    ...item,
+    payment_status: normalizeBookingPaymentStatus(item.payment_status),
+  }));
   const paymentByBooking = Object.fromEntries(normalizedPayments.map((item) => [item.booking_id, item]));
   const reportBookings = validBookings.map((booking) => {
     const bookingVenueIds = [...new Set([booking.venue_id, ...(venueIdsByBookingId.get(booking.id) ?? [])].filter((id): id is string => Boolean(id)))];
@@ -115,6 +146,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   return ok({
     report: calculateSalesReport(reportBookings, normalizedPayments, range, packageNames, venueNames),
+    forecast: calculateIntelligentSalesForecast(validForecastBookings, normalizedForecastPayments, forecastTargetMonth),
     bookings: reportBookings,
   });
 };

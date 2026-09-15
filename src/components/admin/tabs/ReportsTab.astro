@@ -85,6 +85,28 @@
       </section>
     </div>
 
+    <section class="border border-gray-100 rounded-xl p-5 bg-gray-50 mb-8">
+      <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400">Baseline Forecast</h3>
+          <p id="rpt-forecast-period" class="text-lg font-black mt-1" style="color:var(--jet-primary);">-</p>
+        </div>
+        <p id="rpt-forecast-trend" class="px-3 py-1 rounded-full text-xs font-bold bg-white border border-gray-100 text-gray-600">-</p>
+      </div>
+      <p id="rpt-forecast-unavailable" class="text-sm text-gray-500 hidden">-</p>
+      <div id="rpt-forecast-results" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Expected bookings</p>
+          <p id="rpt-forecast-bookings" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Expected booking value</p>
+          <p id="rpt-forecast-revenue" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
+      </div>
+      <p id="rpt-forecast-method" class="report-period-note mt-4 hidden"></p>
+    </section>
+
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
       <section>
         <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Package Usage</h3>

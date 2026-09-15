@@ -2644,6 +2644,7 @@ generateReport = async function() {
     if (!response.ok) throw new Error(payload.error ?? 'Could not generate the sales report');
 
     const report = payload.report;
+    const forecast = payload.forecast;
     const reportBookings: any[] = payload.bookings ?? [];
     const start = new Date(report.period.start);
     const end = new Date(report.period.endExclusive);
@@ -2671,6 +2672,46 @@ generateReport = async function() {
     setText('rpt-pay-partial', String(report.paymentStatusCounts?.partial ?? 0));
     setText('rpt-pay-paid', String(report.paymentStatusCounts?.paid ?? 0));
     setText('rpt-pay-refunded', String(report.paymentStatusCounts?.refunded ?? 0));
+
+    const forecastUnavailable = document.getElementById('rpt-forecast-unavailable');
+    const forecastResults = document.getElementById('rpt-forecast-results');
+    const forecastMethod = document.getElementById('rpt-forecast-method');
+    const forecastTrend = document.getElementById('rpt-forecast-trend');
+    if (forecast) {
+      const forecastDate = new Date(`${forecast.targetMonth}-01T00:00:00Z`);
+      const trend = String(forecast.trend?.direction ?? 'stable');
+      const trendLabel = trend.charAt(0).toUpperCase() + trend.slice(1);
+      setText('rpt-forecast-period', forecastDate.toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+      setText('rpt-forecast-trend', trendLabel);
+      if (forecastTrend) {
+        const trendTone = trend === 'increasing'
+          ? 'bg-green-50 border-green-100 text-green-700'
+          : trend === 'declining'
+            ? 'bg-red-50 border-red-100 text-red-700'
+            : 'bg-white border-gray-100 text-gray-600';
+        forecastTrend.className = `px-3 py-1 rounded-full text-xs font-bold border ${trendTone}`;
+      }
+      if (!forecast.available) {
+        setText('rpt-forecast-unavailable', forecast.message ?? 'Forecast unavailable.');
+        forecastUnavailable?.classList.remove('hidden');
+        forecastResults?.classList.add('hidden');
+        forecastMethod?.classList.add('hidden');
+      } else {
+        setText('rpt-forecast-bookings', String(forecast.expectedBookings ?? 0));
+        setText('rpt-forecast-revenue', formatReportMoney(forecast.expectedRevenue));
+        setText('rpt-forecast-method', `Created-at baseline from ${forecast.monthsUsed?.join(', ') || 'available history'}: weighted recent demand plus simple linear trend.`);
+        forecastUnavailable?.classList.add('hidden');
+        forecastResults?.classList.remove('hidden');
+        forecastMethod?.classList.remove('hidden');
+      }
+    } else {
+      setText('rpt-forecast-period', '-');
+      setText('rpt-forecast-trend', '-');
+      setText('rpt-forecast-unavailable', 'Forecast unavailable.');
+      forecastUnavailable?.classList.remove('hidden');
+      forecastResults?.classList.add('hidden');
+      forecastMethod?.classList.add('hidden');
+    }
 
     const breakdown = document.getElementById('rpt-breakdown-body')!;
     breakdown.innerHTML = report.revenueByPackage.length

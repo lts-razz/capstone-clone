@@ -3,6 +3,12 @@ import {
   normalizeBookingStatus,
   type BookingStatus,
 } from "../lib/bookingStatus";
+import {
+  calculateIntelligentSalesForecast,
+  type ForecastBooking,
+  type ForecastPayment,
+  type IntelligentSalesForecast,
+} from "./intelligentForecast";
 
 export type SalesReportPeriod = "weekly" | "monthly";
 
@@ -66,16 +72,7 @@ export interface SalesReport {
   mostSelectedPackages: SalesReportPackageMetric[];
 }
 
-export interface SalesForecast {
-  available: boolean;
-  message: string | null;
-  targetMonth: string;
-  expectedBookings: number | null;
-  expectedRevenue: number | null;
-  likelyTopPackage: string | null;
-  monthsUsed: string[];
-  method: "3-month moving average with monthly trend average";
-}
+export type SalesForecast = IntelligentSalesForecast;
 
 const PACKAGE_LABELS: Record<string, string> = {
   "lunch-time": "Lunch Time Package",
@@ -87,81 +84,12 @@ const PACKAGE_LABELS: Record<string, string> = {
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-const FORECAST_UNAVAILABLE_MESSAGE = "Not enough reliable historical data for forecasting yet.";
-
-/**
- * Produces a basic estimate from the latest three complete calendar months.
- * Only booked/completed reservations count as reliable history. The result
- * averages a 3-month moving average with the average month-to-month trend.
- */
 export function calculateSalesForecast(
-  bookings: SalesReportBooking[],
-  payments: SalesReportPayment[],
+  bookings: ForecastBooking[],
+  payments: ForecastPayment[],
   targetMonth: string,
-  packageNames: Record<string, string> = {},
 ): SalesForecast {
-  if (!/^\d{4}-\d{2}$/.test(targetMonth)) throw new Error("Target month must use YYYY-MM format");
-
-  const paymentByBooking = new Map(payments.map((payment) => [payment.booking_id, payment]));
-  const normalizedBookings = bookings
-    .filter((booking) => isRecognizedBookingStatus(booking.status))
-    .map((booking) => ({ ...booking, status: normalizeBookingStatus(booking.status) }));
-  const reliable = normalizedBookings.filter((booking) => {
-    return (booking.status === "booked" || booking.status === "completed")
-      && booking.created_at.slice(0, 7) < targetMonth;
-  });
-  const reliableMonths = [...new Set(reliable.map((booking) => booking.created_at.slice(0, 7)))].sort();
-  const monthsUsed = reliableMonths.slice(-3);
-
-  if (monthsUsed.length < 3) {
-    return {
-      available: false,
-      message: FORECAST_UNAVAILABLE_MESSAGE,
-      targetMonth,
-      expectedBookings: null,
-      expectedRevenue: null,
-      likelyTopPackage: null,
-      monthsUsed,
-      method: "3-month moving average with monthly trend average",
-    };
-  }
-
-  const histories = monthsUsed.map((month) => {
-    const monthBookings = reliable.filter((booking) => booking.created_at.startsWith(month));
-    const revenue = monthBookings.reduce((sum, booking) => {
-      const payment = paymentByBooking.get(booking.id);
-      return sum + Math.max(Number(payment?.total_booking_amount ?? booking.total_price ?? 0), 0);
-    }, 0);
-    return { bookings: monthBookings.length, revenue };
-  });
-  const movingAverage = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
-  const averageTrend = (values: number[]) =>
-    values.slice(1).reduce((sum, value, index) => sum + (value - values[index]), 0) / (values.length - 1);
-  const forecastValue = (values: number[]) => Math.max(0, (movingAverage(values) + values.at(-1)! + averageTrend(values)) / 2);
-
-  const packageCounts = new Map<string, { name: string; count: number }>();
-  reliable.filter((booking) => monthsUsed.includes(booking.created_at.slice(0, 7))).forEach((booking) => {
-    const key = booking.package_id ?? booking.package_type ?? "unspecified";
-    const name = booking.package_id
-      ? (packageNames[booking.package_id] ?? booking.package_type ?? "Unspecified package")
-      : (PACKAGE_LABELS[booking.package_type ?? ""] ?? booking.package_type ?? "Unspecified package");
-    const current = packageCounts.get(key) ?? { name, count: 0 };
-    current.count++;
-    packageCounts.set(key, current);
-  });
-  const likelyTopPackage = [...packageCounts.values()]
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))[0]?.name ?? "Unspecified package";
-
-  return {
-    available: true,
-    message: null,
-    targetMonth,
-    expectedBookings: Math.round(forecastValue(histories.map((item) => item.bookings))),
-    expectedRevenue: roundMoney(forecastValue(histories.map((item) => item.revenue))),
-    likelyTopPackage,
-    monthsUsed,
-    method: "3-month moving average with monthly trend average",
-  };
+  return calculateIntelligentSalesForecast(bookings, payments, targetMonth);
 }
 
 function parseDateOnly(value: string): Date {
