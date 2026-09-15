@@ -1,84 +1,158 @@
 ---
 const { allAdmins, allCustomers } = Astro.props;
+
+const formatDate = (date: string | null | undefined) => {
+  if (!date) return '-';
+  return new Date(date).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const fullName = (profile: any) =>
+  `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() || 'Unnamed account';
 ---
 
 <!-- TAB: USERS -->
 <section id="tab-users" class="tab-section hidden">
-  <!-- Admins -->
   <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
-      <h2 class="font-bold text-lg" style="color:var(--jet-primary);">Admins</h2>
-      <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{allAdmins?.length ?? 0}</span>
+    <div class="px-6 py-5 border-b border-gray-100 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Account roles</p>
+        <h2 class="font-bold text-lg" style="color:var(--jet-primary);">Users Management</h2>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-3 lg:w-[34rem]">
+        <label class="sm:col-span-2">
+          <span class="sr-only">Search users</span>
+          <input
+            id="userSearch"
+            type="search"
+            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[var(--butterscotch-primary)]"
+            placeholder="Search name or email"
+            autocomplete="off"
+          />
+        </label>
+        <label>
+          <span class="sr-only">Filter account role</span>
+          <select
+            id="userRoleFilter"
+            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[var(--butterscotch-primary)]"
+          >
+            <option value="all">All roles</option>
+            <option value="admin">Admins</option>
+            <option value="customer">Customers</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="grid gap-0 border-b border-gray-100 sm:grid-cols-3">
+      <div class="px-6 py-4">
+        <strong class="block text-2xl" style="color:var(--jet-primary);">{(allAdmins?.length ?? 0) + (allCustomers?.length ?? 0)}</strong>
+        <span class="text-xs font-bold uppercase tracking-wide text-gray-400">Total accounts</span>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 sm:border-l sm:border-t-0">
+        <strong class="block text-2xl text-purple-700">{allAdmins?.length ?? 0}</strong>
+        <span class="text-xs font-bold uppercase tracking-wide text-gray-400">Admins</span>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 sm:border-l sm:border-t-0">
+        <strong class="block text-2xl text-blue-700">{allCustomers?.length ?? 0}</strong>
+        <span class="text-xs font-bold uppercase tracking-wide text-gray-400">Customers</span>
+      </div>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
-        <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-          <th class="px-5 py-3 text-left">Name</th>
-          <th class="px-5 py-3 text-left">Email</th>
-          <th class="px-5 py-3 text-left">Joined</th>
-          <th class="px-5 py-3 text-left">Actions</th>
-        </tr></thead>
-        <tbody>
-          {allAdmins?.map(a => (
-            <tr class="border-t border-gray-50 hover:bg-gray-50">
-              <td class="px-5 py-3 font-medium">{a.first_name??''} {a.last_name??''}</td>
-              <td class="px-5 py-3 text-gray-600">{a.email??'—'}</td>
-              <td class="px-5 py-3 text-gray-400 text-xs">{new Date(a.created_at).toLocaleDateString('en-PH')}</td>
-              <td class="px-5 py-3">
-                <button onclick={`demoteUser('${a.id}')`}
+        <thead>
+          <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+            <th class="px-5 py-3 text-left">Account</th>
+            <th class="px-5 py-3 text-left">Role</th>
+            <th class="px-5 py-3 text-left">Joined</th>
+            <th class="px-5 py-3 text-left">Booking summary</th>
+            <th class="px-5 py-3 text-left">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          {allAdmins?.map((admin) => (
+            <tr
+              class="border-t border-gray-50 hover:bg-gray-50"
+              data-user-management-row
+              data-role="admin"
+              data-user-id={admin.id}
+              data-search={`${fullName(admin)} ${admin.email ?? ''} admin`.toLowerCase()}
+            >
+              <td class="px-5 py-4">
+                <div class="font-semibold" style="color:var(--jet-primary);">{fullName(admin)}</div>
+                <div class="text-xs text-gray-500">{admin.email ?? '-'}</div>
+              </td>
+              <td class="px-5 py-4">
+                <span class="inline-flex rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">Admin</span>
+              </td>
+              <td class="px-5 py-4 text-gray-500">{formatDate(admin.created_at)}</td>
+              <td class="px-5 py-4 text-gray-400">Admin account</td>
+              <td class="px-5 py-4">
+                <button
+                  type="button"
+                  onclick={`demoteUser('${admin.id}')`}
                   class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
-                  style="border-color:#9a4a36;color:#9a4a36;">
+                  style="border-color:#9a4a36;color:#9a4a36;"
+                >
                   Demote to Customer
                 </button>
               </td>
             </tr>
           ))}
-          {(!allAdmins||allAdmins.length===0)&&<tr><td colspan="4" class="px-5 py-8 text-center text-gray-400">No admins found.</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Customers -->
-  <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
-      <h2 class="font-bold text-lg" style="color:var(--jet-primary);">Customers</h2>
-      <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{allCustomers?.length ?? 0}</span>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-          <th class="px-5 py-3 text-left">Name</th>
-          <th class="px-5 py-3 text-left">Email</th>
-          <th class="px-5 py-3 text-left">Joined</th>
-          <th class="px-5 py-3 text-left">Actions</th>
-        </tr></thead>
-        <tbody>
-          {allCustomers?.map(c => (
-            <tr class="border-t border-gray-50 hover:bg-gray-50">
-              <td class="px-5 py-3 font-medium">{c.first_name??''} {c.last_name??''}</td>
-              <td class="px-5 py-3 text-gray-600">{c.email??'—'}</td>
-              <td class="px-5 py-3 text-gray-400 text-xs">{new Date(c.created_at).toLocaleDateString('en-PH')}</td>
-              <td class="px-5 py-3">
+          {allCustomers?.map((customer) => (
+            <tr
+              class="border-t border-gray-50 hover:bg-gray-50"
+              data-user-management-row
+              data-role="customer"
+              data-user-id={customer.id}
+              data-search={`${fullName(customer)} ${customer.email ?? ''} customer`.toLowerCase()}
+            >
+              <td class="px-5 py-4">
+                <div class="font-semibold" style="color:var(--jet-primary);">{fullName(customer)}</div>
+                <div class="text-xs text-gray-500">{customer.email ?? '-'}</div>
+              </td>
+              <td class="px-5 py-4">
+                <span class="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">Customer</span>
+              </td>
+              <td class="px-5 py-4 text-gray-500">{formatDate(customer.created_at)}</td>
+              <td class="px-5 py-4">
+                <div class="font-semibold text-gray-700" data-customer-booking-count={customer.id}>0 visible bookings</div>
+                <div class="text-xs text-gray-500" data-customer-booking-last={customer.id}>No booking history loaded</div>
+              </td>
+              <td class="px-5 py-4">
                 <div class="flex flex-wrap gap-2">
-                  <button onclick={`promoteStaff('${c.id}')`}
+                  <button
+                    type="button"
+                    onclick={`promoteStaff('${customer.id}')`}
                     class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
-                    style="border-color:#157a45;color:#157a45;">
+                    style="border-color:#157a45;color:#157a45;"
+                  >
                     Promote to Staff
                   </button>
-                  <button onclick={`promoteUser('${c.id}')`}
+                  <button
+                    type="button"
+                    onclick={`promoteUser('${customer.id}')`}
                     class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
-                    style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);">
+                    style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);"
+                  >
                     Promote to Admin
                   </button>
                 </div>
               </td>
             </tr>
           ))}
-          {(!allCustomers||allCustomers.length===0)&&<tr><td colspan="4" class="px-5 py-8 text-center text-gray-400">No customers yet.</td></tr>}
+          <tr id="usersEmptyState" class="hidden">
+            <td colspan="5" class="px-5 py-8 text-center text-gray-400">No accounts match the current filters.</td>
+          </tr>
+          {(!allAdmins || allAdmins.length === 0) && (!allCustomers || allCustomers.length === 0) && (
+            <tr>
+              <td colspan="5" class="px-5 py-8 text-center text-gray-400">No accounts found.</td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
   </div>
 </section>
-

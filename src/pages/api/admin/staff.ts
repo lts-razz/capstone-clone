@@ -65,6 +65,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const { data: employee } = await supabaseAdmin.from("employees").select("id")
     .eq("id", parsed.data.staffId).maybeSingle();
   if (!employee) return error("Staff member not found", 404);
+  if (parsed.data.action === "deactivate" && parsed.data.staffId === guard.user.id) {
+    return error("You cannot deactivate your own staff access while signed in as admin", 400);
+  }
 
   if (parsed.data.action === "update") {
     const { error: updateError } = await supabaseAdmin.from("employees").update({

@@ -1,14 +1,26 @@
 ---
 const { isAdmin, allEmployees } = Astro.props;
+
+const formatDate = (date: string | null | undefined) => {
+  if (!date) return '-';
+  return new Date(date).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const fullName = (profile: any) =>
+  `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() || 'Unnamed staff';
 ---
 
 {isAdmin && (
   <section id="tab-staff-management" class="tab-section hidden">
     <div class="staff-heading">
       <div>
-        <p class="staff-eyebrow">Account administration</p>
+        <p class="staff-eyebrow">Employee accounts</p>
         <h2>Staff Management</h2>
-        <p>Create staff sign-ins, update basic details, and control access without changing customer accounts.</p>
+        <p>Create staff sign-ins, update staff role labels, and control employee access without changing admin accounts.</p>
       </div>
       <button type="button" class="staff-primary-btn" onclick="openStaffModal()">Add staff account</button>
     </div>
@@ -18,28 +30,79 @@ const { isAdmin, allEmployees } = Astro.props;
       <div><strong>{allEmployees?.filter((employee) => !employee.is_active).length ?? 0}</strong><span>Inactive</span></div>
     </div>
     <div class="staff-table-card">
+      <div class="px-5 py-4 border-b border-gray-100 grid gap-3 lg:grid-cols-[1fr_11rem_11rem]">
+        <label>
+          <span class="sr-only">Search staff</span>
+          <input
+            id="staffSearch"
+            type="search"
+            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[var(--butterscotch-primary)]"
+            placeholder="Search staff name, email, phone, or role"
+            autocomplete="off"
+          />
+        </label>
+        <label>
+          <span class="sr-only">Filter staff status</span>
+          <select id="staffStatusFilter" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[var(--butterscotch-primary)]">
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <label>
+          <span class="sr-only">Filter staff role</span>
+          <select id="staffRoleFilter" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[var(--butterscotch-primary)]">
+            <option value="all">All roles</option>
+            {[...new Set((allEmployees ?? []).map((employee) => employee.position || 'Staff'))].sort().map((position) => (
+              <option value={position}>{position}</option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm staff-table">
-          <thead><tr><th>Name</th><th>Contact</th><th>Position</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
-          <tbody>
+          <thead>
+            <tr><th>Account</th><th>Type</th><th>Contact</th><th>Role</th><th>Status</th><th>Added</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="staffTableBody">
             {allEmployees?.map((employee) => (
-              <tr>
-                <td class="font-semibold">{employee.first_name} {employee.last_name}</td>
-                <td><span>{employee.email ?? '—'}</span><small>{employee.phone || 'No phone provided'}</small></td>
+              <tr
+                data-staff-management-row
+                data-status={employee.is_active ? 'active' : 'inactive'}
+                data-role={employee.position || 'Staff'}
+                data-search={`${fullName(employee)} ${employee.email ?? ''} ${employee.phone ?? ''} ${employee.position || 'Staff'} employee staff`.toLowerCase()}
+              >
+                <td class="font-semibold">{fullName(employee)}</td>
+                <td><span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">Employee / Staff</span></td>
+                <td><span>{employee.email ?? '-'}</span><small>{employee.phone || 'No phone provided'}</small></td>
                 <td>{employee.position || 'Staff'}</td>
                 <td><span class={`staff-status ${employee.is_active ? 'active' : 'inactive'}`}>{employee.is_active ? 'Active' : 'Inactive'}</span></td>
-                <td>{new Date(employee.created_at).toLocaleDateString('en-PH')}</td>
-                <td><div class="staff-actions">
-                  <button type="button" onclick={`openStaffModal(${JSON.stringify(employee)})`}>Edit</button>
-                  <button type="button" class={employee.is_active ? 'danger' : 'activate'} onclick={`setStaffStatus('${employee.id}', '${employee.is_active ? 'deactivate' : 'activate'}')`}>{employee.is_active ? 'Deactivate' : 'Activate'}</button>
-                </div></td>
+                <td>{formatDate(employee.created_at)}</td>
+                <td>
+                  <div class="staff-actions">
+                    <button
+                      type="button"
+                      data-staff-record={encodeURIComponent(JSON.stringify(employee))}
+                      onclick="openStaffModalFromButton(this)"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      class={employee.is_active ? 'danger' : 'activate'}
+                      onclick={`setStaffStatus('${employee.id}', '${employee.is_active ? 'deactivate' : 'activate'}')`}
+                    >
+                      {employee.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
-            {(!allEmployees || allEmployees.length === 0) && <tr><td colspan="6" class="staff-empty">No staff accounts yet.</td></tr>}
+            {(!allEmployees || allEmployees.length === 0) && <tr><td colspan="7" class="staff-empty">No staff accounts yet.</td></tr>}
+            <tr id="staffEmptyState" class="hidden"><td colspan="7" class="staff-empty">No staff accounts match the current filters.</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </section>
 )}
-

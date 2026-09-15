@@ -1361,6 +1361,74 @@ async function deletePackage(id: string, name: string) {
 }
 
 // ── USER MANAGEMENT ───────────────────────────────────────────────────────────
+function applyUserManagementFilters() {
+  const query = ((document.getElementById('userSearch') as HTMLInputElement | null)?.value ?? '').trim().toLowerCase();
+  const role = (document.getElementById('userRoleFilter') as HTMLSelectElement | null)?.value ?? 'all';
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-user-management-row]'));
+  let visibleCount = 0;
+
+  rows.forEach((row) => {
+    const matchesRole = role === 'all' || row.dataset.role === role;
+    const matchesSearch = !query || (row.dataset.search ?? '').includes(query);
+    const show = matchesRole && matchesSearch;
+    row.classList.toggle('hidden', !show);
+    if (show) visibleCount++;
+  });
+
+  const empty = document.getElementById('usersEmptyState');
+  if (empty) empty.classList.toggle('hidden', rows.length === 0 || visibleCount > 0);
+}
+
+function updateCustomerBookingSummaries() {
+  const bookings: any[] = (window as any).__allBookings ?? [];
+  const bookingsByUser = new Map<string, any[]>();
+
+  bookings.forEach((booking) => {
+    if (!booking?.user_id) return;
+    const userBookings = bookingsByUser.get(booking.user_id) ?? [];
+    userBookings.push(booking);
+    bookingsByUser.set(booking.user_id, userBookings);
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-customer-booking-count]').forEach((countEl) => {
+    const userId = countEl.dataset.customerBookingCount;
+    if (!userId) return;
+    const userBookings = bookingsByUser.get(userId) ?? [];
+    const visibleTotal = userBookings.length;
+    countEl.textContent = `${visibleTotal} visible booking${visibleTotal === 1 ? '' : 's'}`;
+
+    const lastEl = document.querySelector<HTMLElement>(`[data-customer-booking-last="${userId}"]`);
+    if (!lastEl) return;
+    if (visibleTotal === 0) {
+      lastEl.textContent = 'No booking history loaded';
+      return;
+    }
+
+    const latest = [...userBookings].sort((a, b) => {
+      const aDate = Date.parse(a.event_date ?? a.start_date ?? a.created_at ?? '');
+      const bDate = Date.parse(b.event_date ?? b.start_date ?? b.created_at ?? '');
+      return bDate - aDate;
+    })[0];
+    const latestDate = latest?.event_date ?? latest?.start_date ?? latest?.created_at;
+    const dateLabel = latestDate
+      ? new Date(latestDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'No date';
+    const statusLabel = String(latest?.status ?? 'booking').replace(/_/g, ' ');
+    lastEl.textContent = `Latest: ${dateLabel} - ${statusLabel}`;
+  });
+}
+
+async function userRoleRequest(payload: Record<string, unknown>) {
+  const response = await fetch('/api/admin/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error ?? result.message ?? 'Could not update account role');
+  return result;
+}
+
 async function promoteUser(id: string) {
   const ok = await showConfirm({
     title: 'Promote to Admin',
@@ -1370,8 +1438,13 @@ async function promoteUser(id: string) {
     icon: '👑',
   });
   if (!ok) return;
-  const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: id, action: 'promote' }) });
-  if (r.ok) { toast('Promoted to admin ✓'); location.reload(); } else { toast('Failed to promote', false); }
+  try {
+    const result = await userRoleRequest({ userId: id, action: 'promote' });
+    toast(result.message ?? 'Promoted to admin');
+    location.reload();
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Failed to promote', false);
+  }
 }
 
 async function demoteUser(id: string) {
@@ -1383,9 +1456,19 @@ async function demoteUser(id: string) {
     icon: '⬇️',
   });
   if (!ok) return;
-  const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: id, action: 'demote' }) });
-  if (r.ok) { toast('Demoted to customer ✓'); location.reload(); } else { toast('Failed to demote', false); }
+  try {
+    const result = await userRoleRequest({ userId: id, action: 'demote' });
+    toast(result.message ?? 'Demoted to customer');
+    location.reload();
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Failed to demote', false);
+  }
 }
+
+document.getElementById('userSearch')?.addEventListener('input', applyUserManagementFilters);
+document.getElementById('userRoleFilter')?.addEventListener('change', applyUserManagementFilters);
+updateCustomerBookingSummaries();
+applyUserManagementFilters();
 
 // ── MODAL BACKDROP CLOSE ──────────────────────────────────────────────────────
 ['rescheduleModal', 'venueModal', 'staffModal'].forEach(function(id) {
@@ -1404,8 +1487,13 @@ async function promoteStaff(id: string) {
     icon: 'ST',
   });
   if (!ok) return;
-  const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: id, action: 'promote_staff' }) });
-  if (r.ok) { toast('Promoted to staff'); location.reload(); } else { toast('Failed to promote staff', false); }
+  try {
+    const result = await userRoleRequest({ userId: id, action: 'promote_staff' });
+    toast(result.message ?? 'Promoted to staff');
+    location.reload();
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Failed to promote staff', false);
+  }
 }
 
 async function demoteStaff(id: string) {
@@ -1417,8 +1505,13 @@ async function demoteStaff(id: string) {
     icon: 'ST',
   });
   if (!ok) return;
-  const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: id, action: 'demote_staff' }) });
-  if (r.ok) { toast('Staff demoted to customer'); location.reload(); } else { toast('Failed to demote staff', false); }
+  try {
+    const result = await userRoleRequest({ userId: id, action: 'demote_staff' });
+    toast(result.message ?? 'Staff demoted to customer');
+    location.reload();
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Failed to demote staff', false);
+  }
 }
 
 function setText(id: string, val: string) {
@@ -1461,6 +1554,15 @@ function openStaffModal(staff?: any) {
   document.getElementById('staffModalTitle')!.textContent = editing ? 'Edit staff details' : 'Add staff account';
   document.getElementById('staffSubmitButton')!.textContent = editing ? 'Save changes' : 'Create account';
   document.getElementById('staffModal')?.classList.remove('hidden');
+}
+
+function openStaffModalFromButton(button: HTMLElement) {
+  try {
+    const rawStaff = button.dataset.staffRecord;
+    openStaffModal(rawStaff ? JSON.parse(decodeURIComponent(rawStaff)) : undefined);
+  } catch {
+    toast('Could not load staff details. Refresh and try again.', false);
+  }
 }
 
 function closeStaffModal() { document.getElementById('staffModal')?.classList.add('hidden'); }
@@ -1509,6 +1611,32 @@ async function setStaffStatus(staffId: string, action: 'activate' | 'deactivate'
   try { await staffRequest({ action, staffId }); toast(`Staff account ${action}d`); location.reload(); }
   catch (err) { toast(err instanceof Error ? err.message : 'Could not update staff access', false); }
 }
+
+function applyStaffManagementFilters() {
+  const query = ((document.getElementById('staffSearch') as HTMLInputElement | null)?.value ?? '').trim().toLowerCase();
+  const status = (document.getElementById('staffStatusFilter') as HTMLSelectElement | null)?.value ?? 'all';
+  const role = (document.getElementById('staffRoleFilter') as HTMLSelectElement | null)?.value ?? 'all';
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-staff-management-row]'));
+  let visibleCount = 0;
+
+  rows.forEach((row) => {
+    const matchesStatus = status === 'all' || row.dataset.status === status;
+    const matchesRole = role === 'all' || row.dataset.role === role;
+    const matchesSearch = !query || (row.dataset.search ?? '').includes(query);
+    const show = matchesStatus && matchesRole && matchesSearch;
+    row.classList.toggle('hidden', !show);
+    if (show) visibleCount++;
+  });
+
+  const empty = document.getElementById('staffEmptyState');
+  if (empty) empty.classList.toggle('hidden', rows.length === 0 || visibleCount > 0);
+}
+
+document.getElementById('staffSearch')?.addEventListener('input', applyStaffManagementFilters);
+['staffStatusFilter', 'staffRoleFilter'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('change', applyStaffManagementFilters);
+});
+applyStaffManagementFilters();
 
 function canTransitionBookingStatus(fromStatus: string, toStatus: string): boolean {
   const transitions = (window as any).__bookingStatusTransitions ?? {};
@@ -2288,6 +2416,7 @@ switchReport('weekly');
 (window as any).promoteStaff      = promoteStaff;
 (window as any).demoteStaff       = demoteStaff;
 (window as any).openStaffModal    = openStaffModal;
+(window as any).openStaffModalFromButton = openStaffModalFromButton;
 (window as any).closeStaffModal   = closeStaffModal;
 (window as any).setStaffStatus    = setStaffStatus;
 (window as any).openBookingDetail = openBookingDetail;
