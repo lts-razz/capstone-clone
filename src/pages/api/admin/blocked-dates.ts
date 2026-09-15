@@ -6,6 +6,7 @@ import { adminGuard } from "../../../lib/adminGuard";
 import { ok, error } from "../../../lib/response";
 import { parseBody } from "../../../lib/parseBody";
 import { logBookingAudit } from "../../../services/bookingAudit";
+import { findActiveReservationBookingOverlaps } from "../../../services/bookingAvailability";
 import type { Database } from "../../../lib/database.types";
 
 export const prerender = false;
@@ -72,6 +73,25 @@ function mapBlockedDate(row: BlockedDateWithMigrationFields) {
   };
 }
 
+async function validateBlockedDateDoesNotOverlapReservation(
+  venueId: string,
+  startDate: string,
+  endDate: string,
+) {
+  const overlaps = await findActiveReservationBookingOverlaps(db, {
+    venueId,
+    startDate,
+    endDate,
+  });
+  if (overlaps.error) {
+    return error("Could not verify existing reservations before changing blocked dates. Please try again.", 500);
+  }
+  if (overlaps.bookings.length > 0) {
+    return error("Cannot block these dates because an existing reservation occupies this venue during the selected period.", 409);
+  }
+  return null;
+}
+
 export const GET: APIRoute = async ({ url, cookies }) => {
   const guard = await adminGuard(cookies);
   if (guard instanceof Response) return guard;
@@ -103,6 +123,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (!parsed.success) {
     return error(parsed.error.errors.map((item) => item.message).join(", "), 400);
   }
+
+  const reservationConflict = await validateBlockedDateDoesNotOverlapReservation(
+    parsed.data.venueId,
+    parsed.data.startDate,
+    parsed.data.endDate,
+  );
+  if (reservationConflict) return reservationConflict;
 
   const { data, error: insertError } = await db
     .from("blocked_dates")
@@ -175,6 +202,23 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 
   if (Object.keys(updateData).length === 0) {
     return ok({ message: "No changes", blockedDate: mapBlockedDate(current) });
+  }
+
+  const currentlyActive = isBlockedDateActive(current);
+  const nextActive = parsed.data.isActive ?? currentlyActive;
+  const activatesBlockedDate = parsed.data.isActive === true && !currentlyActive;
+  const changesBlockedPeriod =
+    parsed.data.venueId !== undefined
+    || parsed.data.startDate !== undefined
+    || parsed.data.endDate !== undefined;
+
+  if (nextActive && (activatesBlockedDate || changesBlockedPeriod)) {
+    const reservationConflict = await validateBlockedDateDoesNotOverlapReservation(
+      parsed.data.venueId ?? current.venue_id,
+      nextStartDate,
+      nextEndDate,
+    );
+    if (reservationConflict) return reservationConflict;
   }
 
   const { data, error: updateError } = await db

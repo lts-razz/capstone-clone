@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../lib/database.types";
 
 type DbClient = SupabaseClient<Database>;
+const ACTIVE_RESERVATION_STATUSES = ["pending", "booked", "rescheduled"] as const;
+
 type AvailabilityBooking = {
   id: string;
   venue_id: string;
@@ -29,6 +31,139 @@ export type AvailabilityRangeOptions = {
   startDate: string;
   endDate: string;
 };
+
+async function getActiveOverlappingBookings(
+  client: DbClient,
+  {
+    startDate,
+    endDate,
+    statuses,
+  }: { startDate: string; endDate: string; statuses?: readonly string[] },
+) {
+  const allBookings: AvailabilityBooking[] = [];
+  let bookingsError: Error | null = null;
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    let query = client
+      .from("bookings")
+      .select("id, venue_id, start_date, end_date, event_date, status, reservation_expires_at, reservation_expired_at, minimum_payment_amount, total_price");
+
+    query = statuses && statuses.length > 0
+      ? query.in("status", [...statuses])
+      : query.neq("status", "cancelled");
+
+    const { data, error } = await applyDateRangeOverlap(query, startDate, endDate)
+      .order("id")
+      .range(offset, offset + pageSize - 1);
+    if (error) {
+      bookingsError = error;
+      break;
+    }
+    const page: AvailabilityBooking[] = data ?? [];
+    allBookings.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  const now = new Date().toISOString();
+  const expiredPending = allBookings.filter((booking) =>
+    booking.status === "pending"
+    && booking.reservation_expired_at == null
+    && booking.reservation_expires_at !== null
+    && booking.reservation_expires_at !== undefined
+    && booking.reservation_expires_at <= now,
+  );
+  const securedExpiredIds = new Set<string>();
+  let paymentsError: Error | null = null;
+  for (let index = 0; index < expiredPending.length; index += 100) {
+    const batch = expiredPending.slice(index, index + 100);
+    const { data, error } = await client
+      .from("booking_payments")
+      .select("booking_id, amount_paid, payment_status, minimum_payment_amount")
+      .in("booking_id", batch.map((booking) => booking.id));
+    if (error) {
+      paymentsError = error;
+      break;
+    }
+    const bookingById = new Map(batch.map((booking) => [booking.id, booking]));
+    for (const payment of data ?? []) {
+      const booking = bookingById.get(payment.booking_id);
+      const minimum = Number(payment.minimum_payment_amount ?? booking?.minimum_payment_amount ?? Number(booking?.total_price ?? 0) * 0.5);
+      if ((payment.payment_status === "partial" || payment.payment_status === "paid")
+        && minimum > 0 && Number(payment.amount_paid) >= minimum) {
+        securedExpiredIds.add(payment.booking_id);
+      }
+    }
+  }
+  const activeBookings = allBookings.filter((booking) =>
+    booking.status !== "pending"
+    || (booking.reservation_expired_at == null && (
+      booking.reservation_expires_at == null
+      || booking.reservation_expires_at > now
+      || securedExpiredIds.has(booking.id)
+    )),
+  );
+
+  return {
+    bookings: activeBookings,
+    error: bookingsError ?? paymentsError,
+  };
+}
+
+async function matchBookingsToVenues(
+  client: DbClient,
+  activeBookings: AvailabilityBooking[],
+  checkedVenueIds: string[],
+) {
+  // Existing bookings retain their primary venue; assignment rows snapshot every
+  // venue they reserve, including secondary package venues.
+  const bookingIds = activeBookings.map((booking) => booking.id);
+  const assignments: Array<{ booking_id: string; venue_id: string }> = [];
+  let assignmentsError: Error | null = null;
+  const pageSize = 1000;
+  if (checkedVenueIds.length > 0) {
+    for (let index = 0; index < bookingIds.length; index += 100) {
+      const batchIds = bookingIds.slice(index, index + 100);
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await client
+          .from("booking_venue_assignments")
+          .select("booking_id, venue_id")
+          .in("booking_id", batchIds)
+          .in("venue_id", checkedVenueIds)
+          .order("id")
+          .range(offset, offset + pageSize - 1);
+        if (error) {
+          assignmentsError = error;
+          break;
+        }
+        const page = data ?? [];
+        assignments.push(...page);
+        if (page.length < pageSize) break;
+      }
+      if (assignmentsError) break;
+    }
+  }
+
+  const checkedVenueSet = new Set(checkedVenueIds);
+  const assignmentsByBooking = new Map<string, string[]>();
+  for (const assignment of assignments ?? []) {
+    const ids = assignmentsByBooking.get(assignment.booking_id) ?? [];
+    ids.push(assignment.venue_id);
+    assignmentsByBooking.set(assignment.booking_id, ids);
+  }
+  const matchingBookings = checkedVenueIds.length === 0
+    ? activeBookings
+    : activeBookings.flatMap((booking) => {
+        const reservedVenueIds = new Set([booking.venue_id, ...(assignmentsByBooking.get(booking.id) ?? [])]);
+        return [...reservedVenueIds]
+          .filter((id) => checkedVenueSet.has(id))
+          .map((id) => ({ ...booking, venue_id: id }));
+      });
+
+  return {
+    bookings: matchingBookings,
+    error: assignmentsError,
+  };
+}
 
 export function applyDateRangeOverlap(query: any, startDate: string, endDate: string) {
   // Availability is intentionally inclusive and date-only. Booking times never
@@ -96,114 +231,41 @@ export async function getAvailabilityRanges(
     blockedDatesQuery = blockedDatesQuery.in("venue_id", checkedVenueIds);
   }
 
-  const allBookings: AvailabilityBooking[] = [];
-  let bookingsError: Error | null = null;
-  const pageSize = 1000;
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await applyDateRangeOverlap(
-      client
-        .from("bookings")
-        .select("id, venue_id, start_date, end_date, event_date, status, reservation_expires_at, reservation_expired_at, minimum_payment_amount, total_price")
-        .neq("status", "cancelled"),
-      startDate,
-      endDate,
-    ).order("id").range(offset, offset + pageSize - 1);
-    if (error) {
-      bookingsError = error;
-      break;
-    }
-    const page: AvailabilityBooking[] = data ?? [];
-    allBookings.push(...page);
-    if (page.length < pageSize) break;
-  }
   const { data: blockedDates, error: blockedDatesError } = await blockedDatesQuery;
 
-  const now = new Date().toISOString();
-  const expiredPending = allBookings.filter((booking) =>
-    booking.status === "pending"
-    && booking.reservation_expired_at === null
-    && booking.reservation_expires_at !== null
-    && booking.reservation_expires_at <= now,
-  );
-  const securedExpiredIds = new Set<string>();
-  let paymentsError: Error | null = null;
-  for (let index = 0; index < expiredPending.length; index += 100) {
-    const batch = expiredPending.slice(index, index + 100);
-    const { data, error } = await client
-      .from("booking_payments")
-      .select("booking_id, amount_paid, payment_status, minimum_payment_amount")
-      .in("booking_id", batch.map((booking) => booking.id));
-    if (error) {
-      paymentsError = error;
-      break;
-    }
-    const bookingById = new Map(batch.map((booking) => [booking.id, booking]));
-    for (const payment of data ?? []) {
-      const booking = bookingById.get(payment.booking_id);
-      const minimum = Number(payment.minimum_payment_amount ?? booking?.minimum_payment_amount ?? Number(booking?.total_price ?? 0) * 0.5);
-      if ((payment.payment_status === "partial" || payment.payment_status === "paid")
-        && minimum > 0 && Number(payment.amount_paid) >= minimum) {
-        securedExpiredIds.add(payment.booking_id);
-      }
-    }
-  }
-  const activeBookings = allBookings.filter((booking) =>
-    booking.status !== "pending"
-    || (booking.reservation_expired_at === null && (
-      booking.reservation_expires_at === null
-      || booking.reservation_expires_at > now
-      || securedExpiredIds.has(booking.id)
-    )),
-  );
-
-  // Existing bookings retain their primary venue; assignment rows snapshot every
-  // venue they reserve, including secondary package venues.
-  const bookingIds = activeBookings.map((booking) => booking.id);
-  const assignments: Array<{ booking_id: string; venue_id: string }> = [];
-  let assignmentsError: Error | null = null;
-  if (checkedVenueIds.length > 0) {
-    for (let index = 0; index < bookingIds.length; index += 100) {
-      const batchIds = bookingIds.slice(index, index + 100);
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await client
-          .from("booking_venue_assignments")
-          .select("booking_id, venue_id")
-          .in("booking_id", batchIds)
-          .in("venue_id", checkedVenueIds)
-          .order("id")
-          .range(offset, offset + pageSize - 1);
-        if (error) {
-          assignmentsError = error;
-          break;
-        }
-        const page = data ?? [];
-        assignments.push(...page);
-        if (page.length < pageSize) break;
-      }
-      if (assignmentsError) break;
-    }
-  }
-
-  const checkedVenueSet = new Set(checkedVenueIds);
-  const assignmentsByBooking = new Map<string, string[]>();
-  for (const assignment of assignments ?? []) {
-    const ids = assignmentsByBooking.get(assignment.booking_id) ?? [];
-    ids.push(assignment.venue_id);
-    assignmentsByBooking.set(assignment.booking_id, ids);
-  }
-  const matchingBookings = checkedVenueIds.length === 0
-    ? activeBookings
-    : activeBookings.flatMap((booking) => {
-        const reservedVenueIds = new Set([booking.venue_id, ...(assignmentsByBooking.get(booking.id) ?? [])]);
-        return [...reservedVenueIds]
-          .filter((id) => checkedVenueSet.has(id))
-          .map((id) => ({ ...booking, venue_id: id }));
-      });
+  const activeBookings = await getActiveOverlappingBookings(client, { startDate, endDate });
+  const matchingBookings = await matchBookingsToVenues(client, activeBookings.bookings, checkedVenueIds);
 
   return {
-    bookings: matchingBookings,
+    bookings: matchingBookings.bookings,
     blockedDates: (blockedDates ?? []).filter(isBlockedDateActive),
-    error: bookingsError ?? blockedDatesError ?? paymentsError ?? assignmentsError,
+    error: activeBookings.error ?? blockedDatesError ?? matchingBookings.error,
+  };
+}
+
+export async function findActiveReservationBookingOverlaps(
+  client: DbClient,
+  { venueId, venueIds, startDate, endDate }: AvailabilityRangeOptions,
+) {
+  const checkedVenueIds = normalizeVenueIds(venueId, venueIds);
+  const activeReservations = await getActiveOverlappingBookings(client, {
+    startDate,
+    endDate,
+    statuses: ACTIVE_RESERVATION_STATUSES,
+  });
+  if (activeReservations.error) {
+    return {
+      bookings: [],
+      unavailableVenueIds: [],
+      error: activeReservations.error,
+    };
+  }
+
+  const matchingBookings = await matchBookingsToVenues(client, activeReservations.bookings, checkedVenueIds);
+  return {
+    bookings: matchingBookings.bookings,
+    unavailableVenueIds: [...new Set(matchingBookings.bookings.map((booking) => booking.venue_id))],
+    error: matchingBookings.error,
   };
 }
 
