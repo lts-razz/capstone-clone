@@ -88,9 +88,12 @@ export const PUT: APIRoute = async ({ request, cookies, params }) => {
     if (nextVenueIds) await replacePackageVenueAssignments(db, id, previousVenueIds);
     return error(dbError.message, 500);
   }
+  const statusChanged = "is_active" in parsed.data && parsed.data.is_active !== existingPackage.is_active;
   return ok({
     package: { ...pkg, ...(nextVenueIds ? { venue_ids: nextVenueIds } : {}) },
-    message: pkg.is_active ? "Package activated successfully" : "Package deactivated successfully",
+    message: statusChanged
+      ? (pkg.is_active ? "Package activated successfully" : "Package deactivated successfully")
+      : "Package saved successfully",
   });
 };
 

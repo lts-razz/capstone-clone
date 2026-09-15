@@ -1461,6 +1461,10 @@
     background: var(--wb-surface-soft);
   }
 
+  .admin-venue-card--inactive {
+    opacity: 0.72;
+  }
+
   .admin-venue-card img,
   .admin-venue-card__placeholder {
     width: 100%;
@@ -1490,6 +1494,31 @@
     font-size: 1.15rem;
   }
 
+  .admin-venue-card__title-row {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .admin-venue-card__status {
+    flex: none;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 900;
+    padding: 0.18rem 0.45rem;
+  }
+
+  .admin-venue-card__status--active {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  .admin-venue-card__status--inactive {
+    background: #f3f4f6;
+    color: #6b7280;
+  }
+
   .admin-venue-card p,
   .admin-venues-empty {
     margin: 0.35rem 0 0;
@@ -1498,25 +1527,68 @@
     line-height: 1.5;
   }
 
-  .admin-venue-card__delete {
-    width: 100%;
-    min-height: 2.5rem;
+  .admin-venue-card__meta {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--wb-green-mid);
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+
+  .admin-venue-card__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
     margin-top: 0.9rem;
-    border: 1px solid var(--wb-danger-action);
+  }
+
+  .admin-venue-card__edit,
+  .admin-venue-card__toggle,
+  .admin-venue-card__delete {
+    min-height: 2.5rem;
     border-radius: var(--wb-radius-sm);
-    background: transparent;
-    color: var(--wb-danger-action);
     cursor: pointer;
     font-size: 0.85rem;
     font-weight: 900;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
+  .admin-venue-card__edit {
+    border: 1px solid var(--wb-action);
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+  }
+
+  .admin-venue-card__toggle {
+    border: 1px solid var(--wb-green);
+    background: transparent;
+    color: var(--wb-link);
+  }
+
+  .admin-venue-card__toggle--deactivate,
+  .admin-venue-card__delete {
+    border-color: var(--wb-danger-action);
+    color: var(--wb-danger-action);
+  }
+
+  .admin-venue-card__edit:hover {
+    background: var(--wb-link);
+    color: #fff;
+  }
+
+  .admin-venue-card__toggle--activate:hover {
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+  }
+
+  .admin-venue-card__toggle--deactivate:hover,
   .admin-venue-card__delete:hover {
     background: var(--wb-danger-action);
     color: var(--wb-on-danger);
   }
 
+  .admin-venue-card__edit:disabled,
+  .admin-venue-card__toggle:disabled,
   .admin-venue-card__delete:disabled {
     cursor: wait;
     opacity: 0.65;

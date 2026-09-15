@@ -137,7 +137,22 @@ export const packageSchema = z.object({
   min_pax:     z.number().int().positive("min_pax must be positive").nullable().optional(),
   max_pax:     z.number().int().positive("max_pax must be positive").nullable().optional(),
   venue_id:    z.string().uuid("venue_id must be a valid venue id").nullable().optional(),
-  venue_ids:   z.array(z.string().uuid("venue_ids must contain valid venue ids")).max(50).optional(),
+  venue_ids:   z.array(z.string().uuid("venue_ids must contain valid venue ids"))
+    .max(50)
+    .superRefine((venueIds, ctx) => {
+      const seen = new Set<string>();
+      venueIds.forEach((venueId, index) => {
+        if (seen.has(venueId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "A venue can only be assigned to a package once.",
+            path: [index],
+          });
+        }
+        seen.add(venueId);
+      });
+    })
+    .optional(),
   time_options: packageTimeOptionsSchema.nullable().optional(),
   thumbnail_url: z.string().url("thumbnail_url must be a valid URL").max(2048).nullable().optional(),
   booking_options: packageBookingOptionsSchema.optional(),

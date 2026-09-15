@@ -18,6 +18,12 @@ function formValue(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
+function optionalPositiveNumber(formData: FormData, key: string) {
+  const value = formValue(formData, key).trim();
+  if (!value) return undefined;
+  return Number(value);
+}
+
 export const GET: APIRoute = async () => {
   const { data, error: dbError } = await supabase
     .from("venues")
@@ -67,8 +73,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     venueInput = {
       name,
       description,
-      location: "Woodberry Resorts and Events Place",
-      price_per_night: 1,
+      location: formValue(formData, "location").trim() || "Woodberry Resorts and Events Place",
+      capacity: optionalPositiveNumber(formData, "capacity"),
+      price_per_night: optionalPositiveNumber(formData, "price_per_night") ?? 1,
       image_url: imageUrl,
     };
   } else {

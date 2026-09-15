@@ -776,10 +776,43 @@ function clearVenueError() {
   errorEl.classList.add('hidden');
 }
 
-function openVenueModal() {
+function openVenueModal(jsonStr?: string) {
   clearVenueError();
   const form = document.getElementById('venueForm') as HTMLFormElement | null;
   form?.reset();
+  const title = document.getElementById('venueModalTitle');
+  const idInput = document.getElementById('venueId') as HTMLInputElement | null;
+  const nameInput = document.getElementById('venueName') as HTMLInputElement | null;
+  const descInput = document.getElementById('venueDesc') as HTMLTextAreaElement | null;
+  const capacityInput = document.getElementById('venueCapacity') as HTMLInputElement | null;
+  const priceInput = document.getElementById('venuePrice') as HTMLInputElement | null;
+  const locationInput = document.getElementById('venueLocation') as HTMLInputElement | null;
+  const imageInput = document.getElementById('venueImage') as HTMLInputElement | null;
+  const imageUrlInput = document.getElementById('venueImageUrl') as HTMLInputElement | null;
+  const imageHelp = document.getElementById('venueImageHelp');
+  const submitButton = document.getElementById('venueSubmit') as HTMLButtonElement | null;
+
+  if (jsonStr) {
+    const venue = JSON.parse(jsonStr);
+    if (title) title.textContent = 'Edit Venue';
+    if (idInput) idInput.value = venue.id ?? '';
+    if (nameInput) nameInput.value = venue.name ?? '';
+    if (descInput) descInput.value = venue.description ?? '';
+    if (capacityInput) capacityInput.value = venue.capacity ?? '';
+    if (priceInput) priceInput.value = venue.price_per_night ?? '';
+    if (locationInput) locationInput.value = venue.location ?? '';
+    if (imageUrlInput) imageUrlInput.value = venue.image_url ?? '';
+    if (imageInput) imageInput.required = false;
+    if (imageHelp) imageHelp.textContent = 'Leave empty to keep the current image. JPEG, PNG, WebP, or GIF only, up to 5 MB.';
+    if (submitButton) submitButton.textContent = 'Update';
+  } else {
+    if (title) title.textContent = 'Add Venue';
+    if (idInput) idInput.value = '';
+    if (imageUrlInput) imageUrlInput.value = '';
+    if (imageInput) imageInput.required = true;
+    if (imageHelp) imageHelp.textContent = 'JPEG, PNG, WebP, or GIF only, up to 5 MB.';
+    if (submitButton) submitButton.textContent = 'Save';
+  }
   document.getElementById('venueModal')?.classList.remove('hidden');
 }
 
@@ -793,87 +826,107 @@ async function submitVenue(event?: SubmitEvent) {
 
   const nameInput = document.getElementById('venueName') as HTMLInputElement;
   const descInput = document.getElementById('venueDesc') as HTMLTextAreaElement;
+  const idInput = document.getElementById('venueId') as HTMLInputElement | null;
+  const capacityInput = document.getElementById('venueCapacity') as HTMLInputElement | null;
+  const priceInput = document.getElementById('venuePrice') as HTMLInputElement | null;
+  const locationInput = document.getElementById('venueLocation') as HTMLInputElement | null;
+  const imageUrlInput = document.getElementById('venueImageUrl') as HTMLInputElement | null;
   const imageInput = document.getElementById('venueImage') as HTMLInputElement;
   const submitButton = document.getElementById('venueSubmit') as HTMLButtonElement;
+  const id = idInput?.value ?? '';
   const imageFile = imageInput.files?.[0];
+  const capacity = capacityInput?.value ? Number(capacityInput.value) : null;
+  const price = priceInput?.value ? Number(priceInput.value) : null;
 
   if (!nameInput.value.trim()) return showVenueError('Name is required.');
   if (!descInput.value.trim()) return showVenueError('Description is required.');
-  if (!imageFile) return showVenueError('Image upload is required.');
-  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(imageFile.type.toLowerCase())) {
+  if (capacity !== null && (!Number.isInteger(capacity) || capacity <= 0)) return showVenueError('Capacity must be a positive whole number.');
+  if (price !== null && (!Number.isFinite(price) || price <= 0)) return showVenueError('Venue price must be greater than 0.');
+  if (!id && !imageFile) return showVenueError('Image upload is required.');
+  if (imageFile && !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(imageFile.type.toLowerCase())) {
     return showVenueError('Please upload a JPEG, PNG, WebP, or GIF image.');
   }
-  if (imageFile.size > 5 * 1024 * 1024) return showVenueError('Image must be 5 MB or smaller.');
+  if (imageFile && imageFile.size > 5 * 1024 * 1024) return showVenueError('Image must be 5 MB or smaller.');
 
   const formData = new FormData();
   formData.append('name', nameInput.value.trim());
   formData.append('description', descInput.value.trim());
-  formData.append('image', imageFile);
+  if (capacity !== null) formData.append('capacity', String(capacity));
+  if (price !== null) formData.append('price_per_night', String(price));
+  if (locationInput?.value.trim()) formData.append('location', locationInput.value.trim());
+  if (imageUrlInput?.value) formData.append('image_url', imageUrlInput.value);
+  if (imageFile) formData.append('image', imageFile);
 
   submitButton.disabled = true;
-  submitButton.textContent = 'Saving...';
+  submitButton.textContent = id ? 'Updating...' : 'Saving...';
   try {
-    const response = await fetch('/api/venues', { method: 'POST', body: formData });
+    const response = await fetch(id ? '/api/venues/' + encodeURIComponent(id) : '/api/venues', {
+      method: id ? 'PUT' : 'POST',
+      body: formData,
+    });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = payload.error ?? payload.message ?? 'Could not add venue.';
+      const message = payload.error ?? payload.message ?? (id ? 'Could not update venue.' : 'Could not add venue.');
       showVenueError(message);
       toast(message, false);
       return;
     }
 
-    toast(payload.message ?? 'Venue added successfully');
+    toast(payload.message ?? (id ? 'Venue updated successfully' : 'Venue added successfully'));
     closeVenueModal();
     location.reload();
   } catch (submitError) {
-    const message = submitError instanceof Error ? submitError.message : 'Could not add venue.';
+    const message = submitError instanceof Error ? submitError.message : (id ? 'Could not update venue.' : 'Could not add venue.');
     showVenueError(message);
     toast(message, false);
   } finally {
     submitButton.disabled = false;
-    submitButton.textContent = 'Save';
+    submitButton.textContent = id ? 'Update' : 'Save';
   }
 }
 
 document.getElementById('venueForm')?.addEventListener('submit', submitVenue);
 
 async function deleteVenue(id: string) {
+  await toggleVenue(id, true);
+}
+
+async function toggleVenue(id: string, isActive: boolean, name = 'this venue') {
   const confirmed = await showConfirm({
-    title: 'Delete Venue',
-    message: 'Delete this venue? Packages using it will be updated.',
-    okLabel: 'Delete Venue',
-    okColor: '#9a4a36',
-    icon: '!',
+    title: isActive ? 'Deactivate Venue' : 'Activate Venue',
+    message: isActive
+      ? `${name} will no longer be available for new package bookings. Existing bookings keep their stored venue details.`
+      : `${name} can be assigned to packages and used for new bookings again.`,
+    okLabel: isActive ? 'Deactivate' : 'Activate',
+    okColor: isActive ? '#9a4a36' : '#157a45',
+    icon: 'V',
   });
   if (!confirmed) return;
 
-  const button = document.querySelector<HTMLButtonElement>(`[data-venue-delete="${id}"]`);
+  const button = document.querySelector<HTMLButtonElement>(`[data-venue-toggle="${id}"]`);
   if (button) {
     button.disabled = true;
-    button.textContent = 'Deleting...';
+    button.textContent = isActive ? 'Deactivating...' : 'Activating...';
   }
 
   try {
-    const response = await fetch('/api/admin/venues/' + encodeURIComponent(id), {
-      method: 'DELETE',
-    });
+    const response = await fetch('/api/venues/' + encodeURIComponent(id), isActive
+      ? { method: 'DELETE' }
+      : { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: true }) });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      toast(payload.error ?? payload.message ?? 'Could not delete the venue', false);
+      toast(payload.error ?? payload.message ?? 'Could not update the venue status', false);
       return;
     }
 
-    const message = payload.warning
-      ? `${payload.message ?? 'Venue removed successfully'} ${payload.warning}`
-      : (payload.message ?? 'Venue removed successfully');
-    toast(message);
-    window.setTimeout(() => location.reload(), 3000);
+    toast(payload.message ?? (isActive ? 'Venue deactivated successfully' : 'Venue activated successfully'));
+    location.reload();
   } catch {
-    toast('Could not delete the venue. Check your connection and try again.', false);
+    toast('Could not update the venue. Check your connection and try again.', false);
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = 'Delete';
+      button.textContent = isActive ? 'Deactivate' : 'Activate';
     }
   }
 }
@@ -1218,8 +1271,12 @@ async function submitPackage() {
       setPackageSubmitButtons('SAVING...', true);
     }
 
-    const venueIds = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="packageVenueIds"]:checked'))
+    const selectedVenueIds = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="packageVenueIds"]:checked'))
       .map((input) => input.value);
+    const venueIds = [...new Set(selectedVenueIds)];
+    if (venueIds.length !== selectedVenueIds.length) {
+      throw new Error('A venue can only be assigned to a package once.');
+    }
     const inclusions = (document.getElementById('packageInclusions') as HTMLTextAreaElement).value || '';
     const allowedEventTypes = collectPackageAllowedEventTypes();
     const body = {
@@ -1283,23 +1340,23 @@ async function togglePackage(id: string, isActive: boolean) {
 
 async function deletePackage(id: string, name: string) {
   const ok = await showConfirm({
-    title: 'Delete Package',
-    message: `Delete ${name}? This permanently removes the package record. Packages used by existing bookings will not be deleted.`,
-    okLabel: 'Delete Package',
+    title: 'Deactivate Package',
+    message: `${name} will be hidden from customers. Existing bookings keep their stored package details.`,
+    okLabel: 'Deactivate',
     okColor: '#9a4a36',
-    icon: '!',
+    icon: 'PK',
   });
   if (!ok) return;
 
-  const response = await fetch('/api/admin/packages/' + encodeURIComponent(id), {
+  const response = await fetch('/api/packages/' + encodeURIComponent(id), {
     method: 'DELETE',
   });
   const payload = await response.json().catch(() => ({}));
   if (response.ok) {
-    toast(payload.message ?? 'Package deleted successfully');
+    toast(payload.message ?? 'Package deactivated successfully');
     location.reload();
   } else {
-    toast(payload.error ?? payload.message ?? 'Could not delete package', false);
+    toast(payload.error ?? payload.message ?? 'Could not deactivate package', false);
   }
 }
 
@@ -2219,6 +2276,7 @@ switchReport('weekly');
 (window as any).closeVenueModal = closeVenueModal;
 (window as any).submitVenue = submitVenue;
 (window as any).deleteVenue = deleteVenue;
+(window as any).toggleVenue = toggleVenue;
 (window as any).openPackageVenueModal = openPackageVenueModal;
 (window as any).closePackageVenueModal = closePackageVenueModal;
 (window as any).deactivatePackageVenue = deactivatePackageVenue;

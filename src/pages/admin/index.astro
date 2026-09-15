@@ -200,8 +200,9 @@ function customQuotationIsFinalized(booking: any) {
 }
 
 const { data: venues } = isAdmin
-  ? await adminClient.from('venues').select('*').eq('is_active', true).order('name')
+  ? await adminClient.from('venues').select('*').order('name')
   : { data: [] };
+const activeVenues = (venues ?? []).filter((venue: any) => venue.is_active !== false);
 const { data: rawPackages } = isAdmin
   ? await adminClient.from('packages').select('*').order('price')
   : { data: [] };
@@ -392,7 +393,7 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
 
       <ReportsTab />
 
-      <AvailabilityTab venues={venues} />
+      <AvailabilityTab venues={activeVenues} />
 
 
 
@@ -641,6 +642,8 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
     <h3 id="venueModalTitle" class="text-xl font-bold mb-2" style="color:var(--jet-primary);">Add Venue</h3>
     <p class="text-sm text-gray-500 mb-5">Create a venue that can be assigned to packages.</p>
     <form id="venueForm" method="post" enctype="multipart/form-data" class="space-y-4">
+      <input id="venueId" type="hidden" />
+      <input id="venueImageUrl" type="hidden" />
       <div>
         <label class="block text-sm font-semibold mb-1" for="venueName">Name *</label>
         <input type="text" id="venueName" name="name" maxlength="200" required class="w-full p-2 rounded-lg border border-gray-200 focus:outline-none" />
@@ -649,10 +652,24 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
         <label class="block text-sm font-semibold mb-1" for="venueDesc">Description *</label>
         <textarea id="venueDesc" name="description" rows="3" maxlength="2000" required class="w-full p-2 rounded-lg border border-gray-200 focus:outline-none resize-none"></textarea>
       </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="venueCapacity">Capacity</label>
+          <input type="number" id="venueCapacity" name="capacity" min="1" inputmode="numeric" class="w-full p-2 rounded-lg border border-gray-200 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="venuePrice">Venue price</label>
+          <input type="number" id="venuePrice" name="price_per_night" min="1" step="0.01" inputmode="decimal" class="w-full p-2 rounded-lg border border-gray-200 focus:outline-none" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-1" for="venueLocation">Location</label>
+        <input type="text" id="venueLocation" name="location" maxlength="300" class="w-full p-2 rounded-lg border border-gray-200 focus:outline-none" />
+      </div>
       <div>
         <label class="block text-sm font-semibold mb-1" for="venueImage">Image upload *</label>
         <input type="file" id="venueImage" name="image" accept="image/jpeg,image/png,image/webp,image/gif" required class="w-full p-2 rounded-lg border border-gray-200 focus:outline-none" />
-        <p class="text-xs text-gray-400 mt-1">JPEG, PNG, WebP, or GIF only, up to 5 MB.</p>
+        <p id="venueImageHelp" class="text-xs text-gray-400 mt-1">JPEG, PNG, WebP, or GIF only, up to 5 MB.</p>
       </div>
       <p id="venueError" class="hidden rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700"></p>
       <div class="flex gap-3 pt-2">
@@ -748,13 +765,13 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
         <fieldset class="package-form-fieldset">
           <legend class="sr-only">Assigned venues</legend>
           <div id="packageVenuePicker" class="package-venue-picker">
-            {(venues ?? []).map((venue: any) => (
+            {activeVenues.map((venue: any) => (
               <label class="package-venue-option">
                 <input type="checkbox" name="packageVenueIds" value={venue.id} />
                 <span><strong>{venue.name}</strong>{venue.description && <small>{venue.description}</small>}</span>
               </label>
             ))}
-            {(venues ?? []).length === 0 && (
+            {activeVenues.length === 0 && (
               <div class="package-form-empty">
                 <strong>No active venues available</strong>
                 <p>Add or activate a venue before assigning one to this package.</p>
@@ -957,7 +974,7 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
 
 
 <!-- Pass server data to client scripts safely, without breaking TypeScript -->
-<script is:inline define:vars={{ enrichedBookings, venues, initialAdminTab, isAdmin, bookingStatusTransitions: BOOKING_STATUS_TRANSITIONS }}>
+<script is:inline define:vars={{ enrichedBookings, venues: activeVenues, initialAdminTab, isAdmin, bookingStatusTransitions: BOOKING_STATUS_TRANSITIONS }}>
   window.__allBookings = enrichedBookings;
   window.__venues = venues;
   window.__initialAdminTab = initialAdminTab;

@@ -22,6 +22,7 @@ export const venueSchema = z.object({
   capacity:        z.number().int().positive("capacity must be positive").optional(),
   price_per_night: z.number().positive("price_per_night must be positive"),
   image_url:       z.string().url("image_url must be a valid URL").optional().or(z.literal("")),
+  is_active:       z.boolean().optional(),
 });
 
 export function validateVenueImage(file: File | null | undefined, required: boolean) {
