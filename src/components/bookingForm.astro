@@ -313,6 +313,97 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         </fieldset>
         <p id="packageScheduleNotice" class="booking-field-package-lock">Choose a package to load available dates and schedule options.</p>
       </div>
+      <div id="customAvailabilitySection" class={customBooking ? "space-y-4 pt-4 border-t border-gray-100" : "hidden"}>
+        <div>
+          <h4 class="text-base font-semibold" style="color: var(--lion-primary);">
+            Preferred Date *
+          </h4>
+          <p id="customScheduleIntro" class="text-sm text-gray-600">
+            Choose an available date first. Venue choices update from Woodberry's booking calendar.
+          </p>
+        </div>
+        <div id="customAvailabilityPicker" class="package-date-picker">
+          <div class="package-date-picker__field">
+            <label
+              for="customBookingDate"
+              class="block text-sm font-medium mb-2"
+              style="color: var(--jet-primary);">Preferred Date *</label
+            >
+            <input
+              type="date"
+              id="customBookingDate"
+              name="customBookingDate"
+              required={customBooking}
+              disabled={!customBooking}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+            />
+          </div>
+          <div class="package-date-picker__calendar" aria-label="Available custom booking dates">
+            <div class="package-date-picker__month">
+              <button type="button" id="customPrevMonth" aria-label="Previous month">Prev</button>
+              <strong id="customAvailabilityMonth">Available dates</strong>
+              <button type="button" id="customNextMonth" aria-label="Next month">Next</button>
+            </div>
+            <div class="package-date-picker__weekdays" aria-hidden="true">
+              <span>Sun</span>
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+            </div>
+            <div id="customAvailabilityCalendar" class="package-date-picker__grid" aria-live="polite"></div>
+          </div>
+        </div>
+        <div id="customTimeSelectionFields" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label
+              for="customStartTime"
+              class="block text-sm font-medium mb-2"
+              style="color: var(--jet-primary);">Start Time *</label
+            >
+            <input
+              type="time"
+              id="customStartTime"
+              name="customStartTime"
+              required={customBooking}
+              disabled={!customBooking}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+            />
+          </div>
+          <div id="customEndDateField" class="hidden">
+            <label
+              for="customEndDate"
+              class="block text-sm font-medium mb-2"
+              style="color: var(--jet-primary);">End Date *</label
+            >
+            <input
+              type="date"
+              id="customEndDate"
+              name="customEndDate"
+              disabled={!customBooking}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+            />
+          </div>
+          <div>
+            <label
+              for="customEndTime"
+              class="block text-sm font-medium mb-2"
+              style="color: var(--jet-primary);">End Time *</label
+            >
+            <input
+              type="time"
+              id="customEndTime"
+              name="customEndTime"
+              required={customBooking}
+              disabled={!customBooking}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+            />
+          </div>
+        </div>
+        <p id="customScheduleNotice" class="booking-field-package-lock">Choose an available date, then add preferred start and end times.</p>
+      </div>
       <label class="date-mode-option" for="isMultiDay">
         <input
           type="checkbox"
@@ -326,7 +417,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
           <small id="multiDayPackageLock" class="booking-field-package-lock hidden">This setting is locked by the selected package.</small>
         </span>
       </label>
-      <div id="bookingDateTimeFields" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div id="bookingDateTimeFields" class={customBooking ? "hidden" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
         <div>
           <label
             for="startDateTime"
@@ -338,7 +429,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
             type="datetime-local"
             id="startDateTime"
             name="startDateTime"
-            required
+            required={!customBooking}
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
           />
         </div>
@@ -353,7 +444,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
             type="datetime-local"
             id="endDateTime"
             name="endDateTime"
-            required
+            required={!customBooking}
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
           />
         </div>
@@ -611,15 +702,15 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
               <span id="optionalExtrasDisplay">&#8369;0.00</span>
             </div>
             <div class="flex justify-between font-bold pt-2 border-t border-gray-200" style="color: var(--jet-primary);">
-              <span>Estimated Total</span>
+              <span>Package Total</span>
               <span id="totalPrice" style="color: var(--butterscotch-primary);">&#8369;0.00</span>
             </div>
             <div class="flex justify-between text-sm pt-2">
-              <span class="text-gray-600">Estimated minimum 50% down payment</span>
+              <span class="text-gray-600">50% Due Now</span>
               <span id="minimumPayment" class="font-semibold" style="color: var(--butterscotch-primary);">&#8369;0.00</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-gray-600">Remaining estimated balance</span>
+              <span class="text-gray-600">Balance Due Later</span>
               <span id="remainingBalance" class="font-semibold">&#8369;0.00</span>
             </div>
             <p class="text-xs text-gray-500 pt-1">The remaining balance is due on or before the reservation date under Woodberry's payment policies.</p>
@@ -918,19 +1009,19 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         <div class="confirmation-payment-card__top">
           <div>
             <p class="confirmation-section__eyebrow">{customBooking ? "Rough additions estimate" : "Payment Estimate"}</p>
-            <h4>{customBooking ? "Selected additions only" : "Estimated total"}</h4>
+            <h4>{customBooking ? "Selected additions only" : "Package Total"}</h4>
             <p>{customBooking ? "This rough amount covers priced selections only. It is not the final booking total or required payment." : "This displayed amount is recalculated from package and optional-extra rates when the reservation is created."}</p>
           </div>
           <p id="conf-total" class="confirmation-payment-card__total"></p>
         </div>
         <div class="confirmation-payment-card__breakdown">
           <div>
-            <span>{customBooking ? "Admin-determined payment" : "Estimated minimum 50% down payment"}</span>
+            <span>{customBooking ? "Admin-determined payment" : "50% Due Now"}</span>
             <strong id="conf-minimum-payment"></strong>
             <p>{customBooking ? "Woodberry admin determines the required payment after reviewing the complete request." : "A minimum 50% down payment is required to secure the reservation."}</p>
           </div>
           <div>
-            <span>{customBooking ? "Final payment / total" : "Remaining estimated balance"}</span>
+            <span>{customBooking ? "Final payment / total" : "Balance Due Later"}</span>
             <strong id="conf-remaining-balance"></strong>
             <p>{customBooking ? "All final charges remain subject to Woodberry admin review." : "Due on or before the reservation date under Woodberry's payment policies."}</p>
           </div>
@@ -1120,6 +1211,16 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
   var packageScheduleOptionsField = document.getElementById("packageScheduleOptionsField");
   var packageScheduleOptionsWrap = document.getElementById("packageScheduleOptions");
   var packageScheduleNotice = document.getElementById("packageScheduleNotice");
+  var customBookingDateInput = document.getElementById("customBookingDate");
+  var customEndDateInput = document.getElementById("customEndDate");
+  var customStartTimeInput = document.getElementById("customStartTime");
+  var customEndTimeInput = document.getElementById("customEndTime");
+  var customEndDateField = document.getElementById("customEndDateField");
+  var customScheduleNotice = document.getElementById("customScheduleNotice");
+  var customAvailabilityCalendar = document.getElementById("customAvailabilityCalendar");
+  var customAvailabilityMonth = document.getElementById("customAvailabilityMonth");
+  var customPrevMonth = document.getElementById("customPrevMonth");
+  var customNextMonth = document.getElementById("customNextMonth");
   var customVenueSelect = document.getElementById("customVenueSelect");
   var customVenueNotice = document.getElementById("customVenueNotice");
   var customVenueDetails = document.getElementById("customVenueDetails");
@@ -1302,6 +1403,53 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
     return datePart(endDateTimeInput?.value || "");
   }
 
+  function getCustomStartDateValue() {
+    return customBookingDateInput?.value || getStartDateValue();
+  }
+
+  function getCustomEndDateValue() {
+    if (!isCustomBooking) return getEndDateValue();
+    return isMultiDayInput?.checked
+      ? customEndDateInput?.value || ""
+      : customBookingDateInput?.value || "";
+  }
+
+  function setCustomDateValidity(message) {
+    if (!customBookingDateInput) return;
+    customBookingDateInput.setCustomValidity(message || "");
+    customBookingDateInput.toggleAttribute("data-availability-invalid", !!message);
+    customBookingDateInput.setAttribute("aria-invalid", message ? "true" : "false");
+  }
+
+  function setCustomScheduleNotice(message, isError) {
+    if (!customScheduleNotice) return;
+    customScheduleNotice.textContent = message;
+    customScheduleNotice.classList.toggle("package-schedule-notice--error", !!isError);
+  }
+
+  function syncCustomDateTimeValues() {
+    if (!isCustomBooking) return;
+    var startDate = customBookingDateInput?.value || "";
+    var endDate = getCustomEndDateValue();
+    var startTime = customStartTimeInput?.value || "";
+    var endTime = customEndTimeInput?.value || "";
+
+    if (customEndDateInput) {
+      customEndDateInput.required = !!isMultiDayInput?.checked;
+      customEndDateInput.disabled = !isCustomBooking || !isMultiDayInput?.checked;
+      customEndDateInput.min = startDate || minimumBookingDateValue;
+      if (!isMultiDayInput?.checked) customEndDateInput.value = startDate;
+      if (isMultiDayInput?.checked && startDate && customEndDateInput.value && customEndDateInput.value < startDate) {
+        customEndDateInput.value = "";
+      }
+    }
+    customEndDateField?.classList.toggle("hidden", !isMultiDayInput?.checked);
+
+    if (startDateTimeInput) startDateTimeInput.value = startDate && startTime ? startDate + "T" + startTime : "";
+    if (endDateTimeInput) endDateTimeInput.value = endDate && endTime ? endDate + "T" + endTime : "";
+    syncDateInputMinimums();
+  }
+
   function syncDateTimeMode() {
     var isMultiDay = !!isMultiDayInput?.checked;
     var usesFixedPresetSchedule = !isCustomBooking && selectedPackageDefinesFixedSchedule();
@@ -1309,14 +1457,15 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
       isMultiDayInput.disabled = true;
       isMultiDayInput.closest(".date-mode-option")?.classList.add("hidden");
     }
-    document.getElementById("bookingDateTimeFields")?.classList.toggle("hidden", usesFixedPresetSchedule);
+    var usesCustomSchedulePicker = isCustomBooking;
+    document.getElementById("bookingDateTimeFields")?.classList.toggle("hidden", usesFixedPresetSchedule || usesCustomSchedulePicker);
     if (startDateTimeInput) {
-      startDateTimeInput.required = !usesFixedPresetSchedule;
+      startDateTimeInput.required = !usesFixedPresetSchedule && !usesCustomSchedulePicker;
       startDateTimeInput.disabled = usesFixedPresetSchedule;
     }
     endDateTimeField?.classList.toggle("hidden", false);
     if (endDateTimeInput) {
-      endDateTimeInput.required = !usesFixedPresetSchedule;
+      endDateTimeInput.required = !usesFixedPresetSchedule && !usesCustomSchedulePicker;
       endDateTimeInput.disabled = usesFixedPresetSchedule;
       if (!isMultiDay && endDateTimeInput.value && datePart(endDateTimeInput.value) !== getStartDateValue()) {
         endDateTimeInput.value = "";
@@ -1332,6 +1481,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         ? "Stay End Date and Time *"
         : "Event End Date and Time *";
     }
+    syncCustomDateTimeValues();
     syncDateInputMinimums();
   }
 
@@ -1449,10 +1599,147 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
     renderCustomVenueDetails();
   }
 
+  function customVenueAvailabilityKey(startDate, endDate) {
+    return startDate + ":" + endDate;
+  }
+
+  async function fetchCustomVenueAvailability(startDate, endDate, forceRefresh) {
+    var key = customVenueAvailabilityKey(startDate, endDate);
+    if (!forceRefresh && customVenueAvailabilityCache[key]) return customVenueAvailabilityCache[key];
+
+    var params = new URLSearchParams({
+      includeVenues: "1",
+      startDate: startDate,
+      endDate: endDate,
+    });
+    var response = await fetch("/api/bookings/availability?" + params.toString());
+    var payload = await response.json().catch(function () {
+      return {};
+    });
+    if (!response.ok) throw new Error(payload.error || payload.message || "Could not load available venues.");
+    if (payload.minimumBookingDate) applyMinimumBookingDateValue(payload.minimumBookingDate);
+    customVenueAvailabilityCache[key] = payload;
+    return payload;
+  }
+
+  function renderCustomCalendarSkeleton(message) {
+    if (!customAvailabilityCalendar) return;
+    customAvailabilityCalendar.innerHTML =
+      '<p class="package-date-picker__status">' + escapeHtml(message) + '</p>';
+  }
+
+  function moveCustomCalendarMonth(offset) {
+    customCalendarMonthDate = new Date(
+      customCalendarMonthDate.getFullYear(),
+      customCalendarMonthDate.getMonth() + offset,
+      1,
+    );
+    refreshCustomAvailabilityCalendar(false);
+  }
+
+  function chooseCustomDate(dateValue) {
+    if (!customBookingDateInput || !dateValue) return;
+    customBookingDateInput.value = dateValue;
+    if (customEndDateInput && (!customEndDateInput.value || customEndDateInput.value < dateValue)) {
+      customEndDateInput.value = dateValue;
+    }
+    setCustomDateValidity("");
+    syncCustomDateTimeValues();
+    refreshCustomAvailabilityCalendar(false);
+    refreshCustomVenueAvailability(false);
+    validateSelectedAvailability(false, false);
+  }
+
+  async function refreshCustomAvailabilityCalendar(forceRefresh) {
+    if (!isCustomBooking || !customAvailabilityCalendar || !customAvailabilityMonth) return true;
+    var run = ++customAvailabilityCalendarRun;
+    var year = customCalendarMonthDate.getFullYear();
+    var monthIndex = customCalendarMonthDate.getMonth();
+
+    customAvailabilityMonth.textContent = customCalendarMonthDate.toLocaleDateString("en-PH", {
+      month: "long",
+      year: "numeric",
+    });
+    renderCustomCalendarSkeleton("Checking venue availability...");
+
+    var firstDay = new Date(year, monthIndex, 1);
+    var daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    var selectedDate = customBookingDateInput?.value || "";
+    var dayStates = new Map();
+
+    try {
+      var checks = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        var dayDate = new Date(year, monthIndex, day);
+        var dateValue = formatDateOnly(dayDate);
+        if (dayDate < minimumBookingDate) {
+          dayStates.set(dateValue, { available: false });
+          continue;
+        }
+        checks.push(
+          fetchCustomVenueAvailability(dateValue, dateValue, forceRefresh)
+            .then(function (payload) {
+              var availableVenues = (payload.venues || []).filter(function (venue) {
+                return venue.isAvailable !== false;
+              });
+              dayStates.set(payload.startDate || dateValue, { available: availableVenues.length > 0 });
+            })
+            .catch(function () {
+              dayStates.set(dateValue, { available: false, failed: true });
+            }),
+        );
+      }
+      await Promise.all(checks);
+      if (run !== customAvailabilityCalendarRun) return true;
+
+      var cells = [];
+      for (var blank = 0; blank < firstDay.getDay(); blank++) {
+        cells.push('<span class="package-date-picker__blank" aria-hidden="true"></span>');
+      }
+      for (var calendarDay = 1; calendarDay <= daysInMonth; calendarDay++) {
+        var calendarDate = new Date(year, monthIndex, calendarDay);
+        var calendarValue = formatDateOnly(calendarDate);
+        var dayState = dayStates.get(calendarValue);
+        var disabled = calendarDate < minimumBookingDate || dayState?.available === false;
+        var className = "package-date-picker__day" +
+          (calendarValue === selectedDate ? " is-selected" : "") +
+          (disabled ? " is-disabled" : "");
+        var label = disabled
+          ? calendarValue + " unavailable"
+          : calendarValue + " available";
+        cells.push(
+          '<button type="button" class="' + className + '" data-custom-date="' + calendarValue + '" ' +
+          (disabled ? 'disabled ' : '') +
+          'aria-label="' + escapeHtml(label) + '">' +
+          calendarDay +
+          '</button>',
+        );
+      }
+      customAvailabilityCalendar.innerHTML = cells.join("");
+      customAvailabilityCalendar.querySelectorAll("[data-custom-date]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          chooseCustomDate(button.getAttribute("data-custom-date") || "");
+        });
+      });
+      if (customPrevMonth && minimumBookingDate) {
+        var minimumMonth = new Date(minimumBookingDate.getFullYear(), minimumBookingDate.getMonth(), 1);
+        customPrevMonth.disabled = customCalendarMonthDate <= minimumMonth;
+      }
+      if (customNextMonth) customNextMonth.disabled = false;
+      setCustomScheduleNotice("Choose an available date, then add preferred start and end times.", false);
+      return true;
+    } catch (availabilityError) {
+      if (run !== customAvailabilityCalendarRun) return true;
+      renderCustomCalendarSkeleton("Could not load availability.");
+      setCustomScheduleNotice(availabilityCheckMessage, true);
+      return false;
+    }
+  }
+
   async function refreshCustomVenueAvailability(showMessage) {
     if (!isCustomBooking) return true;
-    var startDate = getStartDateValue();
-    var endDate = getEndDateValue();
+    var startDate = getCustomStartDateValue();
+    var endDate = getCustomEndDateValue();
     if (!startDate || !endDate) {
       setCustomVenueOptions([], "Choose a booking date to see available venues");
       if (customVenueNotice) customVenueNotice.textContent = "Venue availability updates after you choose a date.";
@@ -1461,17 +1748,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
 
     if (customVenueNotice) customVenueNotice.textContent = "Checking available venues...";
     try {
-      var params = new URLSearchParams({
-        includeVenues: "1",
-        startDate: startDate,
-        endDate: endDate,
-      });
-      var response = await fetch("/api/bookings/availability?" + params.toString());
-      var payload = await response.json().catch(function () {
-        return {};
-      });
-      if (!response.ok) throw new Error(payload.error || payload.message || "Could not load available venues.");
-      if (payload.minimumBookingDate) applyMinimumBookingDateValue(payload.minimumBookingDate);
+      var payload = await fetchCustomVenueAvailability(startDate, endDate, false);
       customVenueOptions = payload.venues || customVenueOptions;
       var availableVenues = customVenueOptions.filter(function (venue) {
         return venue.isAvailable !== false;
@@ -1844,10 +2121,15 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
   var unavailableDateMessage = "Selected dates are unavailable. Please choose another date.";
   var availabilityCheckMessage = "We could not verify availability for the selected venue. Please try again.";
   var availabilityCache = {};
+  var customVenueAvailabilityCache = {};
   var dateAvailabilityValidationRun = 0;
   var presetAvailabilityCalendarRun = 0;
+  var customAvailabilityCalendarRun = 0;
   var selectedPackageScheduleChoice = "";
   var presetCalendarMonthDate = minimumBookingDate
+    ? new Date(minimumBookingDate.getFullYear(), minimumBookingDate.getMonth(), 1)
+    : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  var customCalendarMonthDate = minimumBookingDate
     ? new Date(minimumBookingDate.getFullYear(), minimumBookingDate.getMonth(), 1)
     : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
@@ -1860,6 +2142,8 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         ? getStartDateValue() + "T23:59"
         : "";
     }
+    if (customBookingDateInput) customBookingDateInput.min = minimumBookingDateValue;
+    if (customEndDateInput) customEndDateInput.min = customBookingDateInput?.value || minimumBookingDateValue;
   }
 
   function applyMinimumBookingDateValue(nextMinimumBookingDateValue) {
@@ -2287,6 +2571,10 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
     startDateTime: "Please choose the event or stay start date and time.",
     endDateTime: "Please choose the stay end date and time.",
     presetBookingDate: "Please choose an available reservation date.",
+    customBookingDate: "Please choose an available custom booking date.",
+    customStartTime: "Please choose your preferred start time.",
+    customEndTime: "Please choose your preferred end time.",
+    customEndDate: "Please choose the stay end date.",
     guests: "Please enter the expected number of guests.",
     eventType: "Please choose the type of celebration or event.",
     customEventType: "Please specify the celebration or event type.",
@@ -2333,11 +2621,13 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
 
   function setDateAvailabilityValidity(message) {
     [startDateTimeInput, endDateTimeInput].filter(Boolean).forEach(function (input) {
-      input.setCustomValidity(message || "");
-      input.toggleAttribute("data-availability-invalid", !!message);
-      input.setAttribute("aria-invalid", message ? "true" : "false");
+      var inputMessage = isCustomBooking ? "" : message || "";
+      input.setCustomValidity(inputMessage);
+      input.toggleAttribute("data-availability-invalid", !!inputMessage);
+      input.setAttribute("aria-invalid", inputMessage ? "true" : "false");
     });
     if (!isCustomBooking) setPresetDateValidity(message);
+    else setCustomDateValidity(message);
   }
 
   function availabilityMonthKey(year, monthIndex) {
@@ -2800,11 +3090,35 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
     choosePresetDate(presetBookingDateInput.value);
     await validatePresetScheduleSelection(true, false);
   });
+  customBookingDateInput?.addEventListener("change", async function () {
+    chooseCustomDate(customBookingDateInput.value);
+  });
+  customEndDateInput?.addEventListener("change", async function () {
+    syncCustomDateTimeValues();
+    await refreshCustomVenueAvailability(true);
+    await validateSelectedAvailability(true, false);
+  });
+  customStartTimeInput?.addEventListener("change", async function () {
+    syncCustomDateTimeValues();
+    calculateNights();
+    await validateSelectedAvailability(true, false);
+  });
+  customEndTimeInput?.addEventListener("change", async function () {
+    syncCustomDateTimeValues();
+    calculateNights();
+    await validateSelectedAvailability(true, false);
+  });
   presetPrevMonth?.addEventListener("click", function () {
     movePresetCalendarMonth(-1);
   });
   presetNextMonth?.addEventListener("click", function () {
     movePresetCalendarMonth(1);
+  });
+  customPrevMonth?.addEventListener("click", function () {
+    moveCustomCalendarMonth(-1);
+  });
+  customNextMonth?.addEventListener("click", function () {
+    moveCustomCalendarMonth(1);
   });
   isMultiDayInput.addEventListener("change", async function () {
     syncDateTimeMode();
@@ -3398,6 +3712,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
   if (isCustomBooking) setCustomVenueOptions([], "Choose a booking date to see available venues");
   fillAccountDetails();
   applySelectedPackage();
+  if (isCustomBooking) refreshCustomAvailabilityCalendar(false);
   attachFriendlyValidation();
   syncCaterer();
   syncDateTimeMode();

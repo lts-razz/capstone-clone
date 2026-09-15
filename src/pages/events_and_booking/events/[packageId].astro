@@ -144,15 +144,21 @@ if (isCustomBookingPage) {
 }
 
 const bookingAccessTitle = isInternalUser
-  ? 'Booking requests are for guests'
+  ? isCustomBookingPage ? 'Booking requests are for guests' : 'Reservations are for guests'
   : user && !emailVerified
     ? 'Verify your email to book'
     : 'Sign in to book';
 const bookingAccessMessage = isInternalUser
-  ? 'Your work account can manage existing bookings from its booking workspace. To send a new booking request, please use a guest account.'
+  ? isCustomBookingPage
+    ? 'Your work account can manage existing bookings from its booking workspace. To send a new booking request, please use a guest account.'
+    : 'Your work account can manage existing bookings from its booking workspace. To create a new reservation, please use a guest account.'
   : user && !emailVerified
-    ? 'Please verify your email before booking. A verified email is required before submitting requests or making the 50% down payment.'
-    : 'Sign in with a verified customer account to submit a booking request and make payments.';
+    ? isCustomBookingPage
+      ? 'Please verify your email before booking. A verified email is required before submitting requests.'
+      : 'Please verify your email before booking. A verified email is required before creating a reservation or making the 50% down payment.'
+    : isCustomBookingPage
+      ? 'Sign in with a verified customer account to submit a booking request.'
+      : 'Sign in with a verified customer account to create a reservation and make payments.';
 
 const describePackageVenue = (venue: PackageVenueSummary) =>
   venue.description?.trim()
@@ -161,7 +167,9 @@ const describePackageVenue = (venue: PackageVenueSummary) =>
 
 <Layout
   title={`${selectedPackage.name} Details`}
-  description={`View package details for ${selectedPackage.name} at Woodberry Resorts and Events Place, then check availability and send a booking request.`}
+  description={isCustomBookingPage
+    ? `View custom booking details at Woodberry Resorts and Events Place, then check availability and submit a booking request.`
+    : `View package details for ${selectedPackage.name} at Woodberry Resorts and Events Place, then check availability and create a reservation.`}
 >
   <main class="wb-page-surface booking-page">
     <PublicPageHero
@@ -170,7 +178,7 @@ const describePackageVenue = (venue: PackageVenueSummary) =>
       title={selectedPackage.name}
       description={isCustomBookingPage
         ? "Build your own event or staycation request, choose an available venue, and share the items or services you want Woodberry staff to quote."
-        : "Review the package, included spaces, guest range, and schedule before sending your preferred date to the Woodberry team."}
+        : "Review the package, included spaces, guest range, and schedule before creating your reservation."}
       image={heroImage}
       imageAlt={`${selectedPackage.name} at Woodberry Resorts and Events Place`}
       compact
