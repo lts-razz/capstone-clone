@@ -94,6 +94,13 @@ const fullName = (profile: any) =>
                     >
                       {employee.is_active ? 'Deactivate' : 'Activate'}
                     </button>
+                    <button
+                      type="button"
+                      class="danger"
+                      onclick={`deleteStaffAccount('${employee.id}', ${JSON.stringify(fullName(employee))})`}
+                    >
+                      Delete Account
+                    </button>
                   </div>
                 </td>
               </tr>

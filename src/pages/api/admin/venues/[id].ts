@@ -88,7 +88,7 @@ export const DELETE: APIRoute = async ({ cookies, params }) => {
   if (venueLookupError) return error("Could not check the venue before deletion", 500);
   if (!venue) return error("Venue not found", 404);
 
-  const { data: existingBooking, error: bookingLookupError } = await db
+  const { data: legacyBooking, error: bookingLookupError } = await db
     .from("bookings")
     .select("id")
     .eq("venue_id", venueId)
@@ -96,91 +96,66 @@ export const DELETE: APIRoute = async ({ cookies, params }) => {
     .maybeSingle();
 
   if (bookingLookupError) return error("Could not safely check existing venue bookings", 500);
+  if (legacyBooking) {
+    return error(
+      "This venue is used by existing bookings and cannot be deleted. Deactivate it instead to hide it from new bookings.",
+      409,
+    );
+  }
 
-  const { data: referencedPackages, error: packageLookupError } = await db
-    .from("packages")
+  const { data: assignedBooking, error: assignmentLookupError } = await db
+    .from("booking_venue_assignments")
     .select("id")
+    .eq("venue_id", venueId)
+    .limit(1)
+    .maybeSingle();
+
+  if (assignmentLookupError) return error("Could not safely check existing venue booking assignments", 500);
+  if (assignedBooking) {
+    return error(
+      "This venue is used by existing bookings and cannot be deleted. Deactivate it instead to hide it from new bookings.",
+      409,
+    );
+  }
+
+  const { error: assignmentDeleteError } = await db
+    .from("package_venue_assignments")
+    .delete()
     .eq("venue_id", venueId);
 
-  let packageRelationshipWarning: string | undefined;
-  let detachedPackageIds: string[] = [];
-
-  if (packageLookupError) {
-    logDatabaseError("[AdminVenueDelete] package assignment lookup failed", packageLookupError, { venueId });
-
-    if (isMissingPackageVenueRelationship(packageLookupError)) {
-      packageRelationshipWarning =
-        "Package assignments could not be checked because the package-to-venue relationship is not available.";
-    } else {
-      return error("Could not check package assignments for this venue. The venue was not deleted. Please try again.", 500);
-    }
-  } else {
-    const referencedPackageIds = (referencedPackages ?? []).map((pkg) => pkg.id);
-
-    if (referencedPackageIds.length > 0) {
-      const { data: detachedPackages, error: detachError } = await db
-        .from("packages")
-        .update({ venue_id: null })
-        .in("id", referencedPackageIds)
-        .select("id");
-
-      if (detachError) {
-        logDatabaseError("[AdminVenueDelete] package detach failed", detachError, {
-          venueId,
-          packageIds: referencedPackageIds,
-        });
-        return error(
-          "This venue is assigned to one or more packages, but those assignments could not be removed. The venue was not deleted. Please try again.",
-          500,
-        );
-      }
-
-      detachedPackageIds = (detachedPackages ?? []).map((pkg) => pkg.id);
-      if (detachedPackageIds.length !== referencedPackageIds.length) {
-        console.error("[AdminVenueDelete] package detach returned an unexpected number of packages", {
-          venueId,
-          expectedPackageIds: referencedPackageIds,
-          detachedPackageIds,
-        });
-        if (detachedPackageIds.length > 0) {
-          const { error: rollbackError } = await db
-            .from("packages")
-            .update({ venue_id: venueId })
-            .in("id", detachedPackageIds);
-          if (rollbackError) {
-            logDatabaseError("[AdminVenueDelete] incomplete package detach rollback failed", rollbackError, {
-              venueId,
-              packageIds: detachedPackageIds,
-            });
-          }
-        }
-        return error(
-          "Some package assignments could not be removed safely. The venue was not deleted. Please try again.",
-          500,
-        );
-      }
+  if (assignmentDeleteError) {
+    logDatabaseError("[AdminVenueDelete] package assignment delete failed", assignmentDeleteError, { venueId });
+    if (!isMissingPackageVenueRelationship(assignmentDeleteError)) {
+      return error("Could not remove package assignments for this venue. The venue was not deleted.", 500);
     }
   }
 
-  const { error: deactivateError } = await db
+  const { error: packageDetachError } = await db
+    .from("packages")
+    .update({ venue_id: null })
+    .eq("venue_id", venueId);
+
+  if (packageDetachError) {
+    return error("Could not detach this venue from packages. The venue was not deleted.", 500);
+  }
+
+  const { error: blockedDateDeleteError } = await db
+    .from("blocked_dates")
+    .delete()
+    .eq("venue_id", venueId);
+
+  if (blockedDateDeleteError) {
+    return error("Could not remove blocked-date records for this venue. The venue was not deleted.", 500);
+  }
+
+  const { error: deleteError } = await db
     .from("venues")
-    .update({ is_active: false })
+    .delete()
     .eq("id", venueId);
 
-  if (deactivateError) {
-    if (detachedPackageIds.length > 0) {
-      const { error: rollbackError } = await db
-        .from("packages")
-        .update({ venue_id: venueId })
-        .in("id", detachedPackageIds);
-      if (rollbackError) {
-        console.error("[AdminVenueDelete] package detach rollback failed:", rollbackError.message);
-      }
-    }
-    return error("Could not delete the venue. Please try again.", 500);
-  }
+  if (deleteError) return error("Could not delete the venue. Please try again.", 500);
 
-  let warning = packageRelationshipWarning;
+  let warning: string | undefined;
   const imagePath = safelyKnownVenueImagePath(venue.image_url);
   if (imagePath) {
     if (!supabaseAdmin) {
@@ -194,34 +169,12 @@ export const DELETE: APIRoute = async ({ cookies, params }) => {
       if (imageDeleteError) {
         warning = [warning, "Its image could not be cleaned up."].filter(Boolean).join(" ");
         console.error("[AdminVenueDelete] image cleanup failed:", imageDeleteError.message);
-      } else {
-        const { error: clearImageError } = await db
-          .from("venues")
-          .update({ image_url: null })
-          .eq("id", venueId);
-        if (clearImageError) {
-          console.error("[AdminVenueDelete] could not clear the archived image URL:", clearImageError.message);
-        }
       }
     }
   }
 
-  const detachedPackageCount = detachedPackageIds.length;
-  const packageSummary = packageRelationshipWarning
-    ? ""
-    : detachedPackageCount === 0
-      ? " No package assignments needed updating."
-      : detachedPackageCount === 1
-        ? " 1 package was updated."
-        : ` ${detachedPackageCount} packages were updated.`;
-  const bookingSummary = existingBooking
-    ? " Existing bookings keep the archived venue details."
-    : "";
-
   return ok({
-    message: `${venue.name} removed successfully.${packageSummary}${bookingSummary}`,
+    message: `${venue.name} deleted successfully`,
     warning,
-    detachedPackageCount,
-    archivedForBookings: Boolean(existingBooking),
   });
 };

@@ -277,7 +277,7 @@ const reviews = (rawReviews ?? []).map((r: any) => ({
 const { data: allCustomers } = isAdmin
   ? await adminClient
       .from('customers')
-      .select('id, email, first_name, last_name, created_at')
+      .select('id, email, first_name, last_name, phone, address, created_at')
       .order('created_at', { ascending: false })
   : { data: [] };
 
@@ -387,7 +387,7 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
 
       <ReviewsTab reviews={reviews} />
 
-      <UsersTab allAdmins={allAdmins} allCustomers={allCustomers} />
+      <UsersTab allAdmins={allAdmins} allCustomers={allCustomers} currentAdminId={user.id} />
 
       <StaffTab isAdmin={isAdmin} allEmployees={allEmployees} />
 

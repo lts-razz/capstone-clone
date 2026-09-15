@@ -1,5 +1,5 @@
 ---
-const { allAdmins, allCustomers } = Astro.props;
+const { allAdmins, allCustomers, currentAdminId } = Astro.props;
 
 const formatDate = (date: string | null | undefined) => {
   if (!date) return '-';
@@ -12,6 +12,9 @@ const formatDate = (date: string | null | undefined) => {
 
 const fullName = (profile: any) =>
   `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() || 'Unnamed account';
+
+const encodeAccount = (role: 'admin' | 'customer', profile: any) =>
+  encodeURIComponent(JSON.stringify({ role, ...profile }));
 ---
 
 <!-- TAB: USERS -->
@@ -90,14 +93,35 @@ const fullName = (profile: any) =>
               <td class="px-5 py-4 text-gray-500">{formatDate(admin.created_at)}</td>
               <td class="px-5 py-4 text-gray-400">Admin account</td>
               <td class="px-5 py-4">
-                <button
-                  type="button"
-                  onclick={`demoteUser('${admin.id}')`}
-                  class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
-                  style="border-color:#9a4a36;color:#9a4a36;"
-                >
-                  Demote to Customer
-                </button>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    data-account-record={encodeAccount('admin', admin)}
+                    onclick="openAccountModalFromButton(this)"
+                    class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
+                    style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onclick={`demoteUser('${admin.id}')`}
+                    class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
+                    style="border-color:#9a4a36;color:#9a4a36;"
+                  >
+                    Demote to Customer
+                  </button>
+                  {admin.id !== currentAdminId && (
+                    <button
+                      type="button"
+                      onclick={`deleteAccount('admin', '${admin.id}', ${JSON.stringify(fullName(admin))})`}
+                      class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-red-50"
+                      style="border-color:var(--wb-danger-action);color:var(--wb-danger-action);"
+                    >
+                      Delete Account
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -125,6 +149,15 @@ const fullName = (profile: any) =>
                 <div class="flex flex-wrap gap-2">
                   <button
                     type="button"
+                    data-account-record={encodeAccount('customer', customer)}
+                    onclick="openAccountModalFromButton(this)"
+                    class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
+                    style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
                     onclick={`promoteStaff('${customer.id}')`}
                     class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
                     style="border-color:#157a45;color:#157a45;"
@@ -138,6 +171,14 @@ const fullName = (profile: any) =>
                     style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);"
                   >
                     Promote to Admin
+                  </button>
+                  <button
+                    type="button"
+                    onclick={`deleteAccount('customer', '${customer.id}', ${JSON.stringify(fullName(customer))})`}
+                    class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-red-50"
+                    style="border-color:var(--wb-danger-action);color:var(--wb-danger-action);"
+                  >
+                    Delete Account
                   </button>
                 </div>
               </td>
@@ -154,5 +195,31 @@ const fullName = (profile: any) =>
         </tbody>
       </table>
     </div>
+  </div>
+
+  <div id="accountModal" class="hidden staff-modal" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+    <form id="accountForm" class="staff-modal-card">
+      <div class="staff-modal-header">
+        <div>
+          <p class="staff-eyebrow">Admin only</p>
+          <h3 id="accountModalTitle">Edit account</h3>
+        </div>
+        <button type="button" aria-label="Close" onclick="closeAccountModal()">&times;</button>
+      </div>
+      <input id="accountId" type="hidden" />
+      <input id="accountRole" type="hidden" />
+      <div class="staff-form-grid">
+        <label><span>First name</span><input id="accountFirstName" required maxlength="100" /></label>
+        <label><span>Last name</span><input id="accountLastName" required maxlength="100" /></label>
+        <label class="full"><span>Email</span><input id="accountEmail" type="email" required maxlength="255" /></label>
+        <label data-account-customer-field><span>Phone</span><input id="accountPhone" type="tel" maxlength="30" /></label>
+        <label class="full" data-account-customer-field><span>Address</span><input id="accountAddress" maxlength="300" /></label>
+      </div>
+      <p id="accountFormError" class="staff-form-error hidden" role="alert"></p>
+      <div class="staff-modal-actions">
+        <button type="button" onclick="closeAccountModal()">Cancel</button>
+        <button id="accountSubmitButton" type="submit">Save changes</button>
+      </div>
+    </form>
   </div>
 </section>

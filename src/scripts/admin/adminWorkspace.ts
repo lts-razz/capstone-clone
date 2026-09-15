@@ -887,8 +887,40 @@ async function submitVenue(event?: SubmitEvent) {
 
 document.getElementById('venueForm')?.addEventListener('submit', submitVenue);
 
-async function deleteVenue(id: string) {
-  await toggleVenue(id, true);
+async function deleteVenue(id: string, name = 'this venue') {
+  const confirmed = await showConfirm({
+    title: 'Delete Venue Permanently',
+    message: `Permanently delete ${name}? This is allowed only when no booking has ever referenced it. Package assignments, blocked dates, and its managed image will be removed.`,
+    okLabel: 'Delete Permanently',
+    okColor: 'var(--wb-danger-action)',
+    icon: 'V',
+  });
+  if (!confirmed) return;
+
+  const button = document.querySelector<HTMLButtonElement>(`[data-venue-delete="${id}"]`);
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Deleting...';
+  }
+
+  try {
+    const response = await fetch('/api/admin/venues/' + encodeURIComponent(id), { method: 'DELETE' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      toast(payload.error ?? payload.message ?? 'Could not delete the venue', false);
+      return;
+    }
+
+    toast(payload.warning ?? payload.message ?? 'Venue deleted successfully');
+    location.reload();
+  } catch {
+    toast('Could not delete the venue. Check your connection and try again.', false);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Delete';
+    }
+  }
 }
 
 async function toggleVenue(id: string, isActive: boolean, name = 'this venue') {
@@ -1340,23 +1372,23 @@ async function togglePackage(id: string, isActive: boolean) {
 
 async function deletePackage(id: string, name: string) {
   const ok = await showConfirm({
-    title: 'Deactivate Package',
-    message: `${name} will be hidden from customers. Existing bookings keep their stored package details.`,
-    okLabel: 'Deactivate',
-    okColor: '#9a4a36',
+    title: 'Delete Package Permanently',
+    message: `Permanently delete ${name}? This is allowed only when no existing booking references the package. Deactivate it instead when bookings must be preserved.`,
+    okLabel: 'Delete Permanently',
+    okColor: 'var(--wb-danger-action)',
     icon: 'PK',
   });
   if (!ok) return;
 
-  const response = await fetch('/api/packages/' + encodeURIComponent(id), {
+  const response = await fetch('/api/admin/packages/' + encodeURIComponent(id), {
     method: 'DELETE',
   });
   const payload = await response.json().catch(() => ({}));
   if (response.ok) {
-    toast(payload.message ?? 'Package deactivated successfully');
+    toast(payload.message ?? 'Package deleted successfully');
     location.reload();
   } else {
-    toast(payload.error ?? payload.message ?? 'Could not deactivate package', false);
+    toast(payload.error ?? payload.message ?? 'Could not delete package', false);
   }
 }
 
@@ -1429,6 +1461,94 @@ async function userRoleRequest(payload: Record<string, unknown>) {
   return result;
 }
 
+function openAccountModal(account: any) {
+  const role = account?.role === 'admin' ? 'admin' : 'customer';
+  (document.getElementById('accountId') as HTMLInputElement).value = account?.id ?? '';
+  (document.getElementById('accountRole') as HTMLInputElement).value = role;
+  (document.getElementById('accountFirstName') as HTMLInputElement).value = account?.first_name ?? '';
+  (document.getElementById('accountLastName') as HTMLInputElement).value = account?.last_name ?? '';
+  (document.getElementById('accountEmail') as HTMLInputElement).value = account?.email ?? '';
+  (document.getElementById('accountPhone') as HTMLInputElement).value = account?.phone ?? '';
+  (document.getElementById('accountAddress') as HTMLInputElement).value = account?.address ?? '';
+  document.querySelectorAll<HTMLElement>('[data-account-customer-field]').forEach((field) => {
+    field.classList.toggle('hidden', role !== 'customer');
+  });
+  document.getElementById('accountFormError')?.classList.add('hidden');
+  const title = document.getElementById('accountModalTitle');
+  if (title) title.textContent = role === 'admin' ? 'Edit admin account' : 'Edit customer account';
+  document.getElementById('accountModal')?.classList.remove('hidden');
+}
+
+function openAccountModalFromButton(button: HTMLElement) {
+  try {
+    const rawAccount = button.dataset.accountRecord;
+    openAccountModal(rawAccount ? JSON.parse(decodeURIComponent(rawAccount)) : {});
+  } catch {
+    toast('Could not load account details. Refresh and try again.', false);
+  }
+}
+
+function closeAccountModal() {
+  document.getElementById('accountModal')?.classList.add('hidden');
+}
+
+async function accountRequest(method: 'PATCH' | 'DELETE', payload: Record<string, unknown>) {
+  const response = await fetch('/api/admin/users', {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error ?? result.message ?? 'Account request failed');
+  return result;
+}
+
+document.getElementById('accountForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const submit = document.getElementById('accountSubmitButton') as HTMLButtonElement;
+  const errorBox = document.getElementById('accountFormError')!;
+  submit.disabled = true;
+  errorBox.classList.add('hidden');
+  try {
+    const result = await accountRequest('PATCH', {
+      userId: (document.getElementById('accountId') as HTMLInputElement).value,
+      role: (document.getElementById('accountRole') as HTMLInputElement).value,
+      email: (document.getElementById('accountEmail') as HTMLInputElement).value,
+      firstName: (document.getElementById('accountFirstName') as HTMLInputElement).value,
+      lastName: (document.getElementById('accountLastName') as HTMLInputElement).value,
+      phone: (document.getElementById('accountPhone') as HTMLInputElement).value,
+      address: (document.getElementById('accountAddress') as HTMLInputElement).value,
+    });
+    toast(result.message ?? 'Account updated');
+    closeAccountModal();
+    location.reload();
+  } catch (err) {
+    errorBox.textContent = err instanceof Error ? err.message : 'Account update failed';
+    errorBox.classList.remove('hidden');
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+async function deleteAccount(role: 'admin' | 'customer', userId: string, name: string) {
+  const confirmed = await showConfirm({
+    title: 'Delete Account Permanently',
+    message: `Permanently delete ${name || 'this account'} and its authentication login? This cannot be undone. Accounts with preserved booking, payment, or review history cannot be deleted.`,
+    okLabel: 'Delete Account',
+    okColor: 'var(--wb-danger-action)',
+    icon: 'AC',
+  });
+  if (!confirmed) return;
+
+  try {
+    const result = await accountRequest('DELETE', { userId, role, confirmedSensitiveAction: true });
+    toast(result.message ?? 'Account deleted');
+    location.reload();
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Could not delete account', false);
+  }
+}
+
 async function promoteUser(id: string) {
   const ok = await showConfirm({
     title: 'Promote to Admin',
@@ -1471,7 +1591,7 @@ updateCustomerBookingSummaries();
 applyUserManagementFilters();
 
 // ── MODAL BACKDROP CLOSE ──────────────────────────────────────────────────────
-['rescheduleModal', 'venueModal', 'staffModal'].forEach(function(id) {
+['rescheduleModal', 'venueModal', 'staffModal', 'accountModal'].forEach(function(id) {
   document.getElementById(id)?.addEventListener('click', function(e) {
     if (e.target === document.getElementById(id)) document.getElementById(id)?.classList.add('hidden');
   });
@@ -1610,6 +1730,30 @@ async function setStaffStatus(staffId: string, action: 'activate' | 'deactivate'
   if (!confirmed) return;
   try { await staffRequest({ action, staffId }); toast(`Staff account ${action}d`); location.reload(); }
   catch (err) { toast(err instanceof Error ? err.message : 'Could not update staff access', false); }
+}
+
+async function deleteStaffAccount(staffId: string, name: string) {
+  const confirmed = await showConfirm({
+    title: 'Delete Staff Account Permanently',
+    message: `Permanently delete ${name || 'this staff account'} and its authentication login? This cannot be undone. Booking, payment, and review history will not be removed to make deletion succeed.`,
+    okLabel: 'Delete Account',
+    okColor: 'var(--wb-danger-action)',
+    icon: 'ST',
+  });
+  if (!confirmed) return;
+  try {
+    const response = await fetch('/api/admin/staff', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ staffId, confirmedSensitiveAction: true }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error ?? payload.message ?? 'Could not delete staff account');
+    toast(payload.message ?? 'Staff account deleted');
+    location.reload();
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Could not delete staff account', false);
+  }
 }
 
 function applyStaffManagementFilters() {
@@ -2603,10 +2747,14 @@ switchReport('weekly');
 (window as any).demoteUser        = demoteUser;
 (window as any).promoteStaff      = promoteStaff;
 (window as any).demoteStaff       = demoteStaff;
+(window as any).openAccountModalFromButton = openAccountModalFromButton;
+(window as any).closeAccountModal = closeAccountModal;
+(window as any).deleteAccount     = deleteAccount;
 (window as any).openStaffModal    = openStaffModal;
 (window as any).openStaffModalFromButton = openStaffModalFromButton;
 (window as any).closeStaffModal   = closeStaffModal;
 (window as any).setStaffStatus    = setStaffStatus;
+(window as any).deleteStaffAccount = deleteStaffAccount;
 (window as any).openBookingDetail = openBookingDetail;
 (window as any).closeBookingDetail = closeBookingDetail;
 (window as any).openPaymentModal = openPaymentModal;
@@ -2617,6 +2765,7 @@ switchReport('weekly');
 (window as any).printReport       = printReport;
 (window as any).deactivateBlockedDate = deactivateBlockedDate;
 (window as any).activateBlockedDate = activateBlockedDate;
+(window as any).deleteBlockedDate = deleteBlockedDate;
 (window as any).editBlockedDate = editBlockedDate;
 (window as any).resetBlockedDateForm = resetBlockedDateForm;
 
@@ -2838,6 +2987,7 @@ function renderBlockedDateList() {
             ? `<button type="button" onclick="deactivateBlockedDate('${escapeHtml(block.id)}')">Deactivate</button>`
             : `<button class="activate" type="button" onclick="activateBlockedDate('${escapeHtml(block.id)}')">Activate</button>`
           }
+          <button class="danger" type="button" onclick="deleteBlockedDate('${escapeHtml(block.id)}')">Delete</button>
         </div>
       </div>
     `)
@@ -2993,6 +3143,40 @@ function deactivateBlockedDate(id: string) {
 
 function activateBlockedDate(id: string) {
   return setBlockedDateActive(id, true);
+}
+
+async function deleteBlockedDate(id: string) {
+  const block = activeBlockedDates.map(normalizeBlockedDate).find((item) => item.id === id);
+  const confirmed = await showConfirm({
+    title: 'Delete Blocked Date Permanently',
+    message: block
+      ? `Permanently delete the blocked date for ${venueNameById(block.venueId)} on ${formatAdminDateRange(block.startDate, block.endDate)}? This cannot be undone.`
+      : 'Permanently delete this blocked date? This cannot be undone.',
+    okLabel: 'Delete Permanently',
+    okColor: 'var(--wb-danger-action)',
+    icon: '!',
+  });
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch('/api/admin/blocked-dates', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, confirmedSensitiveAction: true }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error ?? payload.message ?? 'Could not delete blocked date');
+
+    toast(payload.message ?? 'Blocked date deleted');
+    resetBlockedDateForm();
+    clearAvailabilityCache();
+    await loadBlockedDates();
+    await admRenderCalendar();
+  } catch (deleteError) {
+    const message = deleteError instanceof Error ? deleteError.message : 'Could not delete blocked date';
+    toast(message, false);
+    setAvailabilityMessage(message);
+  }
 }
 
 async function admRenderCalendar() {

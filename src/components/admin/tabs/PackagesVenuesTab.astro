@@ -47,9 +47,10 @@ const sortedVenues = [...(venues ?? [])].sort((a: any, b: any) => {
             <span class="package-assigned-venue__missing">No venues selected</span>
           )}
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap">
           <button onclick={`openPackageModal(${JSON.stringify(JSON.stringify(p))})`} class="flex-1 py-1.5 rounded-lg text-sm font-semibold border-2 transition hover:bg-gray-50" style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);">Edit</button>
           <button onclick={`togglePackage('${p.id}',${p.is_active})`} class={`flex-1 py-1.5 rounded-lg text-sm font-semibold text-white transition hover:opacity-80 ${p.is_active?'bg-red-400':'bg-green-500'}`}>{p.is_active?'Deactivate':'Activate'}</button>
+          <button onclick={`deletePackage(${JSON.stringify(p.id)}, ${JSON.stringify(p.name)})`} class="flex-1 py-1.5 rounded-lg text-sm font-semibold border-2 transition hover:bg-red-50" style="border-color:var(--wb-danger-action);color:var(--wb-danger-action);">Delete</button>
         </div>
       </div>
     )})}
@@ -101,6 +102,12 @@ const sortedVenues = [...(venues ?? [])].sort((a: any, b: any) => {
                     data-venue-toggle={venue.id}
                     onclick={`toggleVenue(${JSON.stringify(venue.id)}, ${venue.is_active}, ${JSON.stringify(venue.name)})`}
                   >{venue.is_active ? 'Deactivate' : 'Activate'}</button>
+                  <button
+                    type="button"
+                    class="admin-venue-card__delete"
+                    data-venue-delete={venue.id}
+                    onclick={`deleteVenue(${JSON.stringify(venue.id)}, ${JSON.stringify(venue.name)})`}
+                  >Delete</button>
                 </div>
               </div>
             </article>

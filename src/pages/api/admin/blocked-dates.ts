@@ -48,6 +48,13 @@ const updateBlockedDateSchema = z.object({
   }),
 });
 
+const deleteBlockedDateSchema = z.object({
+  id: z.string().uuid("id must be a valid UUID"),
+  confirmedSensitiveAction: z.literal(true, {
+    errorMap: () => ({ message: "Explicit confirmation is required before deleting blocked dates" }),
+  }),
+});
+
 type BlockedDateRow = Database["public"]["Tables"]["blocked_dates"]["Row"];
 type BlockedDateUpdate = Database["public"]["Tables"]["blocked_dates"]["Update"];
 type BlockedDateWithMigrationFields = BlockedDateRow & {
@@ -256,4 +263,48 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
     message: isBlockedDateActive(data) ? "Blocked date updated" : "Blocked date deactivated",
     blockedDate: mapBlockedDate(data),
   });
+};
+
+export const DELETE: APIRoute = async ({ request, cookies }) => {
+  const guard = await adminGuard(cookies);
+  if (guard instanceof Response) return guard;
+
+  const body = await parseBody(request);
+  if (!body.ok) return body.response;
+
+  const parsed = deleteBlockedDateSchema.safeParse(body.data);
+  if (!parsed.success) {
+    return error(parsed.error.errors.map((item) => item.message).join(", "), 400);
+  }
+
+  const { data: current, error: fetchError } = await db
+    .from("blocked_dates")
+    .select("*")
+    .eq("id", parsed.data.id)
+    .single();
+
+  if (fetchError || !current) return error("Blocked date not found", 404);
+
+  const { error: deleteError } = await db
+    .from("blocked_dates")
+    .delete()
+    .eq("id", parsed.data.id);
+
+  if (deleteError) return error(deleteError.message, 500);
+
+  await logBookingAudit({
+    actorId: guard.user.id,
+    actorType: "admin",
+    action: "blocked_date_deleted",
+    reason: current.reason,
+    metadata: {
+      blockedDateId: current.id,
+      venueId: current.venue_id,
+      startDate: current.start_date,
+      endDate: current.end_date,
+      wasActive: isBlockedDateActive(current),
+    },
+  }, db);
+
+  return ok({ message: "Blocked date deleted" });
 };
