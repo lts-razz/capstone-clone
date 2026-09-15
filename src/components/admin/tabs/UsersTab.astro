@@ -1,0 +1,84 @@
+---
+const { allAdmins, allCustomers } = Astro.props;
+---
+
+<!-- TAB: USERS -->
+<section id="tab-users" class="tab-section hidden">
+  <!-- Admins -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+      <h2 class="font-bold text-lg" style="color:var(--jet-primary);">Admins</h2>
+      <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{allAdmins?.length ?? 0}</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+          <th class="px-5 py-3 text-left">Name</th>
+          <th class="px-5 py-3 text-left">Email</th>
+          <th class="px-5 py-3 text-left">Joined</th>
+          <th class="px-5 py-3 text-left">Actions</th>
+        </tr></thead>
+        <tbody>
+          {allAdmins?.map(a => (
+            <tr class="border-t border-gray-50 hover:bg-gray-50">
+              <td class="px-5 py-3 font-medium">{a.first_name??''} {a.last_name??''}</td>
+              <td class="px-5 py-3 text-gray-600">{a.email??'—'}</td>
+              <td class="px-5 py-3 text-gray-400 text-xs">{new Date(a.created_at).toLocaleDateString('en-PH')}</td>
+              <td class="px-5 py-3">
+                <button onclick={`demoteUser('${a.id}')`}
+                  class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
+                  style="border-color:#9a4a36;color:#9a4a36;">
+                  Demote to Customer
+                </button>
+              </td>
+            </tr>
+          ))}
+          {(!allAdmins||allAdmins.length===0)&&<tr><td colspan="4" class="px-5 py-8 text-center text-gray-400">No admins found.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Customers -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+      <h2 class="font-bold text-lg" style="color:var(--jet-primary);">Customers</h2>
+      <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{allCustomers?.length ?? 0}</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+          <th class="px-5 py-3 text-left">Name</th>
+          <th class="px-5 py-3 text-left">Email</th>
+          <th class="px-5 py-3 text-left">Joined</th>
+          <th class="px-5 py-3 text-left">Actions</th>
+        </tr></thead>
+        <tbody>
+          {allCustomers?.map(c => (
+            <tr class="border-t border-gray-50 hover:bg-gray-50">
+              <td class="px-5 py-3 font-medium">{c.first_name??''} {c.last_name??''}</td>
+              <td class="px-5 py-3 text-gray-600">{c.email??'—'}</td>
+              <td class="px-5 py-3 text-gray-400 text-xs">{new Date(c.created_at).toLocaleDateString('en-PH')}</td>
+              <td class="px-5 py-3">
+                <div class="flex flex-wrap gap-2">
+                  <button onclick={`promoteStaff('${c.id}')`}
+                    class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
+                    style="border-color:#157a45;color:#157a45;">
+                    Promote to Staff
+                  </button>
+                  <button onclick={`promoteUser('${c.id}')`}
+                    class="px-3 py-1 rounded text-xs font-bold border-2 transition hover:bg-gray-50"
+                    style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);">
+                    Promote to Admin
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {(!allCustomers||allCustomers.length===0)&&<tr><td colspan="4" class="px-5 py-8 text-center text-gray-400">No customers yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+

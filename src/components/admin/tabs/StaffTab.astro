@@ -1,0 +1,45 @@
+---
+const { isAdmin, allEmployees } = Astro.props;
+---
+
+{isAdmin && (
+  <section id="tab-staff-management" class="tab-section hidden">
+    <div class="staff-heading">
+      <div>
+        <p class="staff-eyebrow">Account administration</p>
+        <h2>Staff Management</h2>
+        <p>Create staff sign-ins, update basic details, and control access without changing customer accounts.</p>
+      </div>
+      <button type="button" class="staff-primary-btn" onclick="openStaffModal()">Add staff account</button>
+    </div>
+    <div class="staff-summary">
+      <div><strong>{allEmployees?.length ?? 0}</strong><span>Total staff</span></div>
+      <div><strong>{allEmployees?.filter((employee) => employee.is_active).length ?? 0}</strong><span>Active</span></div>
+      <div><strong>{allEmployees?.filter((employee) => !employee.is_active).length ?? 0}</strong><span>Inactive</span></div>
+    </div>
+    <div class="staff-table-card">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm staff-table">
+          <thead><tr><th>Name</th><th>Contact</th><th>Position</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
+          <tbody>
+            {allEmployees?.map((employee) => (
+              <tr>
+                <td class="font-semibold">{employee.first_name} {employee.last_name}</td>
+                <td><span>{employee.email ?? '—'}</span><small>{employee.phone || 'No phone provided'}</small></td>
+                <td>{employee.position || 'Staff'}</td>
+                <td><span class={`staff-status ${employee.is_active ? 'active' : 'inactive'}`}>{employee.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td>{new Date(employee.created_at).toLocaleDateString('en-PH')}</td>
+                <td><div class="staff-actions">
+                  <button type="button" onclick={`openStaffModal(${JSON.stringify(employee)})`}>Edit</button>
+                  <button type="button" class={employee.is_active ? 'danger' : 'activate'} onclick={`setStaffStatus('${employee.id}', '${employee.is_active ? 'deactivate' : 'activate'}')`}>{employee.is_active ? 'Deactivate' : 'Activate'}</button>
+                </div></td>
+              </tr>
+            ))}
+            {(!allEmployees || allEmployees.length === 0) && <tr><td colspan="6" class="staff-empty">No staff accounts yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+)}
+

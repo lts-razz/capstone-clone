@@ -1,0 +1,85 @@
+---
+const { packages, adminVenueById, formatAdminPackageTime, venues } = Astro.props;
+---
+
+<!-- TAB: PACKAGES -->
+<section id="tab-packages" class="tab-section hidden">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-bold" style="color:var(--jet-primary);">Manage Packages</h2>
+    <button onclick="openPackageModal()" class="px-5 py-2 rounded-lg text-white font-semibold transition hover:opacity-90" style="background:var(--butterscotch-primary);">+ Add Package</button>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+    {packages?.map((p: any) => {
+      const assignedVenues = (p.venue_ids ?? []).map((venueId: string) => adminVenueById[venueId]).filter(Boolean);
+      return (
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        {p.thumbnail_url && <img src={p.thumbnail_url} alt="" class="package-admin-thumbnail" loading="lazy" />}
+        <div class="flex justify-between items-start mb-3">
+          <h3 class="font-bold text-xl" style="color:var(--jet-primary);">{p.name}</h3>
+          <span class={`text-xs px-2 py-0.5 rounded-full font-bold ${p.is_active?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}`}>{p.is_active?'Active':'Inactive'}</span>
+        </div>
+        <div class="mb-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Base price</p>
+          <p class="text-3xl font-black" style="color:var(--butterscotch-primary);">₱{Number(p.price).toLocaleString()}</p>
+        </div>
+        {p.description&&<p class="text-sm text-gray-500 mb-3">{p.description}</p>}
+        {p.inclusions&&<div class="mb-3"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Inclusions</p><p class="text-sm text-gray-600">{p.inclusions}</p></div>}
+        {(p.min_pax || p.max_pax)&&<p class="text-sm text-gray-500 mb-4">Guests: <strong>{p.min_pax ?? 1}{p.max_pax ? `-${p.max_pax}` : '+'}</strong></p>}
+        <p class="package-time-summary"><strong>Time option:</strong> {formatAdminPackageTime(p.time_options)}</p>
+        <div class="package-assigned-venue">
+          <p>Assigned venues</p>
+          {assignedVenues.length > 0 ? (
+            <span>{assignedVenues.map((venue: any) => venue.name).join(', ')}</span>
+          ) : (
+            <span class="package-assigned-venue__missing">No venues selected</span>
+          )}
+        </div>
+        <div class="flex gap-2">
+          <button onclick={`openPackageModal(${JSON.stringify(JSON.stringify(p))})`} class="flex-1 py-1.5 rounded-lg text-sm font-semibold border-2 transition hover:bg-gray-50" style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);">Edit</button>
+          <button onclick={`togglePackage('${p.id}',${p.is_active})`} class={`flex-1 py-1.5 rounded-lg text-sm font-semibold text-white transition hover:opacity-80 ${p.is_active?'bg-red-400':'bg-green-500'}`}>{p.is_active?'Deactivate':'Activate'}</button>
+          <button onclick={`deletePackage(${JSON.stringify(p.id)}, ${JSON.stringify(p.name)})`} class="flex-1 py-1.5 rounded-lg text-sm font-semibold border-2 transition hover:bg-red-50" style="border-color:#9a4a36;color:#9a4a36;">Delete</button>
+        </div>
+      </div>
+    )})}
+    {(!packages || packages.length === 0) && (
+      <div class="col-span-full bg-white rounded-xl border border-gray-100 px-6 py-10 text-center text-sm text-gray-400">No packages found.</div>
+    )}
+  </div>
+  <section class="admin-venues-section mt-10" aria-labelledby="admin-venues-title">
+    <div class="admin-venues-section__header">
+      <div>
+        <h2 id="admin-venues-title">Venues</h2>
+        <p>Manage the venues that can be assigned to packages.</p>
+      </div>
+      <button type="button" onclick="openVenueModal()">Add Venue</button>
+    </div>
+    {
+      venues && venues.length > 0 ? (
+        <div class="admin-venues-grid">
+          {venues.map((venue: any) => (
+            <article class="admin-venue-card">
+              {venue.image_url ? (
+                <img src={venue.image_url} alt={`${venue.name} venue`} loading="lazy" decoding="async" />
+              ) : (
+                <div class="admin-venue-card__placeholder" aria-hidden="true">Venue</div>
+              )}
+              <div class="admin-venue-card__body">
+                <h3>{venue.name}</h3>
+                <p>{venue.description || 'No description provided.'}</p>
+                <button
+                  type="button"
+                  class="admin-venue-card__delete"
+                  data-venue-delete={venue.id}
+                  onclick={`deleteVenue(${JSON.stringify(venue.id)})`}
+                >Delete</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div class="admin-venues-empty">No venues added yet.</div>
+      )
+    }
+  </section>
+</section>
+

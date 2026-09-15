@@ -1,0 +1,89 @@
+---
+const { venues } = Astro.props;
+---
+
+<!-- TAB: AVAILABILITY CALENDAR -->
+<section id="tab-calendar" class="tab-section hidden">
+  <div class="flex flex-wrap gap-4 items-start justify-between mb-6">
+    <div>
+      <h2 class="text-xl font-bold" style="color:var(--jet-primary);">Availability Calendar</h2>
+      <p class="text-sm text-gray-500 mt-0.5">Click any date to view bookings. Book, cancel, complete, or reschedule from here.</p>
+    </div>
+    <div class="flex gap-2 flex-wrap items-center">
+      <button id="adm-prev-month" class="w-9 h-9 rounded-lg border-2 border-gray-200 flex items-center justify-center hover:bg-gray-50 transition text-gray-600">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span id="adm-month-label" class="font-bold text-lg px-3" style="color:var(--jet-primary);min-width:160px;text-align:center;"></span>
+      <button id="adm-next-month" class="w-9 h-9 rounded-lg border-2 border-gray-200 flex items-center justify-center hover:bg-gray-50 transition text-gray-600">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="blocked-date-manager mb-6">
+    <form id="blockedDateForm" class="blocked-date-form">
+      <div>
+        <label for="blockedVenue">Venue</label>
+        <select id="blockedVenue" required>
+          <option value="">Select venue</option>
+          {(venues ?? []).map((venue: any) => (
+            <option value={venue.id}>{venue.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label for="blockedStartDate">Start date</label>
+        <input id="blockedStartDate" type="date" required />
+      </div>
+      <div>
+        <label for="blockedEndDate">End date</label>
+        <input id="blockedEndDate" type="date" required />
+      </div>
+      <div class="blocked-date-form__reason">
+        <label for="blockedReason">Reason</label>
+        <textarea id="blockedReason" rows="2" maxlength="500" required placeholder="Maintenance, private event, venue closure..."></textarea>
+      </div>
+      <button type="submit">Block Dates</button>
+    </form>
+    <div class="blocked-date-list-wrap">
+      <div class="blocked-date-list-wrap__header">
+        <h3>Active blocked dates</h3>
+        <button id="refreshBlockedDates" type="button">Refresh</button>
+      </div>
+      <div id="blockedDateList" class="blocked-date-list">
+        <p class="blocked-date-empty">Loading blocked dates...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex gap-4 flex-wrap mb-5">
+    {[
+      { bg:'#e7efe8', ring:'#157a45', label:'Available' },
+      { bg:'#fbe7df', ring:'#9a4a36', label:'Reserved / booked' },
+      { bg:'#f7f2ea', ring:'#aa8f66', label:'Admin blocked' },
+    ].map(l => (
+      <div class="flex items-center gap-2">
+        <div class="w-5 h-5 rounded-md" style={`background:${l.bg};outline:1.5px solid ${l.ring};`}></div>
+        <span class="text-sm font-medium text-gray-600">{l.label}</span>
+      </div>
+    ))}
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);background:#f9fafb;border-bottom:1px solid #f3f4f6;">
+      {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+        <div style="text-align:center;font-size:0.78rem;font-weight:700;color:#6b7280;padding:10px 0;">{d}</div>
+      ))}
+    </div>
+    <div id="adm-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);"></div>
+    <div id="adm-cal-loading" style="display:none;text-align:center;padding:20px;color:#888;font-size:0.875rem;">Loading bookings…</div>
+  </div>
+
+  <div id="adm-day-detail" class="hidden mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h3 id="adm-detail-date" class="text-lg font-bold" style="color:var(--jet-primary);"></h3>
+      <button id="adm-detail-close" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div id="adm-detail-content" class="space-y-3 text-sm"></div>
+  </div>
+</section>

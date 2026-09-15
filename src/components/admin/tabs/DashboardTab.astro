@@ -1,0 +1,73 @@
+---
+const { isAdmin, stats, packages, enrichedBookings, customQuotationIsFinalized, statusLabels } = Astro.props;
+---
+
+<!-- TAB: DASHBOARD -->
+<section id="tab-dashboard" class={`tab-section ${isAdmin ? '' : 'hidden'}`}>
+  <div class="admin-section-heading">
+    <div>
+      <p class="admin-kicker">Operational snapshot</p>
+      <h2>Today at a Glance</h2>
+    </div>
+    <button data-tab="bookings" class="nav-btn admin-link-action">Open bookings</button>
+  </div>
+  <div class="admin-stats-grid grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+    {[
+      { label:'All reservations', value:stats.total, color:'#664c2f', icon:'All' },
+      { label:'Pending reservations', value:stats.pending, color:'#aa8f66', icon:'PD' },
+      { label:'Booked events', value:stats.booked, color:'#176b42', icon:'BK' },
+      { label:'Cancelled', value:stats.cancelled, color:'#8f2f20', icon:'CX' },
+      { label:'Rescheduled', value:stats.rescheduled, color:'#74552f', icon:'RS' },
+      { label:'Completed', value:stats.completed, color:'#5e554a', icon:'OK' },
+      { label:'Payments collected', value:`₱${stats.revenue.toLocaleString()}`, color:'#155d39', icon:'₱' },
+      { label:'Active packages', value:packages?.filter(p=>p.is_active).length??0, color:'#176b42', icon:'PK' },
+      { label:'Avg booked pax', value:stats.avgPax||'—', color:'#74552f', icon:'PX' },
+    ].map(c => (
+      <div class="admin-stat-card bg-white rounded-xl p-5 shadow-sm border border-gray-100" style={`--stat-color:${c.color}`}>
+        <span class="admin-stat-card__icon">{c.icon}</span>
+        <div class="admin-stat-card__body">
+          <p class="admin-stat-card__label">{c.label}</p>
+          <p class="admin-stat-card__value">{c.value}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+  <div class="admin-panel bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="admin-panel-header px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+      <div>
+        <p class="admin-kicker">Latest activity</p>
+        <h2 class="font-bold text-lg" style="color:var(--jet-primary);">Recent Bookings</h2>
+      </div>
+      <button data-tab="bookings" class="nav-btn admin-link-action">View all</button>
+    </div>
+    <div class="admin-table-wrap overflow-x-auto">
+      <table class="admin-table w-full text-sm">
+        <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+          <th class="px-4 py-3 text-left">Guest</th>
+          <th class="px-4 py-3 text-left">Venue</th>
+          <th class="px-4 py-3 text-left">Event Date</th>
+          <th class="px-4 py-3 text-left">Pax</th>
+          <th class="px-4 py-3 text-left">Total</th>
+          <th class="px-4 py-3 text-left">Status</th>
+        </tr></thead>
+        <tbody>
+          {enrichedBookings.slice(0,8).map(b => (
+            <tr class="border-t border-gray-50 hover:bg-gray-50">
+              <td class="px-4 py-3 font-medium">{b.full_name ?? (b.userName as any)?.email ?? '—'}</td>
+              <td class="px-4 py-3 text-gray-600">{b.venueName ?? '—'}</td>
+              <td class="px-4 py-3 text-gray-600">{b.event_date ? new Date(b.event_date).toLocaleDateString('en-PH') : '—'}</td>
+              <td class="px-4 py-3 text-gray-600">{b.pax ?? '—'}</td>
+              <td class="px-4 py-3 font-semibold" style="color:var(--butterscotch-primary);">{b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'To be confirmed' : b.total_price ? `₱${Number(b.total_price).toLocaleString()}` : '—'}</td>
+              <td class="px-4 py-3">
+                <span class={`wb-badge ${ b.status==='booked'?'wb-badge--success': b.status==='completed'?'wb-badge--neutral': b.status==='cancelled'?'wb-badge--danger': b.status==='rescheduled'?'wb-badge--earth':'wb-badge--neutral'}`}>{b.status === 'pending' && b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'Waiting for Quotation' : statusLabels[b.status] ?? b.status}</span>
+              </td>
+            </tr>
+          ))}
+          {enrichedBookings.length === 0 && (
+            <tr><td colspan="6" class="admin-empty-cell">No recent bookings to show.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

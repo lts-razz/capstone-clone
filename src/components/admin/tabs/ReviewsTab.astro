@@ -1,0 +1,30 @@
+---
+const { reviews } = Astro.props;
+---
+
+<!-- TAB: REVIEWS -->
+<section id="tab-reviews" class="tab-section hidden">
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100"><h2 class="font-bold text-lg" style="color:var(--jet-primary);">All Reviews</h2></div>
+    <div class="divide-y divide-gray-50">
+      {reviews?.map(r => (
+        <div class="px-6 py-5">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <p class="font-semibold">{(r.reviewUser as any)?.first_name} {(r.reviewUser as any)?.last_name}</p>
+              <p class="text-xs text-gray-400">{(r.reviewUser as any)?.email}</p>
+            </div>
+            <div class="text-right">
+              <div class="flex gap-0.5 mb-1">{Array.from({length:5}).map((_,i)=>(<span class={i<r.rating?'text-yellow-400':'text-gray-200'}>★</span>))}</div>
+              <p class="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString('en-PH')}</p>
+            </div>
+          </div>
+          <p class="text-sm text-gray-500">Venue: <strong>{r.reviewVenueName}</strong></p>
+          {r.comment&&<p class="text-sm text-gray-700 mt-2 bg-gray-50 rounded-lg px-4 py-3 italic">"{r.comment}"</p>}
+        </div>
+      ))}
+      {(!reviews||reviews.length===0)&&<p class="px-6 py-12 text-center text-gray-400">No reviews yet.</p>}
+    </div>
+  </div>
+</section>
+
