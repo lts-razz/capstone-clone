@@ -4,85 +4,116 @@ import Layout from "../../layouts/Layout.astro";
 <Layout title="Payment Status">
   <main class="min-h-[70vh] grid place-items-center px-4 wb-page-surface"><section class="max-w-xl w-full p-8 text-center wb-card">
     <h1 id="title" class="text-3xl font-bold">Checking your payment</h1><p id="message" class="mt-3">Please keep this page open while we verify PayMongo.</p>
+    <button id="refresh-status" type="button" class="wb-btn wb-btn--secondary mt-6 hidden">Refresh Status</button>
     <a href="/dashboard" class="wb-btn wb-btn--primary mt-6">View My Bookings</a>
   </section></main>
   <script>
     const id = new URLSearchParams(location.search).get('bookingId');
     const title = document.getElementById('title');
     const el = document.getElementById('message');
+    const refresh = document.getElementById('refresh-status') as HTMLButtonElement | null;
     const maxAttempts = 24;
     const pollDelayMs = 2500;
     let attempts = 0;
+    let stopped = false;
 
-    function setStatus(heading: string, message: string) {
+    function setStatus(heading: string, message: string, options: { canRefresh?: boolean } = {}) {
       if (title) title.textContent = heading;
       if (el) el.textContent = message;
+      refresh?.classList.toggle('hidden', options.canRefresh !== true);
     }
 
     function isSecuredBookingStatus(status: unknown) {
       return status === 'booked' || status === 'rescheduled' || status === 'confirmed';
     }
 
+    function stop(heading: string, message: string, options: { canRefresh?: boolean } = {}) {
+      stopped = true;
+      setStatus(heading, message, options);
+    }
+
     async function check() {
+      if (stopped) return;
       if (!id || !el) {
-        setStatus('Payment status unavailable', 'We could not identify which booking to verify. Please check My Bookings for the current status.');
+        stop('Payment status unavailable', 'We could not identify which booking to verify. Please check My Bookings for the current status.');
         return;
       }
       attempts += 1;
       try {
         const response = await fetch('/api/payments/status?bookingId=' + encodeURIComponent(id));
         if (response.status === 401) {
-          setStatus('Sign in required', 'Please sign in to verify the current payment and booking status.');
+          stop('Sign in required', 'Please sign in to verify the current payment and booking status.');
           return;
         }
         const result = await response.json();
         if (!response.ok) throw new Error(result?.error || 'Could not verify payment status');
 
-        const paymentStatus = result?.payment?.status;
+        const paymentStatus = result?.payment?.status ?? result?.payment?.payment_status;
+        const latestTransactionStatus = result?.latestTransaction?.status;
         const bookingStatus = result?.bookingStatus;
+        const reservationState = result?.booking?.reservationState;
+        const requiresManualReview = result?.booking?.requiresManualReview === true;
         if (isSecuredBookingStatus(bookingStatus)) {
-          setStatus('Booking secured', 'Payment verified. Your booking is now secured.');
+          stop('Booking secured', 'Payment verified by Woodberry. Your booking is now secured.');
           return;
         }
         if (bookingStatus === 'completed') {
-          setStatus('Booking completed', 'Payment verification is recorded and this booking is marked completed.');
+          stop('Booking completed', 'Payment verification is recorded and this booking is marked completed.');
           return;
         }
         if (bookingStatus === 'cancelled') {
-          setStatus(
+          stop(
             'Booking cancelled',
-            paymentStatus === 'paid'
-              ? 'Payment was recorded after this reservation was cancelled. Please contact Woodberry to check your booking.'
+            paymentStatus === 'paid' || paymentStatus === 'partial' || latestTransactionStatus === 'paid'
+              ? requiresManualReview
+                ? 'Payment was verified after this reservation was cancelled. Woodberry must manually review it for refund or next steps.'
+                : 'Payment was recorded after this reservation was cancelled. Please contact Woodberry to check your booking.'
               : 'This booking is cancelled. Please check My Bookings or contact Woodberry before attempting another payment.',
           );
           return;
         }
-        if (paymentStatus === 'failed') {
-          setStatus('Payment failed', 'Payment failed. You may try again from My Bookings while the reservation is still active.');
-          return;
-        }
-        if (attempts >= maxAttempts) {
-          setStatus(
-            'Verification still pending',
-            paymentStatus === 'paid'
-              ? 'Payment was recorded, but the booking status is still pending. Please check My Bookings or contact Woodberry if it does not update shortly.'
-              : 'We could not confirm a successful payment yet. Please check My Bookings before trying again.',
+        if (reservationState === 'expired_cancelled' || reservationState === 'deadline_passed') {
+          stop(
+            'Reservation deadline passed',
+            paymentStatus === 'paid' || paymentStatus === 'partial' || latestTransactionStatus === 'paid'
+              ? 'Payment was verified after the reservation deadline. Woodberry must manually review it for refund or next steps.'
+              : 'This reservation is no longer payable from this checkout. Please check My Bookings before trying again.',
           );
           return;
         }
-        if (paymentStatus === 'paid') {
+        if (latestTransactionStatus === 'failed') {
+          stop('Payment failed', 'Payment failed. You may try again from My Bookings while the reservation is still active.');
+          return;
+        }
+        if (attempts >= maxAttempts) {
+          stop(
+            'Verification still pending',
+            paymentStatus === 'paid' || paymentStatus === 'partial' || latestTransactionStatus === 'paid'
+              ? 'Payment was recorded, but the booking status is still pending. Use Refresh Status or check My Bookings before taking another action.'
+              : 'We could not confirm a successful payment yet. Use Refresh Status or check My Bookings before trying again.',
+            { canRefresh: true },
+          );
+          return;
+        }
+        if (paymentStatus === 'paid' || paymentStatus === 'partial' || latestTransactionStatus === 'paid') {
           setStatus('Payment recorded', 'Payment was recorded. We are waiting for the booking status to update.');
         } else {
           setStatus('Checking your payment', 'Please keep this page open while we verify PayMongo.');
         }
       } catch (err) {
         if (attempts >= maxAttempts) {
-          setStatus('Verification unavailable', 'We could not verify the final status right now. Please check My Bookings before trying again.');
+          stop('Verification unavailable', 'We could not verify the final status right now. Use Refresh Status or check My Bookings before trying again.', { canRefresh: true });
           return;
         }
       }
       setTimeout(check, pollDelayMs);
     }
+    refresh?.addEventListener('click', () => {
+      attempts = 0;
+      stopped = false;
+      setStatus('Checking your payment', 'Refreshing the current Woodberry payment and booking status.');
+      check();
+    });
     check();
   </script>
 </Layout>
