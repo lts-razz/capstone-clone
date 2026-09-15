@@ -4,8 +4,8 @@ import { z } from "zod";
  * POST /api/reviews
  *
  * Required:
- *   bookingId  string (UUID) — must be a booked or completed booking owned by the user
- *   rating     number 1–5
+ *   bookingId  string (UUID) - must be an eligible completed booking owned by the user
+ *   rating     number 1-5
  *
  * Optional:
  *   comment    string (max 1000 chars)

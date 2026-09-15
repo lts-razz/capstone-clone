@@ -1,11 +1,11 @@
-// POST /api/reviews/add — add a review for a booked booking (requires auth)
+// POST /api/reviews/add - add a review after a booking event is complete (requires auth)
 import type { APIRoute } from "astro";
 import { supabase } from "../../../lib/supabase";
 import { getUser } from "../../../lib/auth";
 import { addReviewSchema } from "../../../validation/review";
 import { created, error } from "../../../lib/response";
 import { parseBody } from "../../../lib/parseBody";
-import { normalizeBookingStatus } from "../../../lib/bookingStatus";
+import { canReviewBooking } from "../../../lib/reviewEligibility";
 
 export const prerender = false;
 
@@ -23,18 +23,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { bookingId, rating, comment } = parsed.data;
 
-  // Booking must exist, belong to user, and be booked
+  // Booking must exist, belong to user, and be complete or past its event end.
   const { data: booking } = await supabase
     .from("bookings")
-    .select("id, user_id, status")
+    .select("id, user_id, status, end_date, end_datetime")
     .eq("id", bookingId)
     .single();
 
   if (!booking)                       return error("Booking not found", 404);
   if (booking.user_id !== user.id)    return error("You can only review your own bookings", 403);
-  const bookingStatus = normalizeBookingStatus(booking.status);
-  if (bookingStatus !== "booked" && bookingStatus !== "completed") {
-    return error("You can only review booked or completed bookings", 400);
+  if (!canReviewBooking(booking)) {
+    return error("You can only review after the event has been completed", 400);
   }
 
   // One review per booking
@@ -60,6 +59,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     .single();
 
   if (insertError) {
+    if (insertError.code === "23505") {
+      return error("You have already reviewed this booking", 409);
+    }
     console.error("[AddReview]", insertError.message);
     return error(insertError.message, 500);
   }

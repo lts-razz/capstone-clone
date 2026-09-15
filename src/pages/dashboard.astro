@@ -5,6 +5,7 @@ import { isEmailVerified } from '../lib/auth';
 import { customerGuard } from '../lib/adminGuard';
 import { supabaseAdmin, supabase } from '../lib/supabase';
 import { normalizeBookingStatus } from '../lib/bookingStatus';
+import { canReviewBooking } from '../lib/reviewEligibility';
 import { getReservationDeadlineState, hasRequiredSecuringPayment, normalizeBookingPaymentStatus } from '../lib/reservationValidity';
 import { formatReservationCountdown, formatReservationDeadline } from '../lib/reservationDeadlineClient';
 import { woodberryPhotos } from '../data/woodberryPhotos';
@@ -79,6 +80,7 @@ const { data: existingReviews } = bookingIds.length > 0
   ? await db.from('reviews').select('booking_id').eq('user_id', user.id).in('booking_id', bookingIds)
   : { data: [] };
 const reviewedSet = new Set((existingReviews ?? []).map((r: any) => r.booking_id));
+const now = new Date();
 
 const displayName = profile?.first_name
   ? `${profile.first_name} ${profile.last_name ?? ''}`.trim()
@@ -212,9 +214,8 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
     {normalizedBookings.length > 0 ? (
       <div class="dashboard-bookings">
         {normalizedBookings.map((b) => {
-          const todayD = new Date(); todayD.setHours(0,0,0,0);
-          const endDate = new Date(b.end_date);
-          const canReview = (b.status === 'booked' || b.status === 'completed') && !reviewedSet.has(b.id);
+          const bookingReviewEligible = canReviewBooking(b, now);
+          const canReview = bookingReviewEligible && !reviewedSet.has(b.id);
           const hasReview = reviewedSet.has(b.id);
           const venue     = (venueMap as any)[b.venue_id];
           const venueName = venue?.name ?? 'Unknown Venue';
@@ -229,7 +230,7 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
             ? 'Custom Booking'
             : b.package_type ? (woodberryPackageNames[b.package_type] ?? b.package_type) : 'Woodberry Package';
           const cfg       = statusConfig[b.status] ?? statusConfig.booked;
-          const isCompleted = b.status === 'completed' || (b.status === 'booked' && endDate < todayD);
+          const isCompleted = bookingReviewEligible;
           const reservation = getReservationDeadlineState(b);
           const reservationDeadline = formatReservationDeadline(b.reservation_expires_at);
           const hasPricedTotal = isCustomBooking
