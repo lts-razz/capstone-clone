@@ -67,8 +67,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       ? booking.estimate_summary
       : {};
   const wasCustomPricingFinalized = isCustomBooking
-    && (booking.quotation_status === "finalized"
-      || (booking.quotation_status == null && previousEstimateSummary.pricingStatus === "finalized"))
+    && booking.quotation_status === "finalized"
     && Number(booking.total_price) > 0;
 
   if (isCustomBooking && total <= 0) {

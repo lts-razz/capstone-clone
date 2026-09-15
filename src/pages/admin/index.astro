@@ -43,7 +43,7 @@ const initialAdminTab = isAdmin ? 'dashboard' : 'bookings';
 
 const { data: bookings, error: bookingsError } = await adminClient
   .from('bookings')
-  .select('id, full_name, phone, address, pax, event_date, start_date, end_date, start_datetime, end_datetime, event_type, status, total_price, created_at, updated_at, confirmed_at, cancelled_at, rescheduled_at, one_week_notice_sent_at, special_requests, venue_id, user_id, package_id, package_type, package_price, package_inclusions, rooms_count, selected_rooms, add_ons, extension_selections, corkage_selections, additionals, caterer, use_woodberry_caterer, estimate_summary, minimum_payment_amount, remaining_balance_amount, terms_accepted_at, reservation_created_at, reservation_expires_at, reservation_expired_at, cancellation_reason, cancellation_source')
+  .select('id, full_name, phone, address, pax, event_date, start_date, end_date, start_datetime, end_datetime, event_type, status, total_price, created_at, updated_at, confirmed_at, cancelled_at, rescheduled_at, one_week_notice_sent_at, special_requests, venue_id, user_id, package_id, package_type, package_price, package_inclusions, rooms_count, selected_rooms, add_ons, extension_selections, corkage_selections, additionals, caterer, use_woodberry_caterer, estimate_summary, quotation_status, quotation_finalized_at, minimum_payment_amount, remaining_balance_amount, terms_accepted_at, reservation_created_at, reservation_expires_at, reservation_expired_at, cancellation_reason, cancellation_source')
   .order('created_at', { ascending: false })
   .limit(200);
 
@@ -158,6 +158,13 @@ const enrichedBookings = (bookings ?? []).map(b => {
 });
 
 const statusLabels = BOOKING_STATUS_LABELS;
+
+function customQuotationIsFinalized(booking: any) {
+  return booking.package_type === 'custom-booking'
+    && booking.quotation_status === 'finalized'
+    && Number(booking.total_price) > 0
+    && Number(booking.minimum_payment_amount) > 0;
+}
 
 const { data: venues } = isAdmin
   ? await adminClient.from('venues').select('*').eq('is_active', true).order('name')
@@ -393,9 +400,9 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
                     <td class="px-4 py-3 text-gray-600">{b.venueName ?? '—'}</td>
                     <td class="px-4 py-3 text-gray-600">{b.event_date ? new Date(b.event_date).toLocaleDateString('en-PH') : '—'}</td>
                     <td class="px-4 py-3 text-gray-600">{b.pax ?? '—'}</td>
-                    <td class="px-4 py-3 font-semibold" style="color:var(--butterscotch-primary);">{b.package_type === 'custom-booking' && ((b.estimate_summary as any)?.pricingStatus !== 'finalized' || !Number(b.total_price)) ? 'To be confirmed' : b.total_price ? `₱${Number(b.total_price).toLocaleString()}` : '—'}</td>
+                    <td class="px-4 py-3 font-semibold" style="color:var(--butterscotch-primary);">{b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'To be confirmed' : b.total_price ? `₱${Number(b.total_price).toLocaleString()}` : '—'}</td>
                     <td class="px-4 py-3">
-                      <span class={`wb-badge ${ b.status==='booked'?'wb-badge--success': b.status==='completed'?'wb-badge--neutral': b.status==='cancelled'?'wb-badge--danger': b.status==='rescheduled'?'wb-badge--earth':'wb-badge--neutral'}`}>{b.status === 'pending' && b.package_type === 'custom-booking' && (b.estimate_summary as any)?.pricingStatus !== 'finalized' ? 'Waiting for Quotation' : statusLabels[b.status] ?? b.status}</span>
+                      <span class={`wb-badge ${ b.status==='booked'?'wb-badge--success': b.status==='completed'?'wb-badge--neutral': b.status==='cancelled'?'wb-badge--danger': b.status==='rescheduled'?'wb-badge--earth':'wb-badge--neutral'}`}>{b.status === 'pending' && b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'Waiting for Quotation' : statusLabels[b.status] ?? b.status}</span>
                     </td>
                   </tr>
                 ))}
@@ -534,7 +541,7 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
 
                         {/* Total */}
                         <td class="px-4 py-3 font-bold" style="color:var(--butterscotch-primary);">
-                          {b.package_type === 'custom-booking' && ((b.estimate_summary as any)?.pricingStatus !== 'finalized' || !Number(b.total_price)) ? 'To be confirmed' : b.total_price?`₱${Number(b.total_price).toLocaleString()}`:'—'}
+                          {b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'To be confirmed' : b.total_price?`₱${Number(b.total_price).toLocaleString()}`:'—'}
                         </td>
 
                         <td class={`px-4 py-3 min-w-[190px] ${reservation.warning ? 'reservation-warning-cell' : ''}`}>
@@ -561,7 +568,7 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
                         {/* Status */}
                         <td class="px-4 py-3">
                           <span class={`wb-badge ${statusColors[b.status]??'wb-badge--neutral'}`}>
-                            {b.status === 'pending' && b.package_type === 'custom-booking' && (b.estimate_summary as any)?.pricingStatus !== 'finalized' ? 'Waiting for Quotation' : statusLabels[b.status] ?? b.status}
+                            {b.status === 'pending' && b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'Waiting for Quotation' : statusLabels[b.status] ?? b.status}
                           </span>
                           {b.status === 'cancelled' && (
                             <div class="mt-2 max-w-48 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-800">
@@ -6045,7 +6052,7 @@ function openBookingDetail(jsonStr: string) {
 
   const estimate = b.estimate_summary && typeof b.estimate_summary === 'object' ? b.estimate_summary : {};
   const customPricingFinalized = !isCustomBooking
-    || (estimate.pricingStatus === 'finalized'
+    || (b.quotation_status === 'finalized'
       && Number(b.total_price) > 0
       && Number(b.minimum_payment_amount) > 0);
   setText('bd-package-price', isCustomBooking ? 'Not applicable' : formatEstimateAmount(b.package_price ?? estimate.packageBase));

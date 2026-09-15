@@ -154,7 +154,7 @@ function validateCatalogSelections(
 
 const db = supabaseAdmin ?? supabase;
 
-function reservationInsertError(insertError: { message: string }) {
+function reservationInsertError(insertError: { message: string }, flow: "custom" | "package") {
   if (insertError.message.includes("booking_unavailable")) {
     return error("The selected schedule is no longer available. Please choose another date or time.", 409);
   }
@@ -162,7 +162,12 @@ function reservationInsertError(insertError: { message: string }) {
     return error("The booking schedule or its venues could not be verified. Please reload and try again.", 400);
   }
   console.error("[CreateBookings] Reservation insert failed", insertError.message);
-  return error("We could not submit your booking request. Please try again.", 500);
+  return error(
+    flow === "custom"
+      ? "We could not submit your custom booking request. Please try again."
+      : "We could not create your reservation. Please try again.",
+    500,
+  );
 }
 
 export const POST: APIRoute = async ({ request, cookies }) => {
@@ -348,7 +353,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .select("id, reservation_expires_at")
       .single();
 
-    if (insertError) return reservationInsertError(insertError);
+    if (insertError) return reservationInsertError(insertError, "custom");
 
     try {
       await notifyBookingSubmitted(newBooking.id, db);
@@ -618,7 +623,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     .select("id, reservation_expires_at")
     .single();
 
-  if (insertError) return reservationInsertError(insertError);
+  if (insertError) return reservationInsertError(insertError, "package");
 
   try {
     await notifyBookingSubmitted(newBooking.id, db);

@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request, cookies, url }) => {
   if (!parsed.success) return error("Invalid bookingId", 400);
 
   const { data: booking } = await db.from("bookings")
-    .select("id,user_id,total_price,minimum_payment_amount,status,full_name,package_type,estimate_summary,quotation_status,reservation_expires_at")
+    .select("id,user_id,total_price,minimum_payment_amount,status,full_name,package_type,quotation_status,reservation_expires_at")
     .eq("id", parsed.data.bookingId).eq("user_id", user.id).single();
   if (!booking) return error("Booking not found", 404);
   if (booking.status === "cancelled") return error("Cancelled bookings cannot be paid", 409);
@@ -42,18 +42,10 @@ export const POST: APIRoute = async ({ request, cookies, url }) => {
 
   const quotedTotal = Number(booking.total_price);
   const quotedMinimum = Number(booking.minimum_payment_amount ?? quotedTotal * 0.5);
-  const customPricingStatus = booking.estimate_summary
-    && typeof booking.estimate_summary === "object"
-    && !Array.isArray(booking.estimate_summary)
-      ? booking.estimate_summary.pricingStatus
-      : null;
-  const customQuotationStatus = booking.quotation_status ?? (
-    customPricingStatus === "finalized" ? "finalized" : "pending"
-  );
   if (
     booking.package_type === "custom-booking"
     && (
-      customQuotationStatus !== "finalized"
+      booking.quotation_status !== "finalized"
       || !booking.reservation_expires_at
       || !Number.isFinite(quotedTotal)
       || quotedTotal <= 0
