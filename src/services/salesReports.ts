@@ -15,6 +15,8 @@ export interface SalesReportBooking {
   total_price: number | null;
   package_id: string | null;
   package_type: string | null;
+  venue_id?: string | null;
+  venue_ids?: string[];
 }
 
 export interface SalesReportPayment {
@@ -31,6 +33,12 @@ export interface SalesReportPackageMetric {
   revenue: number;
 }
 
+export interface SalesReportVenueMetric {
+  venueId: string | null;
+  venueName: string;
+  bookingCount: number;
+}
+
 export interface SalesReport {
   period: { type: SalesReportPeriod; start: string; endExclusive: string };
   totalBookings: number;
@@ -39,15 +47,20 @@ export interface SalesReport {
   completedBookings: number;
   cancelledBookings: number;
   rescheduledBookings: number;
+  packageBookings: number;
+  customBookings: number;
+  upcomingBookings: number;
   grossRevenue: number;
   paidRevenue: number;
   unpaidBalance: number;
+  paymentStatusCounts: Record<"unpaid" | "partial" | "paid" | "refunded", number>;
   cancellationCount: number;
   cancellationRate: number;
   cancelledBookingValue: number;
   retainedCancellationRevenue: number;
   revenueByPackage: SalesReportPackageMetric[];
   bookingCountByPackage: SalesReportPackageMetric[];
+  venueUsage: SalesReportVenueMetric[];
   averageBookingValue: number;
   busiestBookingDates: Array<{ date: string; bookingCount: number }>;
   mostSelectedPackages: SalesReportPackageMetric[];
@@ -181,6 +194,7 @@ export function calculateSalesReport(
   payments: SalesReportPayment[],
   period: SalesReport["period"],
   packageNames: Record<string, string> = {},
+  venueNames: Record<string, string> = {},
 ): SalesReport {
   const paymentByBooking = new Map(payments.map((payment) => [payment.booking_id, payment]));
   const validBookings: Array<SalesReportBooking & { status: BookingStatus }> = bookings
@@ -189,8 +203,16 @@ export function calculateSalesReport(
   const statusCounts: Record<BookingStatus, number> = {
     pending: 0, booked: 0, rescheduled: 0, cancelled: 0, completed: 0,
   };
+  const paymentStatusCounts: Record<"unpaid" | "partial" | "paid" | "refunded", number> = {
+    unpaid: 0, partial: 0, paid: 0, refunded: 0,
+  };
   const packages = new Map<string, SalesReportPackageMetric>();
+  const venues = new Map<string, SalesReportVenueMetric>();
   const dates = new Map<string, number>();
+  const today = new Date().toISOString().slice(0, 10);
+  let packageBookings = 0;
+  let customBookings = 0;
+  let upcomingBookings = 0;
   let grossRevenue = 0;
   let paidRevenue = 0;
   let unpaidBalance = 0;
@@ -202,6 +224,17 @@ export function calculateSalesReport(
     const status = booking.status;
     statusCounts[status]++;
     const payment = paymentByBooking.get(booking.id);
+    const paymentStatus = payment?.payment_status ?? "unpaid";
+    paymentStatusCounts[paymentStatus]++;
+    if (booking.package_type === "custom-booking") {
+      customBookings++;
+    } else {
+      packageBookings++;
+    }
+    const eventDate = (booking.event_date ?? booking.start_date).slice(0, 10);
+    if ((status === "pending" || status === "booked" || status === "rescheduled") && eventDate >= today) {
+      upcomingBookings++;
+    }
     const paid = payment?.payment_status === "refunded" ? 0 : Math.max(Number(payment?.amount_paid ?? 0), 0);
     const total = Math.max(Number(payment?.total_booking_amount ?? booking.total_price ?? 0), 0);
     const isExpectedRevenue = status === "booked" || status === "completed";
@@ -227,13 +260,27 @@ export function calculateSalesReport(
       bookingCount: 0,
       revenue: 0,
     };
-    if (status !== "pending") packageMetric.bookingCount++;
+    if (status !== "pending" && status !== "cancelled") packageMetric.bookingCount++;
     packageMetric.revenue += recognizedGross;
     packages.set(packageKey, packageMetric);
 
     if (status !== "cancelled" && status !== "pending") {
-      const date = (booking.event_date ?? booking.start_date).slice(0, 10);
-      dates.set(date, (dates.get(date) ?? 0) + 1);
+      dates.set(eventDate, (dates.get(eventDate) ?? 0) + 1);
+      const bookingVenueIds = booking.venue_ids?.length
+        ? booking.venue_ids
+        : booking.venue_id
+          ? [booking.venue_id]
+          : [null];
+      for (const venueId of bookingVenueIds) {
+        const venueKey = venueId ?? "unspecified";
+        const venueMetric = venues.get(venueKey) ?? {
+          venueId,
+          venueName: venueId ? (venueNames[venueId] ?? "Unknown venue") : "Unspecified venue",
+          bookingCount: 0,
+        };
+        venueMetric.bookingCount++;
+        venues.set(venueKey, venueMetric);
+      }
     }
   }
 
@@ -250,15 +297,20 @@ export function calculateSalesReport(
     completedBookings: statusCounts.completed,
     cancelledBookings: statusCounts.cancelled,
     rescheduledBookings: statusCounts.rescheduled,
+    packageBookings,
+    customBookings,
+    upcomingBookings,
     grossRevenue: roundMoney(grossRevenue),
     paidRevenue: roundMoney(paidRevenue),
     unpaidBalance: roundMoney(unpaidBalance),
+    paymentStatusCounts,
     cancellationCount: statusCounts.cancelled,
     cancellationRate: validBookings.length ? roundMoney((statusCounts.cancelled / validBookings.length) * 100) : 0,
     cancelledBookingValue: roundMoney(cancelledBookingValue),
     retainedCancellationRevenue: roundMoney(retainedCancellationRevenue),
     revenueByPackage: [...packageMetrics].sort((a, b) => b.revenue - a.revenue || a.packageName.localeCompare(b.packageName)),
     bookingCountByPackage: byCount,
+    venueUsage: [...venues.values()].sort((a, b) => b.bookingCount - a.bookingCount || a.venueName.localeCompare(b.venueName)),
     averageBookingValue: revenueBookingCount ? roundMoney(grossRevenue / revenueBookingCount) : 0,
     busiestBookingDates: [...dates.entries()]
       .map(([date, bookingCount]) => ({ date, bookingCount }))

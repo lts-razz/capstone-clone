@@ -2387,6 +2387,194 @@ if (_wkInput) _wkInput.value = _todayStr;
 if (_moInput) _moInput.value = _today.getFullYear() + '-' + String(_today.getMonth() + 1).padStart(2, '0');
 switchReport('weekly');
 
+// REVIEWS
+function applyReviewControls() {
+  const query = ((document.getElementById('reviewSearch') as HTMLInputElement | null)?.value ?? '').trim().toLowerCase();
+  const rating = (document.getElementById('reviewRatingFilter') as HTMLSelectElement | null)?.value ?? 'all';
+  const from = (document.getElementById('reviewDateFrom') as HTMLInputElement | null)?.value ?? '';
+  const to = (document.getElementById('reviewDateTo') as HTMLInputElement | null)?.value ?? '';
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('.review-row'));
+  let visible = 0;
+
+  rows.forEach((row) => {
+    const created = row.dataset.created ?? '';
+    const show = (!query || (row.dataset.search ?? '').includes(query))
+      && (rating === 'all' || row.dataset.rating === rating)
+      && (!from || (!!created && created >= from))
+      && (!to || (!!created && created <= to));
+    row.classList.toggle('hidden', !show);
+    if (show) visible++;
+  });
+
+  setText('reviewsVisibleCount', String(visible));
+  setText('reviewsTotalCount', String(rows.length));
+  document.getElementById('reviewsNoMatches')?.classList.toggle('hidden', visible > 0);
+}
+
+function clearReviewFilters() {
+  const search = document.getElementById('reviewSearch') as HTMLInputElement | null;
+  const rating = document.getElementById('reviewRatingFilter') as HTMLSelectElement | null;
+  const from = document.getElementById('reviewDateFrom') as HTMLInputElement | null;
+  const to = document.getElementById('reviewDateTo') as HTMLInputElement | null;
+  if (search) search.value = '';
+  if (rating) rating.value = 'all';
+  if (from) from.value = '';
+  if (to) to.value = '';
+  applyReviewControls();
+}
+
+async function deleteReview(reviewId: string, customerName: string) {
+  if (!reviewId) return;
+  if (!(window as any).__isAdmin) {
+    toast('Only admins can moderate reviews', false);
+    return;
+  }
+
+  const confirmed = await showConfirm({
+    title: 'Remove Review',
+    message: `Remove ${customerName || 'this customer'}'s submitted review? This cannot be undone.`,
+    okLabel: 'Remove Review',
+    okColor: '#9a4a36',
+    icon: 'RV',
+  });
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(`/api/reviews/user?reviewId=${encodeURIComponent(reviewId)}`, { method: 'DELETE' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error ?? 'Could not remove review');
+    document.querySelector<HTMLElement>(`.review-row[data-review-id="${CSS.escape(reviewId)}"]`)?.remove();
+    applyReviewControls();
+    toast(payload.message ?? 'Review removed');
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Could not remove review', false);
+  }
+}
+
+document.getElementById('reviewSearch')?.addEventListener('input', applyReviewControls);
+['reviewRatingFilter', 'reviewDateFrom', 'reviewDateTo'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('change', applyReviewControls);
+});
+document.getElementById('reviewClearFilters')?.addEventListener('click', clearReviewFilters);
+document.querySelectorAll<HTMLElement>('.review-delete-button').forEach((button) => {
+  button.addEventListener('click', () => {
+    deleteReview(button.dataset.reviewId ?? '', button.dataset.customerName ?? 'this customer');
+  });
+});
+applyReviewControls();
+
+// REPORTS
+switchReport = function(mode: string) {
+  _reportMode = mode;
+  const weekly = document.getElementById('rpt-week-picker');
+  const monthly = document.getElementById('rpt-month-picker');
+  const btnW = document.getElementById('rpt-btn-weekly');
+  const btnM = document.getElementById('rpt-btn-monthly');
+  weekly?.classList.toggle('hidden', mode !== 'weekly');
+  monthly?.classList.toggle('hidden', mode !== 'monthly');
+  btnW?.classList.toggle('active', mode === 'weekly');
+  btnM?.classList.toggle('active', mode === 'monthly');
+  if (btnW) btnW.style.cssText = mode === 'weekly' ? 'background:var(--wb-action);color:var(--wb-on-action);' : 'background:white;color:var(--wb-green-dark);';
+  if (btnM) btnM.style.cssText = mode === 'monthly' ? 'background:var(--wb-action);color:var(--wb-on-action);' : 'background:white;color:var(--wb-green-dark);';
+};
+
+function formatReportDate(value: string | null) {
+  return value ? new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '-';
+}
+
+function formatReportMoney(value: unknown) {
+  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value ?? 0));
+}
+
+generateReport = async function() {
+  const anchor = _reportMode === 'weekly'
+    ? (document.getElementById('rpt-week-input') as HTMLInputElement).value
+    : (document.getElementById('rpt-month-input') as HTMLInputElement).value;
+  if (!anchor) { toast(`Pick a ${_reportMode === 'weekly' ? 'week' : 'month'} first`, false); return; }
+
+  const button = document.getElementById('generate-report-button') as HTMLButtonElement | null;
+  if (button) { button.disabled = true; button.textContent = 'Generating...'; }
+  try {
+    const response = await fetch(`/api/admin/sales-report?period=${encodeURIComponent(_reportMode)}&anchor=${encodeURIComponent(anchor)}`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error ?? 'Could not generate the sales report');
+
+    const report = payload.report;
+    const reportBookings: any[] = payload.bookings ?? [];
+    const start = new Date(report.period.start);
+    const end = new Date(report.period.endExclusive);
+    end.setUTCDate(end.getUTCDate() - 1);
+    const periodLabel = _reportMode === 'weekly'
+      ? `${formatReportDate(start.toISOString())} - ${formatReportDate(end.toISOString())}`
+      : start.toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+    setText('rpt-title', _reportMode === 'weekly' ? 'Weekly Management Report' : 'Monthly Management Report');
+    setText('rpt-period', periodLabel);
+    setText('rpt-generated', new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' } as any));
+    setText('rpt-total', String(report.totalBookings));
+    setText('rpt-pending', String(report.pendingReservations));
+    setText('rpt-booked', String(report.bookedBookings));
+    setText('rpt-rescheduled', String(report.rescheduledBookings));
+    setText('rpt-completed', String(report.completedBookings));
+    setText('rpt-cancelled', String(report.cancelledBookings));
+    setText('rpt-package-bookings', String(report.packageBookings));
+    setText('rpt-custom-bookings', String(report.customBookings));
+    setText('rpt-upcoming', String(report.upcomingBookings));
+    setText('rpt-gross', formatReportMoney(report.grossRevenue));
+    setText('rpt-paid', formatReportMoney(report.paidRevenue));
+    setText('rpt-unpaid', formatReportMoney(report.unpaidBalance));
+    setText('rpt-pay-unpaid', String(report.paymentStatusCounts?.unpaid ?? 0));
+    setText('rpt-pay-partial', String(report.paymentStatusCounts?.partial ?? 0));
+    setText('rpt-pay-paid', String(report.paymentStatusCounts?.paid ?? 0));
+    setText('rpt-pay-refunded', String(report.paymentStatusCounts?.refunded ?? 0));
+
+    const breakdown = document.getElementById('rpt-breakdown-body')!;
+    breakdown.innerHTML = report.revenueByPackage.length
+      ? report.revenueByPackage.map((item: any) => `<tr class="border-t border-gray-50"><td class="px-4 py-2 font-medium">${escapeHtml(item.packageName)}</td><td class="px-4 py-2 text-gray-600">${escapeHtml(item.bookingCount)}</td><td class="px-4 py-2 font-semibold">${formatReportMoney(item.revenue)}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-400">No package usage in this period.</td></tr>';
+
+    const venueBody = document.getElementById('rpt-venue-body')!;
+    venueBody.innerHTML = report.venueUsage.length
+      ? report.venueUsage.map((item: any) => `<tr class="border-t border-gray-50"><td class="px-4 py-2 font-medium">${escapeHtml(item.venueName)}</td><td class="px-4 py-2 text-gray-600">${escapeHtml(item.bookingCount)}</td></tr>`).join('')
+      : '<tr><td colspan="2" class="px-4 py-6 text-center text-gray-400">No venue usage in this period.</td></tr>';
+
+    const distribution = document.getElementById('rpt-distribution')!;
+    const dateEntries = [...(report.busiestBookingDates ?? [])].sort((a: any, b: any) => String(a.date).localeCompare(String(b.date)));
+    const maxDateCount = Math.max(1, ...dateEntries.map((item: any) => Number(item.bookingCount ?? 0)));
+    distribution.innerHTML = dateEntries.length
+      ? dateEntries.map((item: any) => {
+          const pct = Math.max(8, Math.round((Number(item.bookingCount ?? 0) / maxDateCount) * 100));
+          return `<div class="flex items-center gap-3"><span class="text-gray-500 w-32 shrink-0">${formatReportDate(`${String(item.date)}T00:00:00Z`)}</span><div class="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden"><div class="h-full rounded-full" style="width:${pct}%;background:var(--butterscotch-primary);"></div></div><span class="font-bold w-8 text-right">${escapeHtml(item.bookingCount)}</span></div>`;
+        }).join('')
+      : '<p class="text-gray-400">No active booked, rescheduled, or completed event dates in this period.</p>';
+
+    const body = document.getElementById('rpt-bookings-body')!;
+    body.innerHTML = reportBookings.length
+      ? reportBookings.map((booking: any) => {
+          const payment = booking.payment;
+          const total = payment?.total_booking_amount ?? booking.total_price ?? 0;
+          const paid = payment?.payment_status === 'refunded' ? 0 : payment?.amount_paid ?? 0;
+          const balance = Math.max(Number(total ?? 0) - Number(paid ?? 0), 0);
+          const statusClass = BOOKING_STATUS_CLASSES[booking.status] ?? 'bg-gray-100 text-gray-600';
+          return `<tr class="border-t border-gray-50"><td class="px-3 py-2 font-medium">${escapeHtml(booking.full_name || '-')}</td><td class="px-3 py-2 text-gray-600">${escapeHtml(booking.venueName || '-')}</td><td class="px-3 py-2 text-gray-600">${escapeHtml(booking.packageName || '-')}</td><td class="px-3 py-2 text-gray-600">${formatReportDate(booking.event_date)}</td><td class="px-3 py-2 text-gray-600">${escapeHtml(booking.pax ?? '-')}</td><td class="px-3 py-2 font-semibold">${formatReportMoney(total)}<small class="report-paid-line">Paid ${formatReportMoney(paid)} / Balance ${formatReportMoney(balance)}</small></td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${statusClass}">${escapeHtml(statusLabel(booking.status))}</span></td></tr>`;
+        }).join('')
+      : '<tr><td colspan="7" class="px-3 py-8 text-center text-gray-400">No bookings were created in this period.</td></tr>';
+
+    document.getElementById('report-output')!.classList.remove('hidden');
+    document.getElementById('report-empty')!.classList.add('hidden');
+  } catch (reportError) {
+    toast(reportError instanceof Error ? reportError.message : 'Could not generate the report', false);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Generate Report'; }
+  }
+};
+
+document.getElementById('rpt-btn-weekly')?.addEventListener('click', () => switchReport('weekly'));
+document.getElementById('rpt-btn-monthly')?.addEventListener('click', () => switchReport('monthly'));
+document.getElementById('generate-report-button')?.addEventListener('click', generateReport);
+document.getElementById('print-report-button')?.addEventListener('click', printReport);
+switchReport('weekly');
+
 // ── EXPOSE TO HTML onclick ATTRIBUTES ────────────────────────────────────────
 (window as any).confirmBooking    = confirmBooking;
 (window as any).cancelBooking     = cancelBooking;

@@ -3,150 +3,149 @@
 
 <!-- TAB: REPORTS -->
 <section id="tab-reports" class="tab-section hidden">
-
   <div class="reports-intro mb-6">
-    <p class="reports-eyebrow">Financial overview</p>
-    <h2>Sales Reports</h2>
-    <p>Review bookings, collections, outstanding balances, and package performance for a selected week or month.</p>
+    <p class="reports-eyebrow">Operational summary</p>
+    <h2>Reports Management</h2>
+    <p>Review bookings and authoritative booking-payment records for a selected week or month.</p>
   </div>
 
-  <!-- Period selector -->
   <div class="flex flex-wrap gap-3 items-center mb-6">
     <div class="flex rounded-xl overflow-hidden border-2 border-gray-200">
-      <button id="rpt-btn-weekly"  onclick="switchReport('weekly')"  class="rpt-mode-btn px-5 py-2 text-sm font-semibold transition-all">Weekly</button>
-      <button id="rpt-btn-monthly" onclick="switchReport('monthly')" class="rpt-mode-btn px-5 py-2 text-sm font-semibold transition-all">Monthly</button>
+      <button id="rpt-btn-weekly" type="button" class="rpt-mode-btn px-5 py-2 text-sm font-semibold transition-all">Weekly</button>
+      <button id="rpt-btn-monthly" type="button" class="rpt-mode-btn px-5 py-2 text-sm font-semibold transition-all">Monthly</button>
     </div>
 
-    <!-- Week picker -->
     <div id="rpt-week-picker" class="flex items-center gap-2">
-      <label class="text-sm font-semibold text-gray-500">Week containing:</label>
+      <label for="rpt-week-input" class="text-sm font-semibold text-gray-500">Week containing:</label>
       <input type="date" id="rpt-week-input" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none" />
     </div>
 
-    <!-- Month picker -->
     <div id="rpt-month-picker" class="hidden flex items-center gap-2">
-      <label class="text-sm font-semibold text-gray-500">Month:</label>
+      <label for="rpt-month-input" class="text-sm font-semibold text-gray-500">Month:</label>
       <input type="month" id="rpt-month-input" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none" />
     </div>
 
-    <button id="generate-report-button" onclick="generateReport()" class="px-5 py-2 rounded-xl text-white text-sm font-bold transition hover:opacity-90" style="background:var(--butterscotch-primary);">Generate Report</button>
-    <button onclick="printReport()" class="px-5 py-2 rounded-xl text-sm font-bold border-2 transition hover:bg-gray-50" style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);">🖨 Print / Save PDF</button>
+    <button id="generate-report-button" type="button" class="px-5 py-2 rounded-xl text-white text-sm font-bold transition hover:opacity-90" style="background:var(--butterscotch-primary);">Generate Report</button>
+    <button id="print-report-button" type="button" class="px-5 py-2 rounded-xl text-sm font-bold border-2 transition hover:bg-gray-50" style="border-color:var(--butterscotch-primary);color:var(--butterscotch-primary);">Print / Save PDF</button>
   </div>
 
-  <!-- Report output (printable area) -->
   <div id="report-output" class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 hidden">
-
-    <!-- Report header -->
     <div class="flex justify-between items-start mb-6 pb-5 border-b border-gray-100">
       <div>
         <h2 id="rpt-title" class="text-2xl font-black" style="color:var(--jet-primary);"></h2>
         <p id="rpt-period" class="text-sm text-gray-400 mt-0.5"></p>
+        <p class="report-period-note mt-2">Figures include bookings created during the selected period. Payment values come from booking payment records when available.</p>
       </div>
       <p class="text-xs text-gray-400">Generated: <span id="rpt-generated"></span></p>
     </div>
 
-    <!-- Metric cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
       {[
-        { id:'rpt-total', label:'Total Reservations', color:'#7c6246', icon:'BK' },
-        { id:'rpt-pending', label:'Pending Reservations', color:'#aa8f66', icon:'PD' },
-        { id:'rpt-cancelled', label:'Cancellations', color:'#9a4a36', icon:'CX' },
-        { id:'rpt-gross', label:'Gross Revenue', color:'#1f6b43', icon:'GR' },
-        { id:'rpt-paid', label:'Paid Revenue', color:'#157a45', icon:'PR' },
-        { id:'rpt-unpaid', label:'Unpaid Balance', color:'#9a4a36', icon:'UB' },
-        { id:'rpt-top-package', label:'Top Package', color:'#aa8f66', icon:'TP' },
-      ].map(c => (
-        <div class="rounded-xl p-4 border border-gray-100 bg-gray-50 flex flex-col items-center text-center">
-          <span class="text-2xl mb-1">{c.icon}</span>
-          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">{c.label}</p>
-          <p id={c.id} class="text-2xl font-black" style={`color:${c.color}`}>—</p>
+        { id: 'rpt-total', label: 'Total bookings' },
+        { id: 'rpt-pending', label: 'Pending payment' },
+        { id: 'rpt-booked', label: 'Booked' },
+        { id: 'rpt-rescheduled', label: 'Rescheduled' },
+        { id: 'rpt-completed', label: 'Completed' },
+        { id: 'rpt-cancelled', label: 'Cancelled' },
+      ].map((card) => (
+        <div class="rounded-xl p-4 border border-gray-100 bg-gray-50">
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">{card.label}</p>
+          <p id={card.id} class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
       ))}
     </div>
 
-    <!-- Distribution by date -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+      <section class="border border-gray-100 rounded-xl p-5 bg-gray-50">
+        <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-4">Booking Mix</h3>
+        <dl class="space-y-3 text-sm">
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Package bookings</dt><dd id="rpt-package-bookings" class="font-bold">-</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Custom bookings</dt><dd id="rpt-custom-bookings" class="font-bold">-</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Upcoming active events</dt><dd id="rpt-upcoming" class="font-bold">-</dd></div>
+        </dl>
+      </section>
+
+      <section class="border border-gray-100 rounded-xl p-5 bg-gray-50">
+        <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-4">Payment Summary</h3>
+        <dl class="space-y-3 text-sm">
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Payable booking value</dt><dd id="rpt-gross" class="font-bold">-</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Amount paid</dt><dd id="rpt-paid" class="font-bold">-</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Outstanding balance</dt><dd id="rpt-unpaid" class="font-bold">-</dd></div>
+        </dl>
+      </section>
+
+      <section class="border border-gray-100 rounded-xl p-5 bg-gray-50">
+        <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-4">Payment Statuses</h3>
+        <dl class="space-y-3 text-sm">
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Unpaid</dt><dd id="rpt-pay-unpaid" class="font-bold">-</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Partial</dt><dd id="rpt-pay-partial" class="font-bold">-</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Paid</dt><dd id="rpt-pay-paid" class="font-bold">-</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-gray-500">Refunded</dt><dd id="rpt-pay-refunded" class="font-bold">-</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+      <section>
+        <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Package Usage</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+                <th class="px-4 py-2 text-left">Package</th>
+                <th class="px-4 py-2 text-left">Bookings</th>
+                <th class="px-4 py-2 text-left">Recognized value</th>
+              </tr>
+            </thead>
+            <tbody id="rpt-breakdown-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Venue Usage</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+                <th class="px-4 py-2 text-left">Venue</th>
+                <th class="px-4 py-2 text-left">Bookings</th>
+              </tr>
+            </thead>
+            <tbody id="rpt-venue-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
     <div class="mb-8">
-      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Booking Distribution by Date</h3>
+      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Active Event Dates</h3>
       <div id="rpt-distribution" class="space-y-2 text-sm"></div>
     </div>
 
-    <!-- Breakdown by event type/package -->
-    <div class="mb-8">
-      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Revenue by Package</h3>
-      <div id="rpt-breakdown" class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-            <th class="px-4 py-2 text-left">Event / Package</th>
-            <th class="px-4 py-2 text-left">Bookings</th>
-            <th class="px-4 py-2 text-left">Gross Revenue</th>
-          </tr></thead>
-          <tbody id="rpt-breakdown-body"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Bookings table -->
     <div>
-      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">All Bookings in Period</h3>
+      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Bookings in Period</h3>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
-          <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-            <th class="px-3 py-2 text-left">Guest</th>
-            <th class="px-3 py-2 text-left">Venue</th>
-            <th class="px-3 py-2 text-left">Package</th>
-            <th class="px-3 py-2 text-left">Event Date</th>
-            <th class="px-3 py-2 text-left">Pax</th>
-            <th class="px-3 py-2 text-left">Total</th>
-            <th class="px-3 py-2 text-left">Status</th>
-          </tr></thead>
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+              <th class="px-3 py-2 text-left">Guest</th>
+              <th class="px-3 py-2 text-left">Venue</th>
+              <th class="px-3 py-2 text-left">Package</th>
+              <th class="px-3 py-2 text-left">Event Date</th>
+              <th class="px-3 py-2 text-left">Pax</th>
+              <th class="px-3 py-2 text-left">Payment</th>
+              <th class="px-3 py-2 text-left">Status</th>
+            </tr>
+          </thead>
           <tbody id="rpt-bookings-body"></tbody>
         </table>
       </div>
     </div>
-
-    <div class="forecast-panel mb-8">
-      <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div>
-          <p class="reports-eyebrow">Estimate</p>
-          <h3 class="text-lg font-bold" style="color:var(--jet-primary);">Next Month Sales Forecast</h3>
-          <p id="rpt-forecast-period" class="text-sm text-gray-500"></p>
-        </div>
-        <span class="forecast-badge">Estimate only</span>
-      </div>
-      <p id="rpt-forecast-unavailable" class="report-period-note hidden"></p>
-      <div id="rpt-forecast-results" class="grid grid-cols-1 sm:grid-cols-3 gap-4 hidden">
-        <div><p>Expected bookings</p><strong id="rpt-forecast-bookings">—</strong></div>
-        <div><p>Expected revenue</p><strong id="rpt-forecast-revenue">—</strong></div>
-        <div><p>Likely top package</p><strong id="rpt-forecast-package">—</strong></div>
-      </div>
-      <p id="rpt-forecast-method" class="forecast-method hidden"></p>
-    </div>
-
-    <div class="mt-8">
-      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400 mb-3">Cancellation Statistics</h3>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-            <th class="px-4 py-2 text-left">Measure</th>
-            <th class="px-4 py-2 text-left">Result</th>
-            <th class="px-4 py-2 text-left">Context</th>
-          </tr></thead>
-          <tbody>
-            <tr class="border-t border-gray-50"><td class="px-4 py-2 font-medium">Cancelled bookings</td><td id="rpt-cancel-count" class="px-4 py-2 font-bold">—</td><td class="px-4 py-2 text-gray-500">Bookings created in this period</td></tr>
-            <tr class="border-t border-gray-50"><td class="px-4 py-2 font-medium">Cancellation rate</td><td id="rpt-cancel-rate" class="px-4 py-2 font-bold">—</td><td class="px-4 py-2 text-gray-500">Cancellations as a share of bookings</td></tr>
-            <tr class="border-t border-gray-50"><td class="px-4 py-2 font-medium">Cancelled booking value</td><td id="rpt-cancel-value" class="px-4 py-2 font-bold">—</td><td class="px-4 py-2 text-gray-500">Gross value attached to cancellations</td></tr>
-            <tr class="border-t border-gray-50"><td class="px-4 py-2 font-medium">Retained payments</td><td id="rpt-cancel-retained" class="px-4 py-2 font-bold">—</td><td class="px-4 py-2 text-gray-500">Payments not marked as refunded</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </div><!-- /report-output -->
-
-  <div id="report-empty" class="text-center py-16 text-gray-400">
-    <p class="text-4xl mb-3">📈</p>
-    <p class="font-semibold">Select a period and click <strong>Generate Report</strong></p>
   </div>
 
+  <div id="report-empty" class="text-center py-16 text-gray-400">
+    <p class="font-semibold">Select a period and generate a report.</p>
+    <p class="text-sm mt-1">No report data is shown until a week or month is selected.</p>
+  </div>
 </section>
-

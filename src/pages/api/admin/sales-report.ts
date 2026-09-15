@@ -1,13 +1,12 @@
 import type { APIRoute } from "astro";
 import { adminGuard } from "../../../lib/adminGuard";
 import {
-  getBookingStatusDatabaseValues,
   isRecognizedBookingStatus,
   normalizeBookingStatus,
 } from "../../../lib/bookingStatus";
 import { error, ok } from "../../../lib/response";
 import { supabase, supabaseAdmin } from "../../../lib/supabase";
-import { calculateSalesForecast, calculateSalesReport, getSalesReportRange, type SalesReportPeriod } from "../../../services/salesReports";
+import { calculateSalesReport, getSalesReportRange, type SalesReportPeriod } from "../../../services/salesReports";
 import { normalizeBookingPaymentStatus } from "../../../lib/reservationValidity";
 
 export const prerender = false;
@@ -50,76 +49,72 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const bookingIds = validBookings.map((booking) => booking.id);
   const packageIds = [...new Set(validBookings.map((booking) => booking.package_id).filter((id): id is string => Boolean(id)))];
   const venueIds = [...new Set(validBookings.map((booking) => booking.venue_id).filter((id): id is string => Boolean(id)))];
-  const [{ data: payments, error: paymentsError }, { data: packages, error: packagesError }, { data: venues, error: venuesError }] = await Promise.all([
+  const [{ data: payments, error: paymentsError }, { data: packages, error: packagesError }, { data: venueAssignments, error: venueAssignmentsError }, { data: venues, error: venuesError }] = await Promise.all([
     bookingIds.length
       ? db.from("booking_payments").select("booking_id, total_booking_amount, amount_paid, payment_status").in("booking_id", bookingIds)
       : Promise.resolve({ data: [], error: null }),
     packageIds.length
       ? db.from("packages").select("id, name").in("id", packageIds)
       : Promise.resolve({ data: [], error: null }),
+    bookingIds.length
+      ? db.from("booking_venue_assignments").select("booking_id, venue_id").in("booking_id", bookingIds)
+      : Promise.resolve({ data: [], error: null }),
     venueIds.length
       ? db.from("venues").select("id, name").in("id", venueIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
-  if (paymentsError || packagesError || venuesError) {
-    console.error("[SalesReport] related data:", paymentsError?.message ?? packagesError?.message ?? venuesError?.message);
+  if (paymentsError || packagesError || venueAssignmentsError || venuesError) {
+    console.error("[SalesReport] related data:", paymentsError?.message ?? packagesError?.message ?? venueAssignmentsError?.message ?? venuesError?.message);
     return error("Could not load report payment or package data", 500);
   }
 
   const packageNames = Object.fromEntries((packages ?? []).map((item) => [item.id, item.name]));
-  const venueNames = Object.fromEntries((venues ?? []).map((item) => [item.id, item.name]));
+  const venueNames: Record<string, string> = Object.fromEntries((venues ?? []).map((item) => [item.id, item.name]));
+  const venueIdsByBookingId = new Map<string, string[]>();
+  for (const assignment of venueAssignments ?? []) {
+    if (!assignment.booking_id || !assignment.venue_id) continue;
+    const ids = venueIdsByBookingId.get(assignment.booking_id) ?? [];
+    ids.push(assignment.venue_id);
+    venueIdsByBookingId.set(assignment.booking_id, ids);
+  }
+  const assignedVenueIds = [...new Set((venueAssignments ?? []).map((assignment) => assignment.venue_id).filter((id): id is string => Boolean(id)))];
+  const missingVenueIds = assignedVenueIds.filter((id) => !(id in venueNames));
+  if (missingVenueIds.length) {
+    const { data: assignedVenues, error: assignedVenuesError } = await db
+      .from("venues")
+      .select("id, name")
+      .in("id", missingVenueIds);
+    if (assignedVenuesError) {
+      console.error("[SalesReport] assigned venues:", assignedVenuesError.message);
+      return error("Could not load report venue data", 500);
+    }
+    for (const venue of assignedVenues ?? []) {
+      venueNames[venue.id] = venue.name;
+    }
+  }
   const normalizedPayments = (payments ?? []).map((item) => ({
     ...item,
     payment_status: normalizeBookingPaymentStatus(item.payment_status),
   }));
   const paymentByBooking = Object.fromEntries(normalizedPayments.map((item) => [item.booking_id, item]));
-  const reportBookings = validBookings.map((booking) => ({
-    ...booking,
-    venueName: booking.venue_id ? (venueNames[booking.venue_id] ?? "Unspecified venue") : "Unspecified venue",
-    packageName: booking.package_id
-      ? (packageNames[booking.package_id] ?? booking.package_type ?? "Unspecified package")
-      : (booking.package_type ?? "Unspecified package"),
-    payment: paymentByBooking[booking.id] ?? null,
-  }));
-  const now = new Date();
-  const targetMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-  const targetMonth = targetMonthDate.toISOString().slice(0, 7);
-  const historyEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-  const { data: forecastBookings, error: forecastBookingsError } = await db
-    .from("bookings")
-    .select("id, status, created_at, event_date, start_date, total_price, package_id, package_type")
-    .in("status", [...getBookingStatusDatabaseValues("booked"), "completed"])
-    .lt("created_at", historyEnd)
-    .order("created_at", { ascending: true });
-  if (forecastBookingsError) {
-    console.error("[SalesForecast] bookings:", forecastBookingsError.message);
-    return error("Could not load forecasting history", 500);
-  }
+  const reportBookings = validBookings.map((booking) => {
+    const bookingVenueIds = [...new Set([booking.venue_id, ...(venueIdsByBookingId.get(booking.id) ?? [])].filter((id): id is string => Boolean(id)))];
+    const venueLabels = bookingVenueIds.length
+      ? bookingVenueIds.map((id) => venueNames[id] ?? "Unknown venue")
+      : ["Unspecified venue"];
+    return {
+      ...booking,
+      venue_ids: bookingVenueIds,
+      venueName: venueLabels.join(", "),
+      packageName: booking.package_id
+        ? (packageNames[booking.package_id] ?? booking.package_type ?? "Unspecified package")
+        : (booking.package_type ?? "Unspecified package"),
+      payment: paymentByBooking[booking.id] ?? null,
+    };
+  });
 
-  const normalizedForecastBookings = (forecastBookings ?? []).map((booking) => ({
-    ...booking,
-    status: normalizeBookingStatus(booking.status),
-  }));
-  const forecastBookingIds = normalizedForecastBookings.map((booking) => booking.id);
-  const forecastPackageIds = [...new Set(normalizedForecastBookings.map((booking) => booking.package_id).filter((id): id is string => Boolean(id)))];
-  const [{ data: forecastPayments, error: forecastPaymentsError }, { data: forecastPackages, error: forecastPackagesError }] = await Promise.all([
-    forecastBookingIds.length
-      ? db.from("booking_payments").select("booking_id, total_booking_amount, amount_paid, payment_status").in("booking_id", forecastBookingIds)
-      : Promise.resolve({ data: [], error: null }),
-    forecastPackageIds.length
-      ? db.from("packages").select("id, name").in("id", forecastPackageIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  if (forecastPaymentsError || forecastPackagesError) {
-    console.error("[SalesForecast] related data:", forecastPaymentsError?.message ?? forecastPackagesError?.message);
-    return error("Could not load forecasting details", 500);
-  }
-  const forecastPackageNames = Object.fromEntries((forecastPackages ?? []).map((item) => [item.id, item.name]));
-  const normalizedForecastPayments = (forecastPayments ?? []).map((item) => ({
-    ...item,
-    payment_status: normalizeBookingPaymentStatus(item.payment_status),
-  }));
-  const forecast = calculateSalesForecast(normalizedForecastBookings, normalizedForecastPayments, targetMonth, forecastPackageNames);
-
-  return ok({ report: calculateSalesReport(validBookings, normalizedPayments, range, packageNames), bookings: reportBookings, forecast });
+  return ok({
+    report: calculateSalesReport(reportBookings, normalizedPayments, range, packageNames, venueNames),
+    bookings: reportBookings,
+  });
 };

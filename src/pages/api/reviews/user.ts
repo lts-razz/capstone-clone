@@ -1,10 +1,12 @@
 // GET /api/reviews/user — get current user's reviews (requires auth)
 import type { APIRoute } from "astro";
-import { supabase } from "../../../lib/supabase";
+import { supabase, supabaseAdmin } from "../../../lib/supabase";
 import { getUser } from "../../../lib/auth";
 import { ok, error } from "../../../lib/response";
+import { adminGuard } from "../../../lib/adminGuard";
 
 export const prerender = false;
+const db = supabaseAdmin ?? supabase;
 
 export const GET: APIRoute = async ({ cookies }) => {
   const user = await getUser(cookies);
@@ -53,4 +55,38 @@ export const GET: APIRoute = async ({ cookies }) => {
   });
 
   return ok({ reviews: enriched });
+};
+
+export const DELETE: APIRoute = async ({ cookies, url }) => {
+  const guard = await adminGuard(cookies);
+  if (guard instanceof Response) return guard;
+
+  const reviewId = url.searchParams.get("reviewId");
+  if (!reviewId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reviewId)) {
+    return error("reviewId must be a valid UUID", 400);
+  }
+
+  const { data: review, error: fetchError } = await db
+    .from("reviews")
+    .select("id")
+    .eq("id", reviewId)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error("[DeleteReview] lookup:", fetchError.message);
+    return error("Could not load review", 500);
+  }
+  if (!review) return error("Review not found", 404);
+
+  const { error: deleteError } = await db
+    .from("reviews")
+    .delete()
+    .eq("id", reviewId);
+
+  if (deleteError) {
+    console.error("[DeleteReview]", deleteError.message);
+    return error("Could not remove review", 500);
+  }
+
+  return ok({ message: "Review removed", reviewId });
 };

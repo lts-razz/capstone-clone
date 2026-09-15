@@ -1,30 +1,136 @@
 ---
-const { reviews } = Astro.props;
+const { reviews = [] } = Astro.props;
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return 'Not set';
+  return new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function shortId(value: string | null | undefined) {
+  return value ? value.slice(0, 8).toUpperCase() : 'Unknown';
+}
+
+function customerName(review: any) {
+  const user = review.reviewUser;
+  const name = `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim();
+  return name || 'Unknown customer';
+}
+
+function searchText(review: any) {
+  return [
+    customerName(review),
+    review.reviewUser?.email,
+    review.reviewVenueName,
+    review.booking_id,
+    review.comment,
+    review.reviewBooking?.event_date,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
 ---
 
 <!-- TAB: REVIEWS -->
 <section id="tab-reviews" class="tab-section hidden">
   <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-100"><h2 class="font-bold text-lg" style="color:var(--jet-primary);">All Reviews</h2></div>
-    <div class="divide-y divide-gray-50">
-      {reviews?.map(r => (
-        <div class="px-6 py-5">
-          <div class="flex justify-between items-start mb-2">
-            <div>
-              <p class="font-semibold">{(r.reviewUser as any)?.first_name} {(r.reviewUser as any)?.last_name}</p>
-              <p class="text-xs text-gray-400">{(r.reviewUser as any)?.email}</p>
+    <div class="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Customer feedback</p>
+        <h2 class="font-bold text-lg" style="color:var(--jet-primary);">Reviews Management</h2>
+      </div>
+      <p class="text-sm text-gray-500"><span id="reviewsVisibleCount">{reviews.length}</span> of <span id="reviewsTotalCount">{reviews.length}</span> submitted reviews</p>
+    </div>
+
+    <div class="px-6 py-4 border-b border-gray-100 grid grid-cols-1 md:grid-cols-4 gap-3">
+      <label class="md:col-span-2">
+        <span class="sr-only">Search reviews</span>
+        <input
+          id="reviewSearch"
+          type="search"
+          placeholder="Search customer, email, booking, venue, or comment"
+          class="w-full px-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
+        />
+      </label>
+      <label>
+        <span class="sr-only">Filter rating</span>
+        <select id="reviewRatingFilter" class="w-full px-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200">
+          <option value="all">All ratings</option>
+          <option value="5">5 stars</option>
+          <option value="4">4 stars</option>
+          <option value="3">3 stars</option>
+          <option value="2">2 stars</option>
+          <option value="1">1 star</option>
+        </select>
+      </label>
+      <button id="reviewClearFilters" type="button" class="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Clear</button>
+      <label>
+        <span class="block text-xs font-semibold text-gray-500 mb-1">Submitted from</span>
+        <input id="reviewDateFrom" type="date" class="w-full px-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200" />
+      </label>
+      <label>
+        <span class="block text-xs font-semibold text-gray-500 mb-1">Submitted to</span>
+        <input id="reviewDateTo" type="date" class="w-full px-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200" />
+      </label>
+    </div>
+
+    <div id="reviewsList" class="divide-y divide-gray-50">
+      {reviews.map((review: any) => (
+        <article
+          class="review-row px-6 py-5"
+          data-review-id={review.id}
+          data-rating={String(review.rating)}
+          data-created={review.created_at?.slice(0, 10) ?? ''}
+          data-search={searchText(review)}
+        >
+          <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-1">
+                <p class="font-semibold text-gray-900">{customerName(review)}</p>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Booking {shortId(review.booking_id)}</span>
+              </div>
+              <p class="text-xs text-gray-400">{review.reviewUser?.email ?? 'No customer email on file'}</p>
+              <dl class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-sm">
+                <div>
+                  <dt class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Venue</dt>
+                  <dd class="font-medium text-gray-700">{review.reviewVenueName ?? 'Unspecified venue'}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Event date</dt>
+                  <dd class="font-medium text-gray-700">{formatDate(review.reviewBooking?.event_date)}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Submitted</dt>
+                  <dd class="font-medium text-gray-700">{formatDate(review.created_at)}</dd>
+                </div>
+              </dl>
             </div>
-            <div class="text-right">
-              <div class="flex gap-0.5 mb-1">{Array.from({length:5}).map((_,i)=>(<span class={i<r.rating?'text-yellow-400':'text-gray-200'}>★</span>))}</div>
-              <p class="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString('en-PH')}</p>
+            <div class="flex lg:flex-col items-center lg:items-end justify-between gap-3">
+              <div class="text-right" aria-label={`${review.rating} out of 5 stars`}>
+                <div class="flex gap-0.5 mb-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span class={i < review.rating ? 'text-yellow-400' : 'text-gray-200'}>★</span>
+                  ))}
+                </div>
+                <p class="text-xs font-semibold text-gray-500">{review.rating}/5 rating</p>
+              </div>
+              <button
+                type="button"
+                class="review-delete-button px-3 py-1.5 rounded-lg border border-red-200 text-red-700 text-xs font-bold hover:bg-red-50"
+                data-review-id={review.id}
+                data-customer-name={customerName(review)}
+              >
+                Remove
+              </button>
             </div>
           </div>
-          <p class="text-sm text-gray-500">Venue: <strong>{r.reviewVenueName}</strong></p>
-          {r.comment&&<p class="text-sm text-gray-700 mt-2 bg-gray-50 rounded-lg px-4 py-3 italic">"{r.comment}"</p>}
-        </div>
+          {review.comment ? (
+            <p class="text-sm text-gray-700 mt-4 bg-gray-50 rounded-lg px-4 py-3">{review.comment}</p>
+          ) : (
+            <p class="text-sm text-gray-400 mt-4 bg-gray-50 rounded-lg px-4 py-3">No written comment.</p>
+          )}
+        </article>
       ))}
-      {(!reviews||reviews.length===0)&&<p class="px-6 py-12 text-center text-gray-400">No reviews yet.</p>}
+      <p id="reviewsNoMatches" class={`px-6 py-12 text-center text-gray-400 ${reviews.length ? 'hidden' : ''}`}>
+        {reviews.length ? 'No reviews match the current filters.' : 'No submitted reviews yet.'}
+      </p>
     </div>
   </div>
 </section>
-
