@@ -24,6 +24,57 @@ import {
 export const prerender = false;
 
 const db = supabaseAdmin ?? supabase;
+const LOCAL_DATE_TIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.\d{1,3})?)?/;
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MANILA_UTC_OFFSET_MINUTES = 8 * 60;
+
+function localTimestampToUtcMs(
+  year: number,
+  month: number,
+  day: number,
+  hours: number,
+  minutes: number,
+  seconds: number,
+) {
+  return Date.UTC(year, month - 1, day, hours, minutes, seconds) - MANILA_UTC_OFFSET_MINUTES * 60_000;
+}
+
+function parseBookingEndUtcMs(booking: {
+  end_date: string | null;
+  end_datetime?: string | null;
+}) {
+  if (booking.end_datetime) {
+    const match = LOCAL_DATE_TIME_RE.exec(booking.end_datetime);
+    if (match) {
+      return localTimestampToUtcMs(
+        Number(match[1]),
+        Number(match[2]),
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5]),
+        Number(match[6] ?? "0"),
+      );
+    }
+  }
+
+  if (booking.end_date) {
+    const match = DATE_ONLY_RE.exec(booking.end_date);
+    if (match) {
+      return localTimestampToUtcMs(
+        Number(match[1]),
+        Number(match[2]),
+        Number(match[3]),
+        23,
+        59,
+        59,
+      );
+    }
+  }
+
+  return null;
+}
+
 const updateStatusSchema = z.object({
   bookingId: z.string().uuid("bookingId must be a valid UUID"),
   status: bookingStatusSchema.optional(),
@@ -79,7 +130,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
       const { data: currentBooking, error: currentBookingError } = await db
         .from("bookings")
-        .select("id, status, reservation_expired_at, cancellation_source, venue_id, start_date, end_date")
+        .select("id, status, reservation_expired_at, cancellation_source, venue_id, start_date, end_date, end_datetime")
         .eq("id", parsed.data.bookingId)
         .single();
       if (currentBookingError || !currentBooking) return error("Booking not found", 404);
@@ -112,6 +163,19 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           }),
           409,
         );
+      }
+
+      if (
+        status === "completed" &&
+        (currentStatus === "booked" || currentStatus === "rescheduled")
+      ) {
+        const bookingEndUtcMs = parseBookingEndUtcMs(currentBooking);
+        if (bookingEndUtcMs === null) {
+          return error("Booking end date/time could not be verified.", 400);
+        }
+        if (Date.now() < bookingEndUtcMs) {
+          return error("This booking cannot be completed until the event has ended.", 409);
+        }
       }
 
       if (reopeningCancelled && parsed.data.manualOverride) {

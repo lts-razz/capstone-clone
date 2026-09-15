@@ -14,8 +14,9 @@ export type PackageTimeOptionChoice = {
 };
 
 const TIME_VALUE_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_TIME_LOCAL_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.\d{1,3})?)?$/;
+  /^(\d{4})-(\d{2})-(\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.\d{1,3})?)?$/;
 
 export function timeValueToMinutes(value: string) {
   if (!TIME_VALUE_PATTERN.test(value)) return null;
@@ -30,6 +31,13 @@ export function getTimeRangeDurationMinutes(fromTime: string, toTime: string) {
   return toMinutes > fromMinutes
     ? toMinutes - fromMinutes
     : 24 * 60 - fromMinutes + toMinutes;
+}
+
+export function applyDateToLocalDateTime(date: string, dateTime: string | null | undefined) {
+  if (!DATE_VALUE_PATTERN.test(date) || !dateTime) return null;
+  const match = DATE_TIME_LOCAL_PATTERN.exec(dateTime);
+  if (!match) return null;
+  return `${date}T${match[4]}:${match[5]}:${match[6] ?? "00"}`;
 }
 
 export function normalizePackageTimeOptions(value: unknown): PackageTimeOptions | null {

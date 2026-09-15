@@ -13,6 +13,11 @@ import {
 } from "../../../lib/bookingDateRules";
 import { validateBookingRescheduleAvailability } from "../../../services/bookingAvailability";
 import { logBookingAudit } from "../../../services/bookingAudit";
+import {
+  applyDateToLocalDateTime,
+  normalizePackageTimeOptions,
+  validatePackageBookingTimes,
+} from "../../../lib/packageTimeOptions";
 
 export const prerender = false;
 
@@ -83,7 +88,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { data: booking, error: bookingError } = await db
     .from("bookings")
-    .select("id, user_id, status, venue_id, start_date, end_date")
+    .select("id, user_id, status, venue_id, start_date, end_date, package_id, start_datetime, end_datetime")
     .eq("id", bookingId)
     .single();
 
@@ -93,6 +98,33 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const bookingStatus = normalizeBookingStatus(booking.status);
   if (bookingStatus !== "booked" && bookingStatus !== "rescheduled") {
     return error("Only secured bookings can request rescheduling.", 409);
+  }
+
+  if (booking.package_id) {
+    const { data: packageRow, error: packageError } = await db
+      .from("packages")
+      .select("time_options")
+      .eq("id", booking.package_id)
+      .maybeSingle();
+    if (packageError) return error("Could not verify package schedule rules. Please try again.", 500);
+    if (!packageRow) return error("Could not verify package schedule rules. Please try again.", 500);
+
+    const timeOptions = normalizePackageTimeOptions(packageRow?.time_options);
+    if (timeOptions) {
+      const scheduleStartDatetime =
+        requestedStartDatetime ?? applyDateToLocalDateTime(requestedStartDate, booking.start_datetime);
+      const scheduleEndDatetime =
+        requestedEndDatetime ?? applyDateToLocalDateTime(requestedEndDate, booking.end_datetime);
+      if (!scheduleStartDatetime || !scheduleEndDatetime) {
+        return error("Please choose a complete start and end time for this package.", 400);
+      }
+      const packageTimeValidationError = validatePackageBookingTimes(
+        timeOptions,
+        scheduleStartDatetime,
+        scheduleEndDatetime,
+      );
+      if (packageTimeValidationError) return error(packageTimeValidationError, 400);
+    }
   }
 
   const existing = await db

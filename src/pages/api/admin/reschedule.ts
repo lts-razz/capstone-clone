@@ -25,6 +25,11 @@ import {
   parseDateOnly,
 } from "../../../lib/bookingDateRules";
 import { validateBookingRescheduleAvailability } from "../../../services/bookingAvailability";
+import {
+  applyDateToLocalDateTime,
+  normalizePackageTimeOptions,
+  validatePackageBookingTimes,
+} from "../../../lib/packageTimeOptions";
 
 export const prerender = false;
 
@@ -94,7 +99,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const { data: requestRow, error: requestFetchError } = await db
       .from("booking_reschedule_requests")
-      .select("id, booking_id, status, requested_start_date, requested_end_date, requested_event_date")
+      .select("id, booking_id, status, requested_start_date, requested_end_date, requested_event_date, requested_start_datetime, requested_end_datetime")
       .eq("id", rescheduleRequestId)
       .maybeSingle();
     if (requestFetchError) return error("Could not load the reschedule request.", 500);
@@ -154,7 +159,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const { data: booking, error: bookingFetchError } = await db
       .from("bookings")
-      .select("id, status, venue_id, start_date, end_date, event_date")
+      .select("id, status, venue_id, start_date, end_date, event_date, package_id, start_datetime, end_datetime")
       .eq("id", requestRow.booking_id)
       .single();
     if (bookingFetchError || !booking) return error("Booking not found", 404);
@@ -183,6 +188,35 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       adminOverrideOneWeek,
     );
     if (requestOverrideReasonError) return error(requestOverrideReasonError, 400);
+
+    if (booking.package_id) {
+      const { data: packageRow, error: packageError } = await db
+        .from("packages")
+        .select("time_options")
+        .eq("id", booking.package_id)
+        .maybeSingle();
+      if (packageError) return error("Could not verify package schedule rules. Please try again.", 500);
+      if (!packageRow) return error("Could not verify package schedule rules. Please try again.", 500);
+
+      const timeOptions = normalizePackageTimeOptions(packageRow?.time_options);
+      if (timeOptions) {
+        const scheduleStartDatetime =
+          requestRow.requested_start_datetime
+          ?? applyDateToLocalDateTime(requestRow.requested_start_date, booking.start_datetime);
+        const scheduleEndDatetime =
+          requestRow.requested_end_datetime
+          ?? applyDateToLocalDateTime(requestRow.requested_end_date, booking.end_datetime);
+        if (!scheduleStartDatetime || !scheduleEndDatetime) {
+          return error("Please choose a complete start and end time for this package.", 400);
+        }
+        const packageTimeValidationError = validatePackageBookingTimes(
+          timeOptions,
+          scheduleStartDatetime,
+          scheduleEndDatetime,
+        );
+        if (packageTimeValidationError) return error(packageTimeValidationError, 400);
+      }
+    }
 
     const availability = await validateBookingRescheduleAvailability(db, {
       bookingId: booking.id,
@@ -283,7 +317,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { data: booking, error: fetchError } = await db
     .from("bookings")
-    .select("id, status, venue_id, start_date, end_date, event_date, start_datetime, end_datetime")
+    .select("id, status, venue_id, start_date, end_date, event_date, package_id, start_datetime, end_datetime")
     .eq("id", bookingId)
     .single();
 
@@ -291,6 +325,33 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const bookingStatus = normalizeBookingStatus(booking.status);
   if (!isValidBookingStatusTransition(bookingStatus, "rescheduled")) {
     return error(bookingStatusTransitionErrorMessage(bookingStatus, "rescheduled"), 409);
+  }
+
+  const scheduleStartDatetime =
+    newStartDatetime ?? applyDateToLocalDateTime(newStartDate, booking.start_datetime);
+  const scheduleEndDatetime =
+    newEndDatetime ?? applyDateToLocalDateTime(newEndDate, booking.end_datetime);
+  if (booking.package_id) {
+    const { data: packageRow, error: packageError } = await db
+      .from("packages")
+      .select("time_options")
+      .eq("id", booking.package_id)
+      .maybeSingle();
+    if (packageError) return error("Could not verify package schedule rules. Please try again.", 500);
+    if (!packageRow) return error("Could not verify package schedule rules. Please try again.", 500);
+
+    const timeOptions = normalizePackageTimeOptions(packageRow?.time_options);
+    if (timeOptions) {
+      if (!scheduleStartDatetime || !scheduleEndDatetime) {
+        return error("Please choose a complete start and end time for this package.", 400);
+      }
+      const packageTimeValidationError = validatePackageBookingTimes(
+        timeOptions,
+        scheduleStartDatetime,
+        scheduleEndDatetime,
+      );
+      if (packageTimeValidationError) return error(packageTimeValidationError, 400);
+    }
   }
 
   const availability = await validateBookingRescheduleAvailability(db, {
@@ -309,16 +370,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     end_date: newEndDate,
     event_date: newEventDate ?? newStartDate,
   };
-  if (newStartDatetime) {
-    updateData.start_datetime = newStartDatetime;
-  } else if (booking.start_datetime) {
-    updateData.start_datetime = `${newStartDate}${booking.start_datetime.slice(10)}`;
-  }
-  if (newEndDatetime) {
-    updateData.end_datetime = newEndDatetime;
-  } else if (booking.end_datetime) {
-    updateData.end_datetime = `${newEndDate}${booking.end_datetime.slice(10)}`;
-  }
+  if (scheduleStartDatetime) updateData.start_datetime = scheduleStartDatetime;
+  if (scheduleEndDatetime) updateData.end_datetime = scheduleEndDatetime;
   if (adminOverrideOneWeek) updateData.override_reason = overrideReason;
 
   try {
