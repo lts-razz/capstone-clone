@@ -19,6 +19,9 @@ type RoleProfile = {
   first_name: string | null;
   last_name: string | null;
   phone?: string | null;
+  address?: string | null;
+  email_notifications_enabled?: boolean;
+  sms_notifications_enabled?: boolean;
   position?: string | null;
 };
 
@@ -55,7 +58,7 @@ export async function getUserRole(cookies: AstroCookies): Promise<UserRoleResult
 
   const { data: customer } = await db
     .from("customers")
-    .select("id, email, first_name, last_name, phone")
+    .select("id, email, first_name, last_name, phone, address, email_notifications_enabled, sms_notifications_enabled")
     .eq("id", user.id)
     .maybeSingle();
 

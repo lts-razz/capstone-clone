@@ -1,4 +1,79 @@
 ---
 import Layout from "../../layouts/Layout.astro";
+import { getUser } from "../../lib/auth";
+import { normalizeBookingStatus } from "../../lib/bookingStatus";
+import { getReservationDeadlineState, hasRequiredSecuringPayment, normalizeBookingPaymentStatus } from "../../lib/reservationValidity";
+import { supabase, supabaseAdmin } from "../../lib/supabase";
+
+export const prerender = false;
+
+const db = supabaseAdmin ?? supabase;
+const bookingId = Astro.url.searchParams.get("bookingId");
+const user = await getUser(Astro.cookies);
+
+let heading = "Payment not completed";
+let message = "No booking was verified from this payment return. Please check My Bookings for the current status.";
+let actionHref = user ? "/dashboard" : "/signin";
+let actionLabel = user ? "View My Bookings" : "Sign In";
+
+if (bookingId && user) {
+  const { data: booking } = await db
+    .from("bookings")
+    .select("id,status,total_price,minimum_payment_amount,reservation_expires_at,reservation_expired_at,cancellation_source")
+    .eq("id", bookingId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!booking) {
+    heading = "Booking not verified";
+    message = "We could not find this booking under your account. Please check My Bookings before trying another payment.";
+  } else {
+    const { data: bookingPayment } = await db
+      .from("booking_payments")
+      .select("payment_status,amount_paid,minimum_payment_amount")
+      .eq("booking_id", booking.id)
+      .maybeSingle();
+    const { data: latestTransaction } = await db
+      .from("payment_transactions")
+      .select("status")
+      .eq("booking_id", booking.id)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const payment = bookingPayment
+      ? { ...bookingPayment, payment_status: normalizeBookingPaymentStatus(bookingPayment.payment_status) }
+      : { payment_status: "unpaid", amount_paid: 0, minimum_payment_amount: booking.minimum_payment_amount };
+    const normalizedBooking = { ...booking, status: normalizeBookingStatus(booking.status), payment };
+    const reservation = getReservationDeadlineState(normalizedBooking);
+    const secured = normalizedBooking.status === "booked"
+      || normalizedBooking.status === "rescheduled"
+      || hasRequiredSecuringPayment(normalizedBooking, payment);
+
+    if (normalizedBooking.status === "completed") {
+      heading = "Booking completed";
+      message = "This booking is already marked completed. No new payment action is needed here.";
+    } else if (secured) {
+      heading = "Booking secured";
+      message = "Your booking is currently secured. No new payment was started from this cancelled checkout.";
+    } else if (reservation.kind === "expired_cancelled" || reservation.kind === "deadline_passed") {
+      heading = "Reservation expired";
+      message = "This reservation has passed its payment deadline. Please check My Bookings before trying another payment.";
+    } else if (normalizedBooking.status === "cancelled") {
+      heading = "Booking cancelled";
+      message = "This booking is cancelled. Please check My Bookings or contact Woodberry before attempting another payment.";
+    } else if (latestTransaction?.status === "paid") {
+      heading = "Payment being verified";
+      message = "A payment record exists, but the booking is not secured yet. Please check My Bookings for the latest status.";
+    } else {
+      heading = "Payment not completed";
+      message = "No verified payment is recorded for this checkout. Check My Bookings for the current reservation window before trying again.";
+    }
+  }
+} else if (bookingId && !user) {
+  heading = "Sign in required";
+  message = "Please sign in to verify whether this reservation is still active.";
+}
 ---
-<Layout title="Payment Cancelled"><main class="min-h-[70vh] grid place-items-center px-4 wb-page-surface"><section class="max-w-xl p-8 text-center wb-card"><h1 class="text-3xl font-bold">Payment not completed</h1><p class="mt-3">Your booking was kept, but no payment was recorded. You can try again from My Bookings.</p><a href="/dashboard" class="wb-btn wb-btn--primary mt-6">View My Bookings</a></section></main></Layout>
+<Layout title="Payment Cancelled"><main class="min-h-[70vh] grid place-items-center px-4 wb-page-surface"><section class="max-w-xl p-8 text-center wb-card"><h1 class="text-3xl font-bold">{heading}</h1><p class="mt-3">{message}</p><a href={actionHref} class="wb-btn wb-btn--primary mt-6">{actionLabel}</a></section></main></Layout>

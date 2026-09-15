@@ -70,7 +70,7 @@ export function isNotifiableBookingStatus(status: BookingStatus): status is Noti
 export const BOOKING_STATUS_TRANSITIONS: Record<BookingStatus, readonly BookingStatus[]> = {
   pending: ["booked", "cancelled"],
   booked: ["rescheduled", "cancelled", "completed"],
-  rescheduled: ["booked", "cancelled"],
+  rescheduled: ["booked", "cancelled", "completed"],
   completed: [],
   cancelled: [],
 };

@@ -30,6 +30,7 @@ type Props = {
     email?: string;
     phone?: string;
     address?: string;
+    notificationPreference?: "email" | "sms" | "both";
   };
 };
 
@@ -1388,6 +1389,13 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         input.value = entry[1].trim();
         input.setCustomValidity("");
       }
+    });
+    var savedNotificationPreference = typeof accountDetails.notificationPreference === "string"
+      && ["email", "sms", "both"].includes(accountDetails.notificationPreference)
+      ? accountDetails.notificationPreference
+      : "both";
+    notificationPreferenceInputs.forEach(function (input) {
+      input.checked = input.value === savedNotificationPreference;
     });
   }
 
@@ -3670,11 +3678,7 @@ const initialMinimumBookingDateValue = getMinimumBookingDateValue();
         }
         successScreen.classList.remove("hidden");
         form.reset();
-        if (notificationPreferenceInputs.length) {
-          notificationPreferenceInputs.forEach(function (input) {
-            input.checked = input.value === "both";
-          });
-        }
+        fillAccountDetails();
         syncCaterer();
         selectedPackageType = initialPackageType || "";
         maximumVisitedStep = 0;

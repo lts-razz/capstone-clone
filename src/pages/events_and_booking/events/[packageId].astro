@@ -36,11 +36,17 @@ const metadataFullName = [accountMetadata.first_name, accountMetadata.last_name]
   .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
   .join(' ')
   .trim();
+const notificationPreference = roleInfo.profile?.email_notifications_enabled === false
+  ? 'sms'
+  : roleInfo.profile?.sms_notifications_enabled === false
+    ? 'email'
+    : 'both';
 const accountDetails = {
   fullName: firstAccountString(profileFullName, accountMetadata.full_name, accountMetadata.name, metadataFullName),
   email: firstAccountString(roleInfo.profile?.email, user?.email, accountMetadata.email),
   phone: firstAccountString(roleInfo.profile?.phone, accountMetadata.phone, accountMetadata.phone_number),
-  address: firstAccountString(accountMetadata.address, accountMetadata.street_address, accountMetadata.billing_address),
+  address: firstAccountString(roleInfo.profile?.address, accountMetadata.address, accountMetadata.street_address, accountMetadata.billing_address),
+  notificationPreference,
 };
 
 const customBookingEventTypes = [

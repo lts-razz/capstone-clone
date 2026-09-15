@@ -322,7 +322,10 @@ export type Database = {
           user_id: string;
           venue_id: string;
           full_name: string | null;
+          email: string | null;
           phone: string | null;
+          email_notifications_enabled: boolean | null;
+          sms_notifications_enabled: boolean | null;
           pax: number | null;
           event_date: string | null;
           start_date: string;
@@ -383,7 +386,10 @@ export type Database = {
           user_id: string;
           venue_id: string;
           full_name?: string | null;
+          email?: string | null;
           phone?: string | null;
+          email_notifications_enabled?: boolean | null;
+          sms_notifications_enabled?: boolean | null;
           pax?: number | null;
           event_date?: string | null;
           start_date: string;
@@ -444,7 +450,10 @@ export type Database = {
           user_id?: string;
           venue_id?: string;
           full_name?: string | null;
+          email?: string | null;
           phone?: string | null;
+          email_notifications_enabled?: boolean | null;
+          sms_notifications_enabled?: boolean | null;
           pax?: number | null;
           event_date?: string | null;
           start_date?: string;
@@ -538,6 +547,7 @@ export type Database = {
           first_name: string | null;
           last_name: string | null;
           phone: string | null;
+          address: string | null;
           created_at: string;
           updated_at: string;
           email_notifications_enabled: boolean;
@@ -549,6 +559,7 @@ export type Database = {
           first_name?: string | null;
           last_name?: string | null;
           phone?: string | null;
+          address?: string | null;
           created_at?: string;
           updated_at?: string;
           email_notifications_enabled?: boolean;
@@ -560,6 +571,7 @@ export type Database = {
           first_name?: string | null;
           last_name?: string | null;
           phone?: string | null;
+          address?: string | null;
           created_at?: string;
           updated_at?: string;
           email_notifications_enabled?: boolean;

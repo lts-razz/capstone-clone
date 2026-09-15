@@ -280,7 +280,7 @@ async function fetchNotificationBooking(
   const { data: booking, error: bookingError } = await client
     .from("bookings")
     .select(
-      "id, user_id, status, full_name, phone, event_date, start_date, end_date, package_id, package_type, venue_id, total_price, minimum_payment_amount, one_week_email_sent_at, one_week_sms_sent_at, reservation_expires_at, expiration_reminder_sent_at, expiration_cancel_notice_sent_at",
+      "id, user_id, status, full_name, email, phone, email_notifications_enabled, sms_notifications_enabled, event_date, start_date, end_date, package_id, package_type, venue_id, total_price, minimum_payment_amount, one_week_email_sent_at, one_week_sms_sent_at, reservation_expires_at, expiration_reminder_sent_at, expiration_cancel_notice_sent_at",
     )
     .eq("id", bookingId)
     .single();
@@ -334,9 +334,9 @@ async function fetchNotificationBooking(
       "Package details pending confirmation",
     isCustomBooking: booking.package_type === "custom-booking",
     venueName: venue?.name ?? "Unknown venue",
-    email: customer?.email ?? null,
-    emailNotificationsEnabled: customer?.email_notifications_enabled ?? true,
-    smsNotificationsEnabled: customer?.sms_notifications_enabled ?? true,
+    email: booking.email ?? customer?.email ?? null,
+    emailNotificationsEnabled: booking.email_notifications_enabled ?? customer?.email_notifications_enabled ?? true,
+    smsNotificationsEnabled: booking.sms_notifications_enabled ?? customer?.sms_notifications_enabled ?? true,
     totalPrice: Number(booking.total_price ?? 0) || null,
     minimumPaymentAmount: Number(booking.minimum_payment_amount ?? 0) || null,
     oneWeekEmailSentAt: booking.one_week_email_sent_at,

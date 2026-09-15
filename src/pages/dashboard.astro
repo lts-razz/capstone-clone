@@ -108,13 +108,45 @@ const fmtBookingSchedule = (booking: { start_datetime?: string | null; end_datet
   return `${fmtDate(booking.start_date)} → ${fmtDate(booking.end_date)}`;
 };
 
-const statusConfig: Record<string, { bg: string; text: string; border: string; dot: string; label: string }> = {
-  pending:          { bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)', dot: '#aa8f66', label: 'Payment Required' },
-  booked:           { bg: 'var(--wb-success-bg)', text: 'var(--wb-success-text)', border: 'var(--wb-success-border)', dot: '#176b42', label: 'Booking Secured' },
-  cancelled:        { bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)', dot: '#8f2f20', label: 'Cancelled' },
-  rescheduled:      { bg: 'var(--wb-green-soft)', text: 'var(--wb-link)', border: 'var(--wb-green-pale)', dot: '#496743', label: 'Rescheduled' },
-  completed:        { bg: 'var(--wb-surface-soft)', text: 'var(--wb-muted)', border: 'var(--wb-border)', dot: '#5e554a', label: 'Completed' },
+type DashboardBookingState =
+  | 'payment_required'
+  | 'waiting_quotation'
+  | 'secured'
+  | 'reschedule_pending'
+  | 'completed'
+  | 'cancelled'
+  | 'expired';
+
+const statusConfig: Record<DashboardBookingState, { bg: string; text: string; border: string; dot: string; label: string }> = {
+  payment_required:   { bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)', dot: '#aa8f66', label: 'Payment Required' },
+  waiting_quotation:  { bg: 'var(--wb-green-soft)', text: 'var(--wb-link)', border: 'var(--wb-green-pale)', dot: '#496743', label: 'Waiting for Quotation' },
+  secured:            { bg: 'var(--wb-success-bg)', text: 'var(--wb-success-text)', border: 'var(--wb-success-border)', dot: '#176b42', label: 'Booking Secured' },
+  reschedule_pending: { bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)', dot: '#aa8f66', label: 'Reschedule Pending' },
+  completed:          { bg: 'var(--wb-surface-soft)', text: 'var(--wb-muted)', border: 'var(--wb-border)', dot: '#5e554a', label: 'Completed' },
+  cancelled:          { bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)', dot: '#8f2f20', label: 'Cancelled' },
+  expired:            { bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)', dot: '#8f2f20', label: 'Expired' },
 };
+
+function getDashboardBookingState({
+  booking,
+  awaitingCustomQuotation,
+  reservationKind,
+}: {
+  booking: any;
+  awaitingCustomQuotation: boolean;
+  reservationKind: string;
+}): DashboardBookingState {
+  if (reservationKind === 'expired_cancelled' || reservationKind === 'deadline_passed') return 'expired';
+  if (booking.status === 'cancelled') return 'cancelled';
+  if (booking.status === 'completed') return 'completed';
+  if (booking.rescheduleRequest?.status === 'pending'
+    && (booking.status === 'booked' || booking.status === 'rescheduled')) {
+    return 'reschedule_pending';
+  }
+  if (awaitingCustomQuotation) return 'waiting_quotation';
+  if (reservationKind === 'paid_secured' || booking.status === 'booked' || booking.status === 'rescheduled') return 'secured';
+  return 'payment_required';
+}
 
 const emailNotificationsEnabled = profile?.email_notifications_enabled ?? true;
 const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
@@ -229,9 +261,13 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
           const packageName = isCustomBooking
             ? 'Custom Booking'
             : b.package_type ? (woodberryPackageNames[b.package_type] ?? b.package_type) : 'Woodberry Package';
-          const cfg       = statusConfig[b.status] ?? statusConfig.booked;
-          const isCompleted = bookingReviewEligible;
           const reservation = getReservationDeadlineState(b);
+          const displayState = getDashboardBookingState({
+            booking: b,
+            awaitingCustomQuotation,
+            reservationKind: reservation.kind,
+          });
+          const cfg = statusConfig[displayState];
           const reservationDeadline = formatReservationDeadline(b.reservation_expires_at);
           const hasPricedTotal = isCustomBooking
             ? customPricingFinalized
@@ -294,7 +330,7 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
                           This unpaid reservation has passed its payment deadline and is awaiting automatic cancellation.
                         </p>
                       )}
-                      {b.rescheduleRequest && (
+                      {b.rescheduleRequest && displayState !== 'reschedule_pending' && (
                         <p class="text-xs mt-2 font-semibold rounded-lg px-3 py-2" style="color:var(--wb-link);background:var(--wb-green-soft);border:1px solid var(--wb-green-pale);">
                           Reschedule request {b.rescheduleRequest.status}
                         </p>
@@ -321,7 +357,7 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
                     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
                       style={`background:${cfg.bg};color:${cfg.text};border:1px solid ${cfg.border};`}>
                       <span class="w-1.5 h-1.5 rounded-full" style={`background:${cfg.dot};`}></span>
-                      {isCompleted ? 'Completed' : awaitingCustomQuotation ? 'Waiting for Quotation' : cfg.label}
+                      {cfg.label}
                     </span>
 
                     {isCustomBooking && !customPricingFinalized ? (
@@ -1108,11 +1144,13 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
   const dashboardVerificationNotice = document.getElementById('dashboardVerificationNotice');
 
   const USER_BOOKING_STATUS_CONFIG: Record<string, any> = {
-    pending: { label: 'Payment Required', bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)' },
-    booked: { label: 'Booking Secured', bg: 'var(--wb-success-bg)', text: 'var(--wb-success-text)', border: 'var(--wb-success-border)' },
-    cancelled: { label: 'Cancelled', bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)' },
-    rescheduled: { label: 'Rescheduled', bg: 'var(--wb-green-soft)', text: 'var(--wb-link)', border: 'var(--wb-green-pale)' },
+    payment_required: { label: 'Payment Required', bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)' },
+    waiting_quotation: { label: 'Waiting for Quotation', bg: 'var(--wb-green-soft)', text: 'var(--wb-link)', border: 'var(--wb-green-pale)' },
+    secured: { label: 'Booking Secured', bg: 'var(--wb-success-bg)', text: 'var(--wb-success-text)', border: 'var(--wb-success-border)' },
+    reschedule_pending: { label: 'Reschedule Pending', bg: 'var(--wb-warning-bg)', text: 'var(--wb-warning-text)', border: 'var(--wb-warning-border)' },
     completed: { label: 'Completed', bg: 'var(--wb-surface-soft)', text: 'var(--wb-muted)', border: 'var(--wb-border)' },
+    cancelled: { label: 'Cancelled', bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)' },
+    expired: { label: 'Expired', bg: 'var(--wb-danger-bg)', text: 'var(--wb-danger-text)', border: 'var(--wb-danger-border)' },
   };
 
   function userBookingSetText(id: string, value: string) {
@@ -1148,11 +1186,15 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
   }
 
   function userBookingCanCancel(booking: any) {
-    return booking?.status === 'pending' || booking?.status === 'booked' || booking?.status === 'rescheduled';
+    const state = getUserBookingNextState(booking);
+    return state === 'payment_required'
+      || state === 'waiting_quotation'
+      || state === 'secured'
+      || state === 'reschedule_pending';
   }
 
   function userBookingCanRequestReschedule(booking: any) {
-    return (booking?.status === 'booked' || booking?.status === 'rescheduled')
+    return getUserBookingNextState(booking) === 'secured'
       && booking?.rescheduleRequest?.status !== 'pending';
   }
 
@@ -1179,6 +1221,28 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
 
   function requiredUserBookingPayment(booking: any) {
     return Number(booking?.minimum_payment_amount ?? booking?.estimate_summary?.minimumPayment ?? 0);
+  }
+
+  function userBookingHasFinalizedCustomPricing(booking: any) {
+    const isCustomBooking = booking?.package_type === 'custom-booking' || booking?.additionals?.customBooking === true;
+    return !isCustomBooking
+      || (booking?.estimate_summary?.pricingStatus === 'finalized'
+        && Number(booking?.total_price) > 0
+        && Number(booking?.minimum_payment_amount) > 0);
+  }
+
+  function getUserBookingNextState(booking: any) {
+    const reservation = getReservationDeadlineState(booking);
+    if (reservation.kind === 'expired_cancelled' || reservation.kind === 'deadline_passed') return 'expired';
+    if (booking?.status === 'cancelled') return 'cancelled';
+    if (booking?.status === 'completed') return 'completed';
+    if (booking?.rescheduleRequest?.status === 'pending'
+      && (booking?.status === 'booked' || booking?.status === 'rescheduled')) {
+      return 'reschedule_pending';
+    }
+    if (booking?.status === 'pending' && !userBookingHasFinalizedCustomPricing(booking)) return 'waiting_quotation';
+    if (reservation.kind === 'paid_secured' || booking?.status === 'booked' || booking?.status === 'rescheduled') return 'secured';
+    return 'payment_required';
   }
 
   function updateReservationCountdowns() {
@@ -1288,12 +1352,11 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
     currentUserBookingId = b.id ?? null;
     currentUserBookingRecord = b;
     const isCustomBooking = b.package_type === 'custom-booking' || b.additionals?.customBooking === true;
-    const cfg = USER_BOOKING_STATUS_CONFIG[b.status] ?? USER_BOOKING_STATUS_CONFIG.booked;
+    const displayState = getUserBookingNextState(b);
+    const cfg = USER_BOOKING_STATUS_CONFIG[displayState] ?? USER_BOOKING_STATUS_CONFIG.secured;
     const badge = document.getElementById('ubd-status') as HTMLElement;
     if (badge) {
-      badge.textContent = b.status === 'pending' && isCustomBooking
-        && (b.estimate_summary?.pricingStatus !== 'finalized' || !Number(b.total_price) || !Number(b.minimum_payment_amount))
-        ? 'Waiting for Quotation' : cfg.label;
+      badge.textContent = cfg.label;
       badge.style.background = cfg.bg;
       badge.style.color = cfg.text;
       badge.style.border = '1px solid ' + cfg.border;
@@ -1326,10 +1389,7 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
     userBookingSetText('ubd-price', isCustomBooking && !Number(b.total_price) ? 'To be confirmed' : userBookingMoney(b.total_price));
     userBookingSetText('ubd-minimum', isCustomBooking && !Number(b.minimum_payment_amount) ? 'After staff quotation' : userBookingMoney(b.minimum_payment_amount ?? b.estimate_summary?.minimumPayment));
     userBookingSetText('ubd-balance', isCustomBooking && !Number(b.remaining_balance_amount) ? 'After staff quotation' : userBookingMoney(b.remaining_balance_amount ?? b.estimate_summary?.remainingBalance));
-    const customPricingFinalized = !isCustomBooking
-      || (b.estimate_summary?.pricingStatus === 'finalized'
-        && Number(b.total_price) > 0
-        && Number(b.minimum_payment_amount) > 0);
+    const customPricingFinalized = userBookingHasFinalizedCustomPricing(b);
     userBookingSetText(
       'ubd-pricing-note',
       isCustomBooking

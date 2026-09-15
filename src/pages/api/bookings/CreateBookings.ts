@@ -231,38 +231,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const isCustomBooking = packageType === CUSTOM_BOOKING_TYPE && !packageId;
 
-  // Keep the latest booking contact info on the customer profile.
-  // The notification service reads the customer profile, so the latest booking
-  // contact details and notification preference must be saved before staff act.
-  if (email || fullName || phone || parsed.data.notificationPreference) {
-    const [firstName, ...lastNameParts] = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
-    const profileUpdate = {
-      id: user.id,
-      ...(email ? { email } : {}),
-      ...(phone ? { phone } : {}),
-      ...(firstName ? { first_name: firstName } : {}),
-      ...(lastNameParts.length ? { last_name: lastNameParts.join(" ") } : {}),
-      email_notifications_enabled: emailNotificationsEnabled,
-      sms_notifications_enabled: smsNotificationsEnabled,
-      updated_at: now,
-    };
-
-    const { error: profileError } = await db
-      .from("customers")
-      .upsert(profileUpdate, { onConflict: "id" });
-
-    if (profileError) {
-      console.error("[CreateBookings] Customer contact and preference update failed", {
-        userId: user.id,
-        error: profileError.message,
-      });
-      return error(
-        "We could not save your contact and notification preferences. Please try again.",
-        500,
-      );
-    }
-  }
-
   if (isCustomBooking) {
     const { data: venue, error: venueError } = await db
       .from("venues")
@@ -336,7 +304,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         package_price: 0,
         pax: pax ?? null,
         full_name: fullName ?? null,
+        email: email ?? null,
         phone: phone ?? null,
+        email_notifications_enabled: emailNotificationsEnabled,
+        sms_notifications_enabled: smsNotificationsEnabled,
         special_requests: customSpecialRequests,
         total_price: 0,
         status: "pending",
@@ -609,7 +580,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       package_price: packagePrice,
       pax: pax ?? null,
       full_name: fullName ?? null,
+      email: email ?? null,
       phone: phone ?? null,
+      email_notifications_enabled: emailNotificationsEnabled,
+      sms_notifications_enabled: smsNotificationsEnabled,
       special_requests: specialRequests ?? null,
       total_price: computedTotal,
       status: "pending",
