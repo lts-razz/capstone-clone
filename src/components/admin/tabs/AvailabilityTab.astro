@@ -7,7 +7,7 @@ const { venues } = Astro.props;
   <div class="flex flex-wrap gap-4 items-start justify-between mb-6">
     <div>
       <h2 class="text-xl font-bold" style="color:var(--jet-primary);">Availability Calendar</h2>
-      <p class="text-sm text-gray-500 mt-0.5">Click any date to view bookings. Book, cancel, complete, or reschedule from here.</p>
+      <p class="text-sm text-gray-500 mt-0.5">Review venue availability, reservation holds, confirmed bookings, and admin blocked dates.</p>
     </div>
     <div class="flex gap-2 flex-wrap items-center">
       <button id="adm-prev-month" class="w-9 h-9 rounded-lg border-2 border-gray-200 flex items-center justify-center hover:bg-gray-50 transition text-gray-600">
@@ -20,8 +20,39 @@ const { venues } = Astro.props;
     </div>
   </div>
 
+  <div class="availability-filters mb-5">
+    <div>
+      <label for="calendarVenueFilter">Venue</label>
+      <select id="calendarVenueFilter">
+        <option value="">All active venues</option>
+        {(venues ?? []).map((venue: any) => (
+          <option value={venue.id}>{venue.name}</option>
+        ))}
+      </select>
+    </div>
+    <div>
+      <label for="calendarRangeStart">Start date</label>
+      <input id="calendarRangeStart" type="date" />
+    </div>
+    <div>
+      <label for="calendarRangeEnd">End date</label>
+      <input id="calendarRangeEnd" type="date" />
+    </div>
+    <div class="availability-filters__actions">
+      <button id="applyAvailabilityFilters" type="button">Apply</button>
+      <button id="resetAvailabilityFilters" type="button">Reset</button>
+    </div>
+  </div>
+
+  <div id="availabilityMessage" class="availability-message hidden" role="alert"></div>
+
   <div class="blocked-date-manager mb-6">
     <form id="blockedDateForm" class="blocked-date-form">
+      <input id="blockedDateId" type="hidden" />
+      <div class="blocked-date-form__title">
+        <h3 id="blockedDateFormTitle">Block venue dates</h3>
+        <button id="cancelBlockedDateEdit" type="button" class="hidden">Cancel edit</button>
+      </div>
       <div>
         <label for="blockedVenue">Venue</label>
         <select id="blockedVenue" required>
@@ -43,12 +74,19 @@ const { venues } = Astro.props;
         <label for="blockedReason">Reason</label>
         <textarea id="blockedReason" rows="2" maxlength="500" required placeholder="Maintenance, private event, venue closure..."></textarea>
       </div>
-      <button type="submit">Block Dates</button>
+      <button id="blockedDateSubmit" type="submit">Block Dates</button>
     </form>
     <div class="blocked-date-list-wrap">
       <div class="blocked-date-list-wrap__header">
-        <h3>Active blocked dates</h3>
-        <button id="refreshBlockedDates" type="button">Refresh</button>
+        <h3>Blocked dates</h3>
+        <div class="blocked-date-list-wrap__tools">
+          <select id="blockedStatusFilter" aria-label="Blocked-date status">
+            <option value="active">Active</option>
+            <option value="all">All</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <button id="refreshBlockedDates" type="button">Refresh</button>
+        </div>
       </div>
       <div id="blockedDateList" class="blocked-date-list">
         <p class="blocked-date-empty">Loading blocked dates...</p>
@@ -59,8 +97,10 @@ const { venues } = Astro.props;
   <div class="flex gap-4 flex-wrap mb-5">
     {[
       { bg:'#e7efe8', ring:'#157a45', label:'Available' },
-      { bg:'#fbe7df', ring:'#9a4a36', label:'Reserved / booked' },
+      { bg:'#fff4cf', ring:'#b48422', label:'Pending reservation' },
+      { bg:'#fbe7df', ring:'#9a4a36', label:'Active booking' },
       { bg:'#f7f2ea', ring:'#aa8f66', label:'Admin blocked' },
+      { bg:'#f3f4f6', ring:'#9ca3af', label:'Past / inactive history' },
     ].map(l => (
       <div class="flex items-center gap-2">
         <div class="w-5 h-5 rounded-md" style={`background:${l.bg};outline:1.5px solid ${l.ring};`}></div>
@@ -76,7 +116,7 @@ const { venues } = Astro.props;
       ))}
     </div>
     <div id="adm-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);"></div>
-    <div id="adm-cal-loading" style="display:none;text-align:center;padding:20px;color:#888;font-size:0.875rem;">Loading bookings…</div>
+    <div id="adm-cal-loading" style="display:none;text-align:center;padding:20px;color:#888;font-size:0.875rem;">Loading availability...</div>
   </div>
 
   <div id="adm-day-detail" class="hidden mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -87,3 +127,157 @@ const { venues } = Astro.props;
     <div id="adm-detail-content" class="space-y-3 text-sm"></div>
   </div>
 </section>
+
+<style>
+  .availability-filters {
+    display: grid;
+    grid-template-columns: minmax(14rem, 1.2fr) repeat(2, minmax(10rem, 0.8fr)) auto;
+    gap: 0.8rem;
+    align-items: end;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-sm);
+    padding: 1rem;
+  }
+
+  .availability-filters label,
+  .blocked-date-form__title h3 {
+    color: var(--wb-green-dark);
+    font-weight: 900;
+  }
+
+  .availability-filters label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+  }
+
+  .availability-filters select,
+  .availability-filters input,
+  .blocked-date-list-wrap__tools select {
+    width: 100%;
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-input-bg);
+    color: var(--wb-text);
+    min-height: 2.45rem;
+    padding: 0.55rem 0.7rem;
+  }
+
+  .availability-filters__actions,
+  .blocked-date-list-wrap__tools,
+  .blocked-date-card__actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .availability-filters__actions button {
+    border: 1px solid var(--wb-border);
+    border-radius: var(--wb-radius-sm);
+    cursor: pointer;
+    font-weight: 900;
+    min-height: 2.45rem;
+    padding: 0.55rem 0.8rem;
+  }
+
+  #applyAvailabilityFilters {
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+  }
+
+  #resetAvailabilityFilters {
+    background: var(--wb-surface-soft);
+    color: var(--wb-green-mid);
+  }
+
+  .availability-message {
+    margin: -0.25rem 0 1rem;
+    border: 1px solid var(--wb-danger-border);
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-danger-bg);
+    color: var(--wb-danger-text);
+    padding: 0.75rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .blocked-date-form__title {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .blocked-date-form__title h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  #cancelBlockedDateEdit {
+    border: 1px solid var(--wb-border);
+    background: var(--wb-surface-soft);
+    color: var(--wb-green-mid);
+    padding: 0.45rem 0.7rem;
+  }
+
+  .blocked-date-card.is-inactive {
+    border-color: var(--wb-border);
+    background: var(--wb-surface-soft);
+  }
+
+  .blocked-date-card__meta {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    margin-top: 0.45rem;
+  }
+
+  .blocked-date-badge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--wb-warning-border);
+    border-radius: 999px;
+    background: var(--wb-warning-bg);
+    color: var(--wb-warning-text);
+    font-size: 0.68rem;
+    font-weight: 900;
+    padding: 0.15rem 0.45rem;
+    text-transform: uppercase;
+  }
+
+  .blocked-date-badge.is-inactive {
+    border-color: var(--wb-border);
+    background: var(--wb-disabled-bg);
+    color: var(--wb-muted);
+  }
+
+  .blocked-date-card__actions button {
+    margin-top: 0.65rem;
+  }
+
+  .blocked-date-card__actions .secondary {
+    border: 1px solid var(--wb-border);
+    background: var(--wb-surface-raised);
+    color: var(--wb-green-mid);
+  }
+
+  .blocked-date-card__actions .activate {
+    background: var(--wb-action);
+    color: var(--wb-on-action);
+  }
+
+  @media (max-width: 860px) {
+    .availability-filters {
+      grid-template-columns: 1fr;
+    }
+
+    .availability-filters__actions button,
+    .blocked-date-list-wrap__tools {
+      width: 100%;
+    }
+  }
+</style>

@@ -2299,6 +2299,9 @@ switchReport('weekly');
 (window as any).generateReport    = generateReport;
 (window as any).printReport       = printReport;
 (window as any).deactivateBlockedDate = deactivateBlockedDate;
+(window as any).activateBlockedDate = activateBlockedDate;
+(window as any).editBlockedDate = editBlockedDate;
+(window as any).resetBlockedDateForm = resetBlockedDateForm;
 
 // ── ADMIN AVAILABILITY CALENDAR ───────────────────────────────────────────────
 const admMonths = ['January','February','March','April','May','June',
@@ -2309,6 +2312,8 @@ type AdminAvailability = { bookings: any[]; blockedDates: any[] };
 const admCache: Record<string, AdminAvailability> = {};
 let activeBlockedDates: any[] = [];
 const adminVenues: any[] = (window as any).__venues ?? [];
+const BLOCKING_BOOKING_STATUSES = new Set(['pending', 'booked', 'rescheduled']);
+const ACTIVE_BOOKING_STATUSES = new Set(['booked', 'rescheduled']);
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -2339,31 +2344,100 @@ function clearAvailabilityCache() {
   Object.keys(admCache).forEach((key) => delete admCache[key]);
 }
 
+function setAvailabilityMessage(message = '') {
+  const element = document.getElementById('availabilityMessage');
+  if (!element) return;
+  if (!message) {
+    element.textContent = '';
+    element.classList.add('hidden');
+    return;
+  }
+  element.textContent = message;
+  element.classList.remove('hidden');
+}
+
+function getCalendarVenueId(): string {
+  return (document.getElementById('calendarVenueFilter') as HTMLSelectElement | null)?.value ?? '';
+}
+
+function getCalendarRange() {
+  const startDate = (document.getElementById('calendarRangeStart') as HTMLInputElement | null)?.value ?? '';
+  const endDate = (document.getElementById('calendarRangeEnd') as HTMLInputElement | null)?.value ?? '';
+  return { startDate, endDate };
+}
+
+function normalizeBlockedDate(block: any) {
+  return {
+    id: block.id,
+    venueId: block.venueId ?? block.venue_id,
+    startDate: block.startDate ?? block.start_date,
+    endDate: block.endDate ?? block.end_date,
+    reason: block.reason ?? '',
+    isActive: block.isActive ?? block.is_active ?? true,
+  };
+}
+
+function datesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+  if (!startB && !endB) return true;
+  const filterStart = startB || endB;
+  const filterEnd = endB || startB;
+  return startA <= filterEnd && endA >= filterStart;
+}
+
+function dateIsInsideFilter(iso: string): boolean {
+  const { startDate, endDate } = getCalendarRange();
+  if (startDate && iso < startDate) return false;
+  if (endDate && iso > endDate) return false;
+  return true;
+}
+
+function isBlockingBookingStatus(status: string): boolean {
+  return BLOCKING_BOOKING_STATUSES.has(status);
+}
+
+function isActiveBookingStatus(status: string): boolean {
+  return ACTIVE_BOOKING_STATUSES.has(status);
+}
+
 async function admFetchAvailability(year: number, month: number): Promise<AdminAvailability> {
-  const key = `${year}-${month}`;
+  const venueId = getCalendarVenueId();
+  const key = `${year}-${month}-${venueId || 'all'}`;
   if (admCache[key]) return admCache[key];
   const loading = document.getElementById('adm-cal-loading')!;
   loading.style.display = 'block';
   try {
-    const res  = await fetch(`/api/bookings/availability?year=${year}&month=${month + 1}`);
+    const params = new URLSearchParams({ year: String(year), month: String(month + 1) });
+    if (venueId) params.set('venueId', venueId);
+    const res  = await fetch(`/api/bookings/availability?${params.toString()}`);
     const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? json.message ?? 'Could not load availability');
     admCache[key] = {
       bookings: json.bookings ?? [],
       blockedDates: json.blockedDates ?? [],
     };
+    setAvailabilityMessage();
     return admCache[key];
-  } catch { return { bookings: [], blockedDates: [] }; }
+  } catch (availabilityError) {
+    const message = availabilityError instanceof Error ? availabilityError.message : 'Could not load availability';
+    setAvailabilityMessage(message);
+    return { bookings: [], blockedDates: [] };
+  }
   finally { loading.style.display = 'none'; }
 }
 
 // Build a map of dateISO -> bookings[]
 function admBuildDateMap(bookings: any[]): Record<string, any[]> {
   const map: Record<string, any[]> = {};
+  const { startDate: filterStart, endDate: filterEnd } = getCalendarRange();
   for (const b of bookings) {
-    const start = new Date((b.start_date ?? b.event_date) + 'T00:00:00');
-    const end   = new Date((b.end_date   ?? b.event_date) + 'T00:00:00');
+    const bookingStart = b.start_date ?? b.event_date;
+    const bookingEnd = b.end_date ?? b.event_date;
+    if (!bookingStart || !bookingEnd || !datesOverlap(bookingStart, bookingEnd, filterStart, filterEnd)) continue;
+    const start = new Date(bookingStart + 'T00:00:00');
+    const end   = new Date(bookingEnd + 'T00:00:00');
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const iso = d.toISOString().split('T')[0];
+      if (!dateIsInsideFilter(iso)) continue;
       if (!map[iso]) map[iso] = [];
       map[iso].push(b);
     }
@@ -2373,19 +2447,24 @@ function admBuildDateMap(bookings: any[]): Record<string, any[]> {
 
 function admBuildBlockedDateMap(blockedDates: any[]): Record<string, any[]> {
   const map: Record<string, any[]> = {};
-  for (const block of blockedDates) {
-    const start = new Date(block.start_date + 'T00:00:00');
-    const end = new Date(block.end_date + 'T00:00:00');
+  const { startDate: filterStart, endDate: filterEnd } = getCalendarRange();
+  for (const rawBlock of blockedDates) {
+    const block = normalizeBlockedDate(rawBlock);
+    if (!block.isActive || !datesOverlap(block.startDate, block.endDate, filterStart, filterEnd)) continue;
+    const start = new Date(block.startDate + 'T00:00:00');
+    const end = new Date(block.endDate + 'T00:00:00');
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const iso = d.toISOString().split('T')[0];
+      if (!dateIsInsideFilter(iso)) continue;
       if (!map[iso]) map[iso] = [];
-      map[iso].push(block);
+      map[iso].push(rawBlock);
     }
   }
   return map;
 }
 
 const STATUS_CELL: Record<string, { bg: string; ring: string; text: string }> = {
+  pending: { bg: '#fff4cf', ring: '#b48422', text: '#6f4d00' },
   booked:   { bg: 'var(--wb-success-bg)', ring: 'var(--wb-success-border)', text: 'var(--wb-success-text)' },
   rescheduled: { bg: 'var(--wb-green-soft)', ring: 'var(--wb-green-pale)', text: 'var(--wb-link)' },
   cancelled: { bg: 'var(--wb-danger-bg)', ring: 'var(--wb-danger-border)', text: 'var(--wb-danger-text)' },
@@ -2397,58 +2476,121 @@ async function loadBlockedDates() {
   const list = document.getElementById('blockedDateList');
   if (list) list.innerHTML = '<p class="blocked-date-empty">Loading blocked dates...</p>';
   try {
-    const res = await fetch('/api/admin/blocked-dates');
+    const res = await fetch('/api/admin/blocked-dates?includeInactive=true');
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.error ?? payload.message ?? 'Could not load blocked dates');
     activeBlockedDates = payload.blockedDates ?? [];
     renderBlockedDateList();
+    setAvailabilityMessage();
   } catch (loadError) {
     const message = loadError instanceof Error ? loadError.message : 'Could not load blocked dates';
     if (list) list.innerHTML = `<p class="blocked-date-empty">${escapeHtml(message)}</p>`;
+    setAvailabilityMessage(message);
   }
 }
 
 function renderBlockedDateList() {
   const list = document.getElementById('blockedDateList');
   if (!list) return;
-  if (activeBlockedDates.length === 0) {
-    list.innerHTML = '<p class="blocked-date-empty">No active blocked dates.</p>';
+  const statusFilter = (document.getElementById('blockedStatusFilter') as HTMLSelectElement | null)?.value ?? 'active';
+  const venueId = getCalendarVenueId();
+  const { startDate, endDate } = getCalendarRange();
+  const blockedDates = activeBlockedDates
+    .map(normalizeBlockedDate)
+    .filter((block) => statusFilter === 'all' || (statusFilter === 'active' ? block.isActive : !block.isActive))
+    .filter((block) => !venueId || block.venueId === venueId)
+    .filter((block) => datesOverlap(block.startDate, block.endDate, startDate, endDate));
+
+  if (blockedDates.length === 0) {
+    list.innerHTML = '<p class="blocked-date-empty">No blocked dates match the current filters.</p>';
     return;
   }
 
-  list.innerHTML = activeBlockedDates
-    .map((block: any) => `
-      <div class="blocked-date-card">
+  list.innerHTML = blockedDates
+    .map((block) => `
+      <div class="blocked-date-card ${block.isActive ? '' : 'is-inactive'}">
         <strong>${escapeHtml(venueNameById(block.venueId))}</strong>
         <p>${escapeHtml(formatAdminDateRange(block.startDate, block.endDate))}</p>
         <p>${escapeHtml(block.reason)}</p>
-        <button type="button" onclick="deactivateBlockedDate('${escapeHtml(block.id)}')">Unblock</button>
+        <div class="blocked-date-card__meta">
+          <span class="blocked-date-badge ${block.isActive ? '' : 'is-inactive'}">${block.isActive ? 'Active' : 'Inactive'}</span>
+        </div>
+        <div class="blocked-date-card__actions">
+          <button class="secondary" type="button" onclick="editBlockedDate('${escapeHtml(block.id)}')">Edit</button>
+          ${block.isActive
+            ? `<button type="button" onclick="deactivateBlockedDate('${escapeHtml(block.id)}')">Deactivate</button>`
+            : `<button class="activate" type="button" onclick="activateBlockedDate('${escapeHtml(block.id)}')">Activate</button>`
+          }
+        </div>
       </div>
     `)
     .join('');
 }
 
+function resetBlockedDateForm() {
+  const form = document.getElementById('blockedDateForm') as HTMLFormElement | null;
+  form?.reset();
+  const idInput = document.getElementById('blockedDateId') as HTMLInputElement | null;
+  const title = document.getElementById('blockedDateFormTitle');
+  const submit = document.getElementById('blockedDateSubmit') as HTMLButtonElement | null;
+  const cancel = document.getElementById('cancelBlockedDateEdit');
+  if (idInput) idInput.value = '';
+  if (title) title.textContent = 'Block venue dates';
+  if (submit) submit.textContent = 'Block Dates';
+  cancel?.classList.add('hidden');
+}
+
+function editBlockedDate(id: string) {
+  const block = activeBlockedDates.map(normalizeBlockedDate).find((item) => item.id === id);
+  if (!block) {
+    toast('Blocked date not found. Refresh and try again.', false);
+    return;
+  }
+  (document.getElementById('blockedDateId') as HTMLInputElement | null)?.setAttribute('value', block.id);
+  const idInput = document.getElementById('blockedDateId') as HTMLInputElement | null;
+  const venueInput = document.getElementById('blockedVenue') as HTMLSelectElement | null;
+  const startInput = document.getElementById('blockedStartDate') as HTMLInputElement | null;
+  const endInput = document.getElementById('blockedEndDate') as HTMLInputElement | null;
+  const reasonInput = document.getElementById('blockedReason') as HTMLTextAreaElement | null;
+  const title = document.getElementById('blockedDateFormTitle');
+  const submit = document.getElementById('blockedDateSubmit') as HTMLButtonElement | null;
+  const cancel = document.getElementById('cancelBlockedDateEdit');
+  if (idInput) idInput.value = block.id;
+  if (venueInput) venueInput.value = block.venueId;
+  if (startInput) startInput.value = block.startDate;
+  if (endInput) endInput.value = block.endDate;
+  if (reasonInput) reasonInput.value = block.reason;
+  if (title) title.textContent = block.isActive ? 'Edit blocked dates' : 'Edit inactive blocked dates';
+  if (submit) submit.textContent = 'Save Changes';
+  cancel?.classList.remove('hidden');
+  document.getElementById('blockedDateForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function createBlockedDate(event: Event) {
   event.preventDefault();
+  const idInput = document.getElementById('blockedDateId') as HTMLInputElement | null;
   const venueInput = document.getElementById('blockedVenue') as HTMLSelectElement;
   const startInput = document.getElementById('blockedStartDate') as HTMLInputElement;
   const endInput = document.getElementById('blockedEndDate') as HTMLInputElement;
   const reasonInput = document.getElementById('blockedReason') as HTMLTextAreaElement;
   const reason = reasonInput.value.trim();
+  const blockedDateId = idInput?.value ?? '';
 
   if (!venueInput.value || !startInput.value || !endInput.value || !reason) {
     toast('Please choose a venue, date range, and blocked-date reason.', false);
+    setAvailabilityMessage('Please choose a venue, date range, and blocked-date reason.');
     return;
   }
   if (endInput.value < startInput.value) {
     toast('Blocked end date must be on or after start date.', false);
+    setAvailabilityMessage('Blocked end date must be on or after start date.');
     return;
   }
 
   const confirmed = await showConfirm({
-    title: 'Block Dates',
-    message: `Block ${venueNameById(venueInput.value)} for ${formatAdminDateRange(startInput.value, endInput.value)}? Reason: ${reason}`,
-    okLabel: 'Block Dates',
+    title: blockedDateId ? 'Update Blocked Dates' : 'Block Dates',
+    message: `${blockedDateId ? 'Update' : 'Block'} ${venueNameById(venueInput.value)} for ${formatAdminDateRange(startInput.value, endInput.value)}? Reason: ${reason}`,
+    okLabel: blockedDateId ? 'Save Changes' : 'Block Dates',
     okColor: 'var(--wb-action-warm)',
     icon: '!',
   });
@@ -2462,9 +2604,10 @@ async function createBlockedDate(event: Event) {
 
   try {
     const res = await fetch('/api/admin/blocked-dates', {
-      method: 'POST',
+      method: blockedDateId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        ...(blockedDateId ? { id: blockedDateId } : {}),
         venueId: venueInput.value,
         startDate: startInput.value,
         endDate: endInput.value,
@@ -2473,29 +2616,35 @@ async function createBlockedDate(event: Event) {
       }),
     });
     const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error ?? payload.message ?? 'Could not block dates');
+    if (!res.ok) throw new Error(payload.error ?? payload.message ?? (blockedDateId ? 'Could not update blocked dates' : 'Could not block dates'));
 
-    toast('Dates blocked');
-    (event.currentTarget as HTMLFormElement).reset();
+    toast(blockedDateId ? 'Blocked date updated' : 'Dates blocked');
+    resetBlockedDateForm();
     clearAvailabilityCache();
     await loadBlockedDates();
     await admRenderCalendar();
   } catch (blockError) {
-    toast(blockError instanceof Error ? blockError.message : 'Could not block dates', false);
+    const message = blockError instanceof Error ? blockError.message : (blockedDateId ? 'Could not update blocked dates' : 'Could not block dates');
+    toast(message, false);
+    setAvailabilityMessage(message);
   } finally {
     if (submitButton) {
       submitButton.disabled = false;
-      submitButton.textContent = 'Block Dates';
+      submitButton.textContent = blockedDateId ? 'Save Changes' : 'Block Dates';
     }
   }
 }
 
-async function deactivateBlockedDate(id: string) {
+async function setBlockedDateActive(id: string, isActive: boolean) {
+  const block = activeBlockedDates.map(normalizeBlockedDate).find((item) => item.id === id);
+  const actionLabel = isActive ? 'Activate' : 'Deactivate';
   const confirmed = await showConfirm({
-    title: 'Unblock Date',
-    message: 'Make this blocked date available again?',
-    okLabel: 'Unblock',
-    okColor: 'var(--wb-danger-action)',
+    title: `${actionLabel} Blocked Date`,
+    message: block
+      ? `${actionLabel} the blocked date for ${venueNameById(block.venueId)} on ${formatAdminDateRange(block.startDate, block.endDate)}?`
+      : `${actionLabel} this blocked date?`,
+    okLabel: actionLabel,
+    okColor: isActive ? 'var(--wb-action)' : 'var(--wb-danger-action)',
     icon: '!',
   });
   if (!confirmed) return;
@@ -2504,18 +2653,29 @@ async function deactivateBlockedDate(id: string) {
     const res = await fetch('/api/admin/blocked-dates', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, isActive: false, confirmedSensitiveAction: true }),
+      body: JSON.stringify({ id, isActive, confirmedSensitiveAction: true }),
     });
     const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error ?? payload.message ?? 'Could not unblock dates');
+    if (!res.ok) throw new Error(payload.error ?? payload.message ?? `Could not ${isActive ? 'activate' : 'deactivate'} blocked date`);
 
-    toast('Blocked date deactivated');
+    toast(isActive ? 'Blocked date activated' : 'Blocked date deactivated');
+    resetBlockedDateForm();
     clearAvailabilityCache();
     await loadBlockedDates();
     await admRenderCalendar();
-  } catch (unblockError) {
-    toast(unblockError instanceof Error ? unblockError.message : 'Could not unblock dates', false);
+  } catch (changeError) {
+    const message = changeError instanceof Error ? changeError.message : `Could not ${isActive ? 'activate' : 'deactivate'} blocked date`;
+    toast(message, false);
+    setAvailabilityMessage(message);
   }
+}
+
+function deactivateBlockedDate(id: string) {
+  return setBlockedDateActive(id, false);
+}
+
+function activateBlockedDate(id: string) {
+  return setBlockedDateActive(id, true);
 }
 
 async function admRenderCalendar() {
@@ -2548,12 +2708,28 @@ async function admRenderCalendar() {
       const dayBlocks = blockedDateMap[iso] ?? [];
       const isPast  = iso < todayISO;
       const isToday = iso === todayISO;
-      const hasBookings = dayBookings.length > 0;
+      const pendingBookings = dayBookings.filter((booking) => booking.status === 'pending');
+      const activeBookings = dayBookings.filter((booking) => isActiveBookingStatus(booking.status));
+      const historyBookings = dayBookings.filter((booking) => !isBlockingBookingStatus(booking.status));
+      const hasBlockingBookings = pendingBookings.length > 0 || activeBookings.length > 0;
       const hasBlocks = dayBlocks.length > 0;
-      const isUnavailable = hasBookings || hasBlocks;
+      const hasHistory = historyBookings.length > 0;
+      const isFilteredOut = !dateIsInsideFilter(iso);
+      const isUnavailable = hasBlockingBookings || hasBlocks;
 
-      cell.style.background = isPast ? 'var(--wb-disabled-bg)' : hasBookings ? 'var(--wb-danger-bg)' : hasBlocks ? BLOCKED_CELL.bg : 'var(--wb-surface-raised)';
+      cell.style.background = isFilteredOut || (isPast && !isUnavailable)
+        ? 'var(--wb-disabled-bg)'
+        : activeBookings.length > 0
+        ? 'var(--wb-danger-bg)'
+        : pendingBookings.length > 0
+        ? STATUS_CELL.pending.bg
+        : hasBlocks
+        ? BLOCKED_CELL.bg
+        : hasHistory
+        ? 'var(--wb-surface-soft)'
+        : 'var(--wb-surface-raised)';
       if (isToday && !isUnavailable) cell.style.background = 'var(--wb-success-bg)';
+      if (isFilteredOut) cell.style.opacity = '0.45';
 
       // Day number
       const num = document.createElement('div');
@@ -2562,35 +2738,56 @@ async function admRenderCalendar() {
       cell.appendChild(num);
 
       // Booking chips (max 3)
-      const shown = dayBookings.slice(0, 3);
-      for (const b of shown) {
+      const chips: Array<{ type: 'booking'; booking: any } | { type: 'blocked'; block: any }> = [
+        ...activeBookings.map((booking) => ({ type: 'booking', booking })),
+        ...pendingBookings.map((booking) => ({ type: 'booking', booking })),
+        ...dayBlocks.map((block) => ({ type: 'blocked', block })),
+        ...historyBookings.map((booking) => ({ type: 'booking', booking })),
+      ];
+      const shown = chips.slice(0, 3);
+      for (const item of shown) {
+        if (item.type === 'blocked') {
+          const block = normalizeBlockedDate(item.block);
+          const chip = document.createElement('div');
+          chip.textContent = 'Blocked';
+          chip.title = block.reason || 'Admin blocked';
+          chip.style.cssText = `font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:4px;background:${BLOCKED_CELL.bg};color:${BLOCKED_CELL.text};outline:1px solid ${BLOCKED_CELL.ring};margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
+          cell.appendChild(chip);
+          continue;
+        }
+        const b = item.booking;
         const s = STATUS_CELL[b.status] ?? STATUS_CELL.booked;
         const chip = document.createElement('div');
-        chip.textContent = statusLabel(b.status);
+        chip.textContent = b.status === 'pending' ? 'Pending' : statusLabel(b.status);
         chip.style.cssText = `font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:4px;background:${s.bg};color:${s.text};outline:1px solid ${s.ring};margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
         cell.appendChild(chip);
       }
-      for (const block of dayBlocks.slice(0, Math.max(0, 3 - shown.length))) {
-        const chip = document.createElement('div');
-        chip.textContent = 'Blocked';
-        chip.title = block.reason ?? 'Admin blocked';
-        chip.style.cssText = `font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:4px;background:${BLOCKED_CELL.bg};color:${BLOCKED_CELL.text};outline:1px solid ${BLOCKED_CELL.ring};margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
-        cell.appendChild(chip);
-      }
-      if (dayBookings.length + dayBlocks.length > 3) {
+      if (chips.length > 3) {
         const more = document.createElement('div');
-        more.textContent = `+${dayBookings.length + dayBlocks.length - 3} more`;
+        more.textContent = `+${chips.length - 3} more`;
         more.style.cssText = 'font-size:0.6rem;color:var(--wb-muted);font-weight:600;';
         cell.appendChild(more);
       }
 
       cell.addEventListener('mouseenter', () => {
-        if (!isPast) cell.style.background = hasBookings ? 'var(--wb-danger-bg)' : hasBlocks ? 'var(--wb-warning-bg)' : 'var(--wb-green-soft)';
+        if (!isPast && !isFilteredOut) cell.style.background = activeBookings.length > 0 ? 'var(--wb-danger-bg)' : pendingBookings.length > 0 ? STATUS_CELL.pending.bg : hasBlocks ? 'var(--wb-warning-bg)' : 'var(--wb-green-soft)';
       });
       cell.addEventListener('mouseleave', () => {
-        cell.style.background = isPast ? 'var(--wb-disabled-bg)' : hasBookings ? 'var(--wb-danger-bg)' : hasBlocks ? BLOCKED_CELL.bg : isToday ? 'var(--wb-success-bg)' : 'var(--wb-surface-raised)';
+        cell.style.background = isFilteredOut || (isPast && !isUnavailable)
+          ? 'var(--wb-disabled-bg)'
+          : activeBookings.length > 0
+          ? 'var(--wb-danger-bg)'
+          : pendingBookings.length > 0
+          ? STATUS_CELL.pending.bg
+          : hasBlocks
+          ? BLOCKED_CELL.bg
+          : isToday
+          ? 'var(--wb-success-bg)'
+          : hasHistory
+          ? 'var(--wb-surface-soft)'
+          : 'var(--wb-surface-raised)';
       });
-      cell.addEventListener('click', () => admShowDayDetail(iso, dayBookings, dayBlocks));
+      cell.addEventListener('click', () => admShowDayDetailV2(iso, dayBookings, dayBlocks));
     }
 
     grid.appendChild(cell);
