@@ -40,11 +40,23 @@ const paymentMap = Object.fromEntries((bookingPayments ?? []).map(payment => [pa
   ...payment,
   payment_status: normalizeBookingPaymentStatus(payment.payment_status),
 }]));
+const { data: bookingRescheduleRequests } = rawBookingIds.length > 0
+  ? await db
+      .from('booking_reschedule_requests')
+      .select('id, booking_id, requested_start_date, requested_end_date, requested_event_date, requested_start_datetime, requested_end_datetime, customer_note, status, reviewed_at, review_note, created_at')
+      .in('booking_id', rawBookingIds)
+      .order('created_at', { ascending: false })
+  : { data: [] };
+const rescheduleRequestMap: Record<string, any> = {};
+(bookingRescheduleRequests ?? []).forEach((request: any) => {
+  if (!rescheduleRequestMap[request.booking_id]) rescheduleRequestMap[request.booking_id] = request;
+});
 
 const normalizedBookings = (bookings ?? []).map((booking) => ({
   ...booking,
   status: normalizeBookingStatus(booking.status),
   payment: paymentMap[booking.id] ?? { payment_status: 'unpaid', amount_paid: 0 },
+  rescheduleRequest: rescheduleRequestMap[booking.id] ?? null,
 }));
 
 const venueIds = [...new Set(normalizedBookings.map(b => b.venue_id))];
@@ -281,6 +293,11 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
                           This unpaid reservation has passed its payment deadline and is awaiting automatic cancellation.
                         </p>
                       )}
+                      {b.rescheduleRequest && (
+                        <p class="text-xs mt-2 font-semibold rounded-lg px-3 py-2" style="color:var(--wb-link);background:var(--wb-green-soft);border:1px solid var(--wb-green-pale);">
+                          Reschedule request {b.rescheduleRequest.status}
+                        </p>
+                      )}
                       {canPayReservation && (
                         <div class={`reservation-deadline-panel ${reservation.warning ? 'reservation-deadline-panel--warning' : ''}`} data-reservation-panel data-booking-id={b.id}>
                           <div>
@@ -330,6 +347,15 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
                         class="dashboard-action-button dashboard-action-button--primary"
                       >
                         Pay Now
+                      </button>
+                    )}
+
+                    {(b.status === 'booked' || b.status === 'rescheduled') && b.rescheduleRequest?.status !== 'pending' && (
+                      <button
+                        onclick={`event.stopPropagation();openRescheduleRequestModal(${JSON.stringify(JSON.stringify({ ...b, venueName, packageName, customerEmail: profile?.email ?? user.email, customerPhone: profile?.phone ?? b.phone ?? null }))})`}
+                        class="dashboard-action-button dashboard-action-button--outline"
+                      >
+                        Request Reschedule
                       </button>
                     )}
 
@@ -977,12 +1003,66 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
         <h4 class="text-sm font-black tracking-widest uppercase mb-3" style="color:var(--jet-primary);">Special Requests</h4>
         <div class="rounded-xl p-4 bg-gray-50 text-sm text-gray-700" id="ubd-requests"></div>
       </div>
+
+      <div id="ubd-reschedule-request-wrap" class="hidden">
+        <h4 class="text-sm font-black tracking-widest uppercase mb-3" style="color:var(--jet-primary);">Reschedule Request</h4>
+        <div class="rounded-xl p-4 text-sm leading-6" id="ubd-reschedule-request" style="background:var(--wb-green-soft);color:var(--wb-link);border:1px solid var(--wb-green-pale);"></div>
+      </div>
     </div>
 
     <div class="px-7 pb-7 flex justify-end gap-3 flex-wrap">
       <button id="ubd-pay-button" data-email-verified={String(emailVerified)} onclick="payCurrentBooking()" class="hidden px-5 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed" style="background:var(--wb-green);">Pay Now</button>
+      <button id="ubd-reschedule-button" onclick="openCurrentRescheduleRequestModal()" class="hidden px-5 py-2 rounded-xl border-2 font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed" style="border-color:var(--wb-green-pale);color:var(--wb-link);background:var(--wb-green-soft);">Request Reschedule</button>
       <button id="ubd-cancel-button" onclick="openCancelCurrentBooking()" class="hidden px-5 py-2 rounded-xl border-2 font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed" style="border-color:var(--wb-danger-border);color:var(--wb-danger-text);background:var(--wb-danger-bg);">Cancel Booking</button>
 <button onclick="closeUserBookingDetail()" class="px-5 py-2 rounded-xl border-2 font-bold text-sm" style="border-color:var(--wb-border);color:var(--wb-link);">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="rescheduleRequestModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:var(--wb-overlay);">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100 flex items-start justify-between">
+      <div>
+        <h3 class="text-xl font-black" style="color:var(--jet-primary);">Request Reschedule</h3>
+        <p class="text-sm text-gray-500 mt-1">Woodberry staff will review the requested schedule before your booking changes.</p>
+      </div>
+      <button onclick="closeRescheduleRequestModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <input id="reschedule-request-booking-id" type="hidden" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label for="reschedule-request-start" class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">Start Date</label>
+          <input id="reschedule-request-start" type="date" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none" style="border-color:var(--wb-border);" />
+        </div>
+        <div>
+          <label for="reschedule-request-end" class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">End Date</label>
+          <input id="reschedule-request-end" type="date" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none" style="border-color:var(--wb-border);" />
+        </div>
+        <div>
+          <label for="reschedule-request-event" class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">Event Date</label>
+          <input id="reschedule-request-event" type="date" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none" style="border-color:var(--wb-border);" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="reschedule-request-start-time" class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">Start Time</label>
+            <input id="reschedule-request-start-time" type="time" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none" style="border-color:var(--wb-border);" />
+          </div>
+          <div>
+            <label for="reschedule-request-end-time" class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">End Time</label>
+            <input id="reschedule-request-end-time" type="time" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none" style="border-color:var(--wb-border);" />
+          </div>
+        </div>
+      </div>
+      <div>
+        <label for="reschedule-request-note" class="block text-sm font-bold mb-2" style="color:var(--jet-primary);">Note <span class="text-gray-400 font-normal">(optional)</span></label>
+        <textarea id="reschedule-request-note" rows="3" maxlength="500" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none" style="border-color:var(--wb-border);"></textarea>
+      </div>
+      <p id="reschedule-request-error" class="hidden text-sm font-semibold rounded-xl px-4 py-3" style="background:var(--wb-danger-bg);color:var(--wb-danger-text);border:1px solid var(--wb-danger-border);"></p>
+    </div>
+    <div class="px-6 pb-6 flex justify-end gap-3 flex-wrap">
+      <button onclick="closeRescheduleRequestModal()" class="px-5 py-2 rounded-xl border-2 font-bold text-sm" style="border-color:var(--wb-border);color:var(--wb-link);">Close</button>
+      <button id="submit-reschedule-request-button" onclick="submitRescheduleRequest()" class="px-5 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed" style="background:var(--wb-green);">Submit Request</button>
     </div>
   </div>
 </div>
@@ -1022,6 +1102,7 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
   let paymentProcessing = false;
   let cancellationProcessing = false;
   let cancellationPreview: any = null;
+  let rescheduleRequestProcessing = false;
   const dashboardResendVerification = document.getElementById('dashboardResendVerification') as HTMLButtonElement | null;
   const dashboardVerificationNotice = document.getElementById('dashboardVerificationNotice');
 
@@ -1067,6 +1148,32 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
 
   function userBookingCanCancel(booking: any) {
     return booking?.status === 'pending' || booking?.status === 'booked' || booking?.status === 'rescheduled';
+  }
+
+  function userBookingCanRequestReschedule(booking: any) {
+    return (booking?.status === 'booked' || booking?.status === 'rescheduled')
+      && booking?.rescheduleRequest?.status !== 'pending';
+  }
+
+  function userBookingTimeFromDatetime(value: string | null) {
+    const match = value?.match(/T(\d{2}:\d{2})/);
+    return match ? match[1] : '';
+  }
+
+  function userBookingRescheduleRequestSummary(request: any) {
+    if (!request) return '';
+    const schedule = request.requested_start_datetime
+      ? (request.requested_end_datetime
+        ? userBookingFmtLocalDateTime(request.requested_start_datetime) + ' -> ' + userBookingFmtLocalDateTime(request.requested_end_datetime)
+        : userBookingFmtLocalDateTime(request.requested_start_datetime))
+      : userBookingFmtDate(request.requested_start_date) + ' -> ' + userBookingFmtDate(request.requested_end_date);
+    const eventPart = request.requested_event_date
+      ? ' Event: ' + userBookingFmtDate(request.requested_event_date) + '.'
+      : '';
+    const reviewPart = request.status === 'rejected' && request.review_note
+      ? ' Note: ' + request.review_note
+      : '';
+    return `Status: ${request.status}. Requested schedule: ${schedule}.${eventPart}${reviewPart}`;
   }
 
   function requiredUserBookingPayment(booking: any) {
@@ -1316,12 +1423,27 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
       cancelButton.textContent = 'Cancel Booking';
     }
 
+    const rescheduleButton = document.getElementById('ubd-reschedule-button') as HTMLButtonElement | null;
+    if (rescheduleButton) {
+      rescheduleButton.classList.toggle('hidden', !userBookingCanRequestReschedule(b));
+      rescheduleButton.disabled = false;
+      rescheduleButton.textContent = 'Request Reschedule';
+    }
+
     const reqWrap = document.getElementById('ubd-requests-wrap');
     if (b.special_requests) {
       userBookingSetText('ubd-requests', b.special_requests);
       reqWrap?.classList.remove('hidden');
     } else {
       reqWrap?.classList.add('hidden');
+    }
+
+    const rescheduleWrap = document.getElementById('ubd-reschedule-request-wrap');
+    if (b.rescheduleRequest) {
+      userBookingSetText('ubd-reschedule-request', userBookingRescheduleRequestSummary(b.rescheduleRequest));
+      rescheduleWrap?.classList.remove('hidden');
+    } else {
+      rescheduleWrap?.classList.add('hidden');
     }
 
     document.getElementById('userBookingDetailModal')?.classList.remove('hidden');
@@ -1484,6 +1606,99 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
     }
   }
 
+  function setRescheduleRequestError(message: string | null) {
+    const errorEl = document.getElementById('reschedule-request-error');
+    if (!errorEl) return;
+    if (!message) {
+      errorEl.classList.add('hidden');
+      errorEl.textContent = '';
+      return;
+    }
+    errorEl.textContent = message;
+    errorEl.classList.remove('hidden');
+  }
+
+  function openRescheduleRequestModal(jsonStr: string) {
+    const booking = JSON.parse(jsonStr);
+    currentUserBookingId = booking.id ?? null;
+    currentUserBookingRecord = booking;
+    if (!userBookingCanRequestReschedule(booking)) {
+      alert(booking.rescheduleRequest?.status === 'pending'
+        ? 'This booking already has a pending reschedule request.'
+        : 'This booking cannot request rescheduling.');
+      return;
+    }
+    setRescheduleRequestError(null);
+    (document.getElementById('reschedule-request-booking-id') as HTMLInputElement | null)!.value = booking.id ?? '';
+    (document.getElementById('reschedule-request-start') as HTMLInputElement | null)!.value = booking.start_date?.slice(0, 10) ?? '';
+    (document.getElementById('reschedule-request-end') as HTMLInputElement | null)!.value = booking.end_date?.slice(0, 10) ?? '';
+    (document.getElementById('reschedule-request-event') as HTMLInputElement | null)!.value = booking.event_date?.slice(0, 10) ?? booking.start_date?.slice(0, 10) ?? '';
+    (document.getElementById('reschedule-request-start-time') as HTMLInputElement | null)!.value = userBookingTimeFromDatetime(booking.start_datetime);
+    (document.getElementById('reschedule-request-end-time') as HTMLInputElement | null)!.value = userBookingTimeFromDatetime(booking.end_datetime);
+    (document.getElementById('reschedule-request-note') as HTMLTextAreaElement | null)!.value = '';
+    document.getElementById('rescheduleRequestModal')?.classList.remove('hidden');
+  }
+
+  function openCurrentRescheduleRequestModal() {
+    if (!currentUserBookingRecord) return;
+    openRescheduleRequestModal(JSON.stringify(currentUserBookingRecord));
+  }
+
+  function closeRescheduleRequestModal() {
+    if (rescheduleRequestProcessing) return;
+    document.getElementById('rescheduleRequestModal')?.classList.add('hidden');
+    setRescheduleRequestError(null);
+  }
+
+  async function submitRescheduleRequest() {
+    if (rescheduleRequestProcessing) return;
+    const bookingId = (document.getElementById('reschedule-request-booking-id') as HTMLInputElement | null)?.value ?? '';
+    const requestedStartDate = (document.getElementById('reschedule-request-start') as HTMLInputElement | null)?.value ?? '';
+    const requestedEndDate = (document.getElementById('reschedule-request-end') as HTMLInputElement | null)?.value ?? '';
+    const requestedEventDate = (document.getElementById('reschedule-request-event') as HTMLInputElement | null)?.value ?? '';
+    const requestedStartTime = (document.getElementById('reschedule-request-start-time') as HTMLInputElement | null)?.value ?? '';
+    const requestedEndTime = (document.getElementById('reschedule-request-end-time') as HTMLInputElement | null)?.value ?? '';
+    const note = (document.getElementById('reschedule-request-note') as HTMLTextAreaElement | null)?.value.trim() ?? '';
+    const submitButton = document.getElementById('submit-reschedule-request-button') as HTMLButtonElement | null;
+    if (!bookingId || !requestedStartDate || !requestedEndDate) {
+      setRescheduleRequestError('Start and end dates are required.');
+      return;
+    }
+    rescheduleRequestProcessing = true;
+    setRescheduleRequestError(null);
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Submitting...';
+    }
+    try {
+      const response = await fetch('/api/bookings/request-reschedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId,
+          requestedStartDate,
+          requestedEndDate,
+          requestedEventDate: requestedEventDate || null,
+          requestedStartTime: requestedStartTime || null,
+          requestedEndTime: requestedEndTime || null,
+          note: note || null,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || result.message || 'Could not submit reschedule request');
+      alert(result.message ?? 'Reschedule request submitted for staff review.');
+      window.location.reload();
+    } catch (err) {
+      setRescheduleRequestError(err instanceof Error ? err.message : 'Could not submit reschedule request');
+    } finally {
+      rescheduleRequestProcessing = false;
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Submit Request';
+      }
+    }
+  }
+
   function closeUserBookingDetail() {
     currentUserBookingId = null;
     currentUserBookingRecord = null;
@@ -1497,6 +1712,15 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
   document.getElementById('cancelBookingModal')?.addEventListener('click', function(e) {
     if (e.target === document.getElementById('cancelBookingModal')) closeCancelBookingModal();
   });
+
+  document.getElementById('rescheduleRequestModal')?.addEventListener('click', function(e) {
+    if (e.target === document.getElementById('rescheduleRequestModal')) closeRescheduleRequestModal();
+  });
+
+  (window as any).openRescheduleRequestModal = openRescheduleRequestModal;
+  (window as any).openCurrentRescheduleRequestModal = openCurrentRescheduleRequestModal;
+  (window as any).closeRescheduleRequestModal = closeRescheduleRequestModal;
+  (window as any).submitRescheduleRequest = submitRescheduleRequest;
 
   dashboardResendVerification?.addEventListener('click', async () => {
     const email = dashboardResendVerification.dataset.email ?? '';

@@ -225,3 +225,50 @@ export async function getUnavailableVenueIdsForRange(
     error: availability.error,
   };
 }
+
+export async function validateBookingRescheduleAvailability(
+  client: DbClient,
+  {
+    bookingId,
+    primaryVenueId,
+    startDate,
+    endDate,
+  }: { bookingId: string; primaryVenueId: string; startDate: string; endDate: string },
+) {
+  const bookingVenues = await getBookingVenueIds(client, bookingId, primaryVenueId);
+  if (bookingVenues.error) {
+    return {
+      ok: false,
+      reason: "venue_lookup_failed" as const,
+      venueIds: bookingVenues.venueIds,
+      error: bookingVenues.error,
+    };
+  }
+
+  const availabilityOverlap = await findAvailabilityOverlaps(client, {
+    venueIds: bookingVenues.venueIds,
+    startDate,
+    endDate,
+    excludeBookingId: bookingId,
+  });
+  if (availabilityOverlap.error) {
+    return {
+      ok: false,
+      reason: "availability_lookup_failed" as const,
+      venueIds: bookingVenues.venueIds,
+      error: availabilityOverlap.error,
+    };
+  }
+
+  const unavailable =
+    availabilityOverlap.bookings.length > 0 || availabilityOverlap.blockedDates.length > 0;
+  return {
+    ok: !unavailable,
+    reason: unavailable ? ("unavailable" as const) : null,
+    venueIds: bookingVenues.venueIds,
+    unavailableVenueIds: availabilityOverlap.unavailableVenueIds,
+    bookings: availabilityOverlap.bookings,
+    blockedDates: availabilityOverlap.blockedDates,
+    error: null,
+  };
+}

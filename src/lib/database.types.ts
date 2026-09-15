@@ -140,6 +140,78 @@ export type Database = {
           },
         ];
       };
+      booking_reschedule_requests: {
+        Row: {
+          id: string;
+          booking_id: string;
+          user_id: string;
+          requested_start_date: string;
+          requested_end_date: string;
+          requested_event_date: string | null;
+          requested_start_datetime: string | null;
+          requested_end_datetime: string | null;
+          customer_note: string | null;
+          status: "pending" | "approved" | "rejected";
+          reviewed_by: string | null;
+          reviewed_role: "admin" | "staff" | null;
+          reviewed_at: string | null;
+          review_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          booking_id: string;
+          user_id: string;
+          requested_start_date: string;
+          requested_end_date: string;
+          requested_event_date?: string | null;
+          requested_start_datetime?: string | null;
+          requested_end_datetime?: string | null;
+          customer_note?: string | null;
+          status?: "pending" | "approved" | "rejected";
+          reviewed_by?: string | null;
+          reviewed_role?: "admin" | "staff" | null;
+          reviewed_at?: string | null;
+          review_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          booking_id?: string;
+          user_id?: string;
+          requested_start_date?: string;
+          requested_end_date?: string;
+          requested_event_date?: string | null;
+          requested_start_datetime?: string | null;
+          requested_end_datetime?: string | null;
+          customer_note?: string | null;
+          status?: "pending" | "approved" | "rejected";
+          reviewed_by?: string | null;
+          reviewed_role?: "admin" | "staff" | null;
+          reviewed_at?: string | null;
+          review_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "booking_reschedule_requests_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reschedule_requests_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       booking_payments: {
         Row: {
           id: string;
@@ -756,6 +828,7 @@ export type Database = {
       change_booking_status: { Args: { p_booking_id: string; p_new_status: string; p_actor_id: string; p_actor_role: string; p_reason?: string | null; p_allow_override?: boolean | null }; Returns: Json };
       confirm_booking: { Args: { p_booking_id: string; p_user_id: string }; Returns: boolean };
       create_booking: { Args: { p_user_id: string; p_venue_id: string; p_start_date: string; p_end_date: string; p_event_date?: string | null; p_event_type?: string | null; p_event_type_id?: string | null; p_package_id?: string | null; p_pax?: number | null; p_special_requests?: string | null; p_full_name?: string | null; p_phone?: string | null }; Returns: string };
+      approve_booking_reschedule_request: { Args: { p_request_id: string; p_actor_id: string; p_actor_role: string; p_reason?: string | null; p_admin_override_one_week?: boolean | null }; Returns: Json };
       reschedule_booking: { Args: { p_booking_id: string; p_new_start: string; p_new_end: string; p_new_event_date?: string | null }; Returns: string };
       valid_booking_transition: { Args: { old_status: string; new_status: string }; Returns: boolean };
     };

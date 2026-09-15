@@ -73,6 +73,19 @@ if (bookingAuditError) console.error('[Admin] Could not load booking audit histo
   if (!entry.booking_id) return;
   (auditByBookingId[entry.booking_id] ??= []).push(entry);
 });
+const { data: rescheduleRequests, error: rescheduleRequestsError } = bookingIds.length > 0
+  ? await adminClient
+      .from('booking_reschedule_requests')
+      .select('id, booking_id, requested_start_date, requested_end_date, requested_event_date, requested_start_datetime, requested_end_datetime, customer_note, status, created_at')
+      .in('booking_id', bookingIds)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+  : { data: [], error: null };
+if (rescheduleRequestsError) console.error('[Admin] Could not load reschedule requests:', rescheduleRequestsError.message);
+const pendingRescheduleByBookingId: Record<string, any> = {};
+(rescheduleRequests ?? []).forEach((request: any) => {
+  if (!pendingRescheduleByBookingId[request.booking_id]) pendingRescheduleByBookingId[request.booking_id] = request;
+});
 
 // Separately fetch venue names for each booking
 const venueIds = [...new Set((bookings ?? []).map(b => b.venue_id).filter(Boolean))];
@@ -130,6 +143,7 @@ const enrichedBookings = (bookings ?? []).map(b => {
       payment_recorded_at: null,
     },
     auditHistory: auditByBookingId[b.id] ?? [],
+    pendingRescheduleRequest: pendingRescheduleByBookingId[b.id] ?? null,
     status: normalizeBookingStatus(b.status),
     venueName: venueById[b.venue_id] ?? '—',
     packageName: b.package_type === 'custom-booking'
@@ -508,6 +522,11 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
                             <span class="text-gray-300 mx-1">→</span>
                             {new Date(b.end_date).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}
                           </div>
+                          {b.pendingRescheduleRequest && (
+                            <div class="admin-table-meta mt-1 font-semibold" style="color:var(--wb-link);">
+                              Reschedule requested
+                            </div>
+                          )}
                         </td>
 
                         {/* Pax */}
@@ -574,6 +593,16 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
                               <button onclick={`openReschedule('${b.id}')`}
                                 class="admin-action-btn admin-action-btn--warm px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-80"
                                 style="background:#aa8f66;">Reschedule</button>
+                            )}
+                            {b.pendingRescheduleRequest && (
+                              <>
+                                <button onclick={`approveRescheduleRequest('${b.id}')`}
+                                  class="admin-action-btn admin-action-btn--success px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-80"
+                                  style="background:#157a45;">Approve Request</button>
+                                <button onclick={`rejectRescheduleRequest('${b.id}')`}
+                                  class="admin-action-btn admin-action-btn--danger px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-80"
+                                  style="background:#9a4a36;">Reject Request</button>
+                              </>
                             )}
                             {canTransitionBookingTo(b.status, 'cancelled')&&(
                               <button onclick={`cancelBooking('${b.id}')`}
@@ -4841,6 +4870,119 @@ async function submitReschedule() {
 }
 
 // ── VENUE MODAL ───────────────────────────────────────────────────────────────
+function getPendingRescheduleRequestForBooking(bookingId: string) {
+  const booking = ((window as any).__allBookings ?? []).find((b: any) => b.id === bookingId);
+  return booking?.pendingRescheduleRequest ?? null;
+}
+
+function rescheduleRequestRequiresOverride(request: any): boolean {
+  const start = parseAdminDateOnly(request?.requested_start_date ?? '');
+  const eventDate = request?.requested_event_date ? parseAdminDateOnly(request.requested_event_date) : null;
+  return [start, eventDate].some((date) => date !== null && date < adminMinimumBookingDate);
+}
+
+function formatRescheduleRequestSchedule(request: any): string {
+  if (!request) return 'the requested schedule';
+  const dateRange = formatAdminDateRange(request.requested_start_date, request.requested_end_date);
+  return request.requested_event_date
+    ? `${dateRange} with event date ${formatAdminDateRange(request.requested_event_date, request.requested_event_date)}`
+    : dateRange;
+}
+
+async function approveRescheduleRequest(bookingId: string) {
+  const request = getPendingRescheduleRequestForBooking(bookingId);
+  if (!request) {
+    toast('No pending reschedule request found for this booking.', false);
+    return;
+  }
+
+  const adminOverrideOneWeek = rescheduleRequestRequiresOverride(request);
+  let overrideReason = '';
+  if (adminOverrideOneWeek) {
+    if (!(window as any).__isAdmin) {
+      toast('This request needs an admin date-rule override before approval.', false);
+      return;
+    }
+    const reason = await showReasonConfirm({
+      title: 'Approve Date Override',
+      message: `This requested schedule is inside the one-week rule. The earliest allowed date is ${adminMinimumBookingDateLabel}. Enter the override reason before approval.`,
+      okLabel: 'Approve Override',
+      okColor: 'var(--wb-action-warm)',
+      icon: '!',
+      reasonLabel: 'Override reason',
+      reasonPlaceholder: 'Admin-approved urgent reschedule...',
+      reasonRequiredMessage: 'Override reason is required.',
+    });
+    if (!reason) return;
+    overrideReason = reason;
+  } else {
+    const confirmed = await showConfirm({
+      title: 'Approve Reschedule Request',
+      message: `Move this booking to ${formatRescheduleRequestSchedule(request)}? The client will be notified.`,
+      okLabel: 'Approve Request',
+      okColor: 'var(--wb-action)',
+      icon: '!',
+    });
+    if (!confirmed) return;
+  }
+
+  const r = await fetch('/api/admin/reschedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rescheduleRequestId: request.id,
+      decision: 'approve',
+      adminOverrideOneWeek,
+      overrideReason,
+      confirmedSensitiveAction: true,
+    }),
+  });
+  const payload = await r.json().catch(() => ({}));
+  if (r.ok) {
+    toast(payload.warning ? `Request approved, but notification warning: ${payload.warning}` : 'Reschedule request approved');
+    location.reload();
+  } else {
+    toast(payload.error ?? payload.message ?? 'Failed to approve request', false);
+  }
+}
+
+async function rejectRescheduleRequest(bookingId: string) {
+  const request = getPendingRescheduleRequestForBooking(bookingId);
+  if (!request) {
+    toast('No pending reschedule request found for this booking.', false);
+    return;
+  }
+  const reason = await showReasonConfirm({
+    title: 'Reject Reschedule Request',
+    message: `Reject the request for ${formatRescheduleRequestSchedule(request)}?`,
+    okLabel: 'Reject Request',
+    okColor: 'var(--wb-danger-action)',
+    icon: '!',
+    reasonLabel: 'Reason',
+    reasonPlaceholder: 'Dates unavailable, package timing conflict, customer follow-up needed...',
+    reasonRequiredMessage: 'Rejection reason is required.',
+  });
+  if (!reason) return;
+
+  const r = await fetch('/api/admin/reschedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rescheduleRequestId: request.id,
+      decision: 'reject',
+      reviewNote: reason,
+      confirmedSensitiveAction: true,
+    }),
+  });
+  const payload = await r.json().catch(() => ({}));
+  if (r.ok) {
+    toast('Reschedule request rejected');
+    location.reload();
+  } else {
+    toast(payload.error ?? payload.message ?? 'Failed to reject request', false);
+  }
+}
+
 ['rescheduleStart', 'rescheduleEnd', 'rescheduleEventDate'].forEach(function(id) {
   document.getElementById(id)?.addEventListener('input', updateRescheduleOverrideWarning);
   document.getElementById(id)?.addEventListener('change', updateRescheduleOverrideWarning);
@@ -6030,6 +6172,10 @@ function openBookingDetail(jsonStr: string) {
   if (canTransitionBookingStatus(b.status, 'rescheduled')) {
     addActionBtn(actions, '↻ Reschedule', 'var(--wb-action-warm)', function() { closeBookingDetail(); openReschedule(b.id); });
   }
+  if (b.pendingRescheduleRequest) {
+    addActionBtn(actions, 'Approve Request', 'var(--wb-action)', function() { closeBookingDetail(); approveRescheduleRequest(b.id); });
+    addActionBtn(actions, 'Reject Request', 'var(--wb-danger-action)', function() { closeBookingDetail(); rejectRescheduleRequest(b.id); });
+  }
   if (canTransitionBookingStatus(b.status, 'cancelled')) {
     addActionBtn(actions, '✕ Cancel', 'var(--wb-danger-action)', function() { closeBookingDetail(); cancelBooking(b.id); });
   }
@@ -6333,6 +6479,8 @@ switchReport('weekly');
 (window as any).openReschedule    = openReschedule;
 (window as any).closeReschedule   = closeReschedule;
 (window as any).submitReschedule  = submitReschedule;
+(window as any).approveRescheduleRequest = approveRescheduleRequest;
+(window as any).rejectRescheduleRequest = rejectRescheduleRequest;
 (window as any).openPackageModal  = openPackageModal;
 (window as any).closePackageModal = closePackageModal;
 (window as any).openVenueModal = openVenueModal;

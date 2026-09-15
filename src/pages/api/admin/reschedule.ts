@@ -13,18 +13,48 @@ import {
 } from "../../../lib/bookingStatus";
 import {
   BookingStatusTransitionError,
+  notificationChannelSucceeded,
+  notifyBookingStatusChange,
   updateBookingStatusAndNotify,
 } from "../../../services/notifications";
+import { logBookingAudit } from "../../../services/bookingAudit";
 import {
   ADVANCE_BOOKING_RULE_MESSAGE,
   getMinimumBookingDate,
   isDateOnly,
   parseDateOnly,
 } from "../../../lib/bookingDateRules";
+import { validateBookingRescheduleAvailability } from "../../../services/bookingAvailability";
 
 export const prerender = false;
 
 const db = supabaseAdmin ?? supabase;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function combineLocalDateTime(date: string, time?: string | null): string | null {
+  const normalizedTime = typeof time === "string" ? time.trim() : "";
+  if (!normalizedTime) return null;
+  if (!TIME_RE.test(normalizedTime)) return "invalid";
+  return `${date}T${normalizedTime}:00`;
+}
+
+function notificationWarning(result: Awaited<ReturnType<typeof notifyBookingStatusChange>>) {
+  const unavailableChannels = (["email", "sms"] as const).filter((channel) => {
+    const channelResult = result[channel];
+    if (!channelResult) return false;
+    if (notificationChannelSucceeded(channelResult)) return false;
+    if (channelResult.ok && "skipped" in channelResult) {
+      return !channelResult.reason.includes("disabled for this customer");
+    }
+    return true;
+  });
+
+  if (unavailableChannels.length === 0) return undefined;
+  if (unavailableChannels.length === 2) {
+    return "The booking was updated, but email and SMS notifications could not be sent.";
+  }
+  return `The booking was updated, but the ${unavailableChannels[0]} notification could not be sent.`;
+}
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const guard = await staffOrAdminGuard(cookies);
@@ -32,22 +62,173 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const body = await parseBody<{
     bookingId?: string;
+    rescheduleRequestId?: string;
+    decision?: "approve" | "reject";
     newStartDate?: string;
     newEndDate?: string;
     newEventDate?: string | null;
+    newStartTime?: string | null;
+    newEndTime?: string | null;
     adminOverrideOneWeek?: boolean;
     overrideReason?: string;
+    reviewNote?: string;
     confirmedSensitiveAction?: boolean;
   }>(request);
   if (!body.ok) return body.response;
 
   const { bookingId, newStartDate, newEndDate } = body.data;
+  const rescheduleRequestId = body.data.rescheduleRequestId;
+  const decision = body.data.decision;
   const newEventDate = body.data.newEventDate || null;
   const adminOverrideOneWeek = body.data.adminOverrideOneWeek === true;
   const overrideReason = normalizeBookingActionReason(body.data.overrideReason);
+  const reviewNote = normalizeBookingActionReason(body.data.reviewNote);
 
   if (body.data.confirmedSensitiveAction !== true) {
     return error("Explicit confirmation is required before rescheduling a booking.", 400);
+  }
+
+  if (decision === "reject") {
+    if (!rescheduleRequestId) return error("rescheduleRequestId is required", 400);
+    if (reviewNote.length > 500) return error("Review note must be 500 characters or fewer.", 400);
+
+    const { data: requestRow, error: requestFetchError } = await db
+      .from("booking_reschedule_requests")
+      .select("id, booking_id, status, requested_start_date, requested_end_date, requested_event_date")
+      .eq("id", rescheduleRequestId)
+      .maybeSingle();
+    if (requestFetchError) return error("Could not load the reschedule request.", 500);
+    if (!requestRow) return error("Reschedule request not found", 404);
+    if (requestRow.status !== "pending") return error("This reschedule request is no longer pending.", 409);
+
+    const now = new Date().toISOString();
+    const { data: rejected, error: rejectError } = await db
+      .from("booking_reschedule_requests")
+      .update({
+        status: "rejected",
+        reviewed_by: guard.user.id,
+        reviewed_role: guard.role,
+        reviewed_at: now,
+        review_note: reviewNote || null,
+        updated_at: now,
+      })
+      .eq("id", rescheduleRequestId)
+      .eq("status", "pending")
+      .select("id, booking_id, status")
+      .maybeSingle();
+
+    if (rejectError) return error("Could not reject the reschedule request.", 500);
+    if (!rejected) return error("This reschedule request changed while it was being reviewed.", 409);
+
+    await logBookingAudit({
+      bookingId: rejected.booking_id,
+      actorId: guard.user.id,
+      actorType: guard.role,
+      action: "reschedule_request_rejected",
+      reason: reviewNote || null,
+      metadata: {
+        rescheduleRequestId,
+        requestedStartDate: requestRow.requested_start_date,
+        requestedEndDate: requestRow.requested_end_date,
+        requestedEventDate: requestRow.requested_event_date,
+      },
+    }, db);
+
+    return ok({
+      message: "Reschedule request rejected.",
+      request: rejected,
+    });
+  }
+
+  if (decision === "approve") {
+    if (!rescheduleRequestId) return error("rescheduleRequestId is required", 400);
+
+    const { data: requestRow, error: requestFetchError } = await db
+      .from("booking_reschedule_requests")
+      .select("id, booking_id, status, requested_start_date, requested_end_date, requested_event_date")
+      .eq("id", rescheduleRequestId)
+      .maybeSingle();
+    if (requestFetchError) return error("Could not load the reschedule request.", 500);
+    if (!requestRow) return error("Reschedule request not found", 404);
+    if (requestRow.status !== "pending") return error("This reschedule request is no longer pending.", 409);
+
+    const { data: booking, error: bookingFetchError } = await db
+      .from("bookings")
+      .select("id, status, venue_id, start_date, end_date, event_date")
+      .eq("id", requestRow.booking_id)
+      .single();
+    if (bookingFetchError || !booking) return error("Booking not found", 404);
+    const bookingStatus = normalizeBookingStatus(booking.status);
+    if (!isValidBookingStatusTransition(bookingStatus, "rescheduled")) {
+      return error(bookingStatusTransitionErrorMessage(bookingStatus, "rescheduled"), 409);
+    }
+
+    const startDate = parseDateOnly(requestRow.requested_start_date);
+    const eventDate = requestRow.requested_event_date ? parseDateOnly(requestRow.requested_event_date) : null;
+    const minimumBookingDate = getMinimumBookingDate();
+    const requiresOneWeekOverride =
+      startDate < minimumBookingDate || (eventDate !== null && eventDate < minimumBookingDate);
+    if (requiresOneWeekOverride && adminOverrideOneWeek !== true) {
+      return error(
+        `${ADVANCE_BOOKING_RULE_MESSAGE} This reschedule requires admin override confirmation.`,
+        400,
+      );
+    }
+    if (adminOverrideOneWeek && guard.role !== "admin") {
+      return error("Forbidden: date-rule override requires an admin account", 403);
+    }
+    const requestOverrideReasonError = bookingActionReasonError(
+      overrideReason,
+      "Override",
+      adminOverrideOneWeek,
+    );
+    if (requestOverrideReasonError) return error(requestOverrideReasonError, 400);
+
+    const availability = await validateBookingRescheduleAvailability(db, {
+      bookingId: booking.id,
+      primaryVenueId: booking.venue_id,
+      startDate: requestRow.requested_start_date,
+      endDate: requestRow.requested_end_date,
+    });
+    if (availability.error) return error("Could not verify venue availability. Please try again.", 500);
+    if (!availability.ok) {
+      return error("The selected schedule is no longer available for all assigned venues.", 409);
+    }
+
+    const { data: approval, error: approvalError } = await db.rpc(
+      "approve_booking_reschedule_request",
+      {
+        p_request_id: rescheduleRequestId,
+        p_actor_id: guard.user.id,
+        p_actor_role: guard.role,
+        p_reason: overrideReason || reviewNote || null,
+        p_admin_override_one_week: adminOverrideOneWeek,
+      },
+    );
+
+    if (approvalError) {
+      console.error("[RescheduleRequestApprove]", approvalError.message);
+      if (approvalError.message.includes("booking_unavailable")) {
+        return error("The selected schedule is no longer available. Please choose another date or time.", 409);
+      }
+      if (approvalError.message.includes("reschedule_request_not_pending")) {
+        return error("This reschedule request is no longer pending.", 409);
+      }
+      if (approvalError.message.includes("invalid_booking_schedule") || approvalError.message.includes("invalid_booking_venues")) {
+        return error("The replacement schedule or venues could not be verified.", 400);
+      }
+      return error("Could not approve the reschedule request. Please try again.", 500);
+    }
+
+    const notification = await notifyBookingStatusChange(booking.id, "rescheduled", db);
+    const warning = notificationWarning(notification);
+    return ok({
+      message: "Reschedule request approved and booking rescheduled.",
+      bookingId: booking.id,
+      requestId: rescheduleRequestId,
+      result: approval,
+      ...(warning ? { warning } : {}),
+    });
   }
 
   if (!bookingId) return error("bookingId is required", 400);
@@ -92,6 +273,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   );
   if (overrideReasonError) return error(overrideReasonError, 400);
 
+  const newStartDatetime = combineLocalDateTime(newStartDate, body.data.newStartTime);
+  const newEndDatetime = combineLocalDateTime(newEndDate, body.data.newEndTime);
+  if (newStartDatetime === "invalid") return error("newStartTime must use HH:mm", 400);
+  if (newEndDatetime === "invalid") return error("newEndTime must use HH:mm", 400);
+  if (newStartDatetime && newEndDatetime && newEndDatetime <= newStartDatetime) {
+    return error("New end date/time must be after new start date/time", 400);
+  }
+
   const { data: booking, error: fetchError } = await db
     .from("bookings")
     .select("id, status, venue_id, start_date, end_date, event_date, start_datetime, end_datetime")
@@ -104,15 +293,30 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return error(bookingStatusTransitionErrorMessage(bookingStatus, "rescheduled"), 409);
   }
 
-  const updateData: Record<string, string> = {
+  const availability = await validateBookingRescheduleAvailability(db, {
+    bookingId,
+    primaryVenueId: booking.venue_id,
+    startDate: newStartDate,
+    endDate: newEndDate,
+  });
+  if (availability.error) return error("Could not verify venue availability. Please try again.", 500);
+  if (!availability.ok) {
+    return error("The selected schedule is not available for all assigned venues.", 409);
+  }
+
+  const updateData: Record<string, string | null> = {
     start_date: newStartDate,
     end_date: newEndDate,
     event_date: newEventDate ?? newStartDate,
   };
-  if (booking.start_datetime) {
+  if (newStartDatetime) {
+    updateData.start_datetime = newStartDatetime;
+  } else if (booking.start_datetime) {
     updateData.start_datetime = `${newStartDate}${booking.start_datetime.slice(10)}`;
   }
-  if (booking.end_datetime) {
+  if (newEndDatetime) {
+    updateData.end_datetime = newEndDatetime;
+  } else if (booking.end_datetime) {
     updateData.end_datetime = `${newEndDate}${booking.end_datetime.slice(10)}`;
   }
   if (adminOverrideOneWeek) updateData.override_reason = overrideReason;
