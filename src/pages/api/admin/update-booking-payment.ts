@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { data: booking, error: bookingError } = await db
     .from("bookings")
-    .select("id, status, package_type, total_price, estimate_summary, reservation_expires_at")
+    .select("id, status, package_type, total_price, estimate_summary, quotation_status, quotation_finalized_at, reservation_expires_at")
     .eq("id", parsed.data.bookingId)
     .single();
   if (bookingError || !booking) return error("Booking not found", 404);
@@ -67,7 +67,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       ? booking.estimate_summary
       : {};
   const wasCustomPricingFinalized = isCustomBooking
-    && previousEstimateSummary.pricingStatus === "finalized"
+    && (booking.quotation_status === "finalized"
+      || (booking.quotation_status == null && previousEstimateSummary.pricingStatus === "finalized"))
     && Number(booking.total_price) > 0;
 
   if (isCustomBooking && total <= 0) {
@@ -76,25 +77,30 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   if (isCustomBooking) {
     const now = new Date();
+    const nowIso = now.toISOString();
+    const startsPaymentWindow = !wasCustomPricingFinalized;
     const pricingUpdate = db
       .from("bookings")
       .update({
         total_price: total,
         minimum_payment_amount: minimumPayment,
         remaining_balance_amount: remainingBalance,
-        ...(booking.reservation_expires_at == null
+        quotation_status: "finalized",
+        quotation_finalized_at: booking.quotation_finalized_at ?? nowIso,
+        ...(startsPaymentWindow && booking.reservation_expires_at == null
           ? { reservation_expires_at: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString() }
           : {}),
         estimate_summary: {
           ...previousEstimateSummary,
           pricingStatus: "finalized",
         },
-        updated_at: now.toISOString(),
+        updated_at: nowIso,
       })
       .eq("id", booking.id);
-    const { data: updatedBooking, error: pricingError } = await (booking.reservation_expires_at == null
-      ? pricingUpdate.is("reservation_expires_at", null)
-      : pricingUpdate)
+    const guardedPricingUpdate = startsPaymentWindow
+      ? pricingUpdate.or("quotation_status.is.null,quotation_status.neq.finalized")
+      : pricingUpdate;
+    const { data: updatedBooking, error: pricingError } = await guardedPricingUpdate
       .select("id")
       .maybeSingle();
 

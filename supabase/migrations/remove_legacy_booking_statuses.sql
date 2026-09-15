@@ -21,15 +21,31 @@ begin
   end loop;
 end $$;
 
-update public.bookings
+update public.bookings b
 set status = 'booked',
     status_updated_at = coalesce(status_updated_at, updated_at, now()),
     updated_at = now()
-where status in ('pending', 'contract_signing', 'confirmed');
+where status in ('pending', 'contract_signing', 'confirmed')
+  and exists (
+    select 1
+    from public.booking_payments payment
+    where payment.booking_id = b.id
+      and payment.payment_status in ('partial', 'paid')
+      and payment.amount_paid >= greatest(
+        coalesce(payment.minimum_payment_amount, b.minimum_payment_amount, b.total_price * 0.5, 0),
+        0.01
+      )
+  );
+
+update public.bookings
+set status = 'pending',
+    status_updated_at = coalesce(status_updated_at, updated_at, now()),
+    updated_at = now()
+where status in ('contract_signing', 'confirmed');
 
 alter table public.bookings
-  alter column status set default 'booked';
+  alter column status set default 'pending';
 
 alter table public.bookings
   add constraint bookings_status_check
-  check (status in ('booked', 'rescheduled', 'cancelled', 'completed'));
+  check (status in ('pending', 'booked', 'rescheduled', 'cancelled', 'completed'));

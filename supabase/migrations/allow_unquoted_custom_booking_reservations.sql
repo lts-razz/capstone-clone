@@ -10,7 +10,7 @@ set reservation_expires_at = null,
 where package_type = 'custom-booking'
   and status not in ('cancelled', 'completed')
   and (
-    estimate_summary->>'pricingStatus' is distinct from 'finalized'
+    quotation_status is distinct from 'finalized'
     or coalesce(total_price, 0) <= 0
     or coalesce(minimum_payment_amount, 0) <= 0
   )

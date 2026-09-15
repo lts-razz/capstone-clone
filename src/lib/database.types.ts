@@ -15,6 +15,7 @@ export type BookingStatus =
 
 export type BookingPaymentStatus = "unpaid" | "partial" | "paid" | "refunded";
 export type BookingPaymentRefundStatus = "not_required" | "not_eligible" | "pending" | "processed" | "failed";
+export type BookingQuotationStatus = "not_required" | "pending" | "finalized";
 export type PaymentTransactionStatus =
   | "pending"
   | "processing"
@@ -362,6 +363,8 @@ export type Database = {
           extension_selections: Json | null;
           corkage_selections: Json | null;
           estimate_summary: Json | null;
+          quotation_status: BookingQuotationStatus;
+          quotation_finalized_at: string | null;
           minimum_payment_amount: number | null;
           remaining_balance_amount: number | null;
           terms_accepted_at: string | null;
@@ -426,6 +429,8 @@ export type Database = {
           extension_selections?: Json | null;
           corkage_selections?: Json | null;
           estimate_summary?: Json | null;
+          quotation_status?: BookingQuotationStatus;
+          quotation_finalized_at?: string | null;
           minimum_payment_amount?: number | null;
           remaining_balance_amount?: number | null;
           terms_accepted_at?: string | null;
@@ -490,6 +495,8 @@ export type Database = {
           extension_selections?: Json | null;
           corkage_selections?: Json | null;
           estimate_summary?: Json | null;
+          quotation_status?: BookingQuotationStatus;
+          quotation_finalized_at?: string | null;
           minimum_payment_amount?: number | null;
           remaining_balance_amount?: number | null;
           terms_accepted_at?: string | null;

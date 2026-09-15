@@ -32,9 +32,12 @@ select
   b.id,
   coalesce(b.total_price, 0),
   coalesce(b.minimum_payment_amount, coalesce(b.total_price, 0) * 0.5),
-  0,
-  coalesce(b.total_price, 0),
-  'unpaid'
+  greatest(coalesce(b.amount_paid, 0), 0),
+  greatest(coalesce(b.total_price, 0) - greatest(coalesce(b.amount_paid, 0), 0), 0),
+  case
+    when b.payment_status in ('unpaid', 'partial', 'paid', 'refunded') then b.payment_status
+    else 'unpaid'
+  end
 from public.bookings b
 on conflict (booking_id) do nothing;
 
@@ -75,4 +78,3 @@ for all
 to authenticated
 using (exists (select 1 from public.admins where admins.id = auth.uid()))
 with check (exists (select 1 from public.admins where admins.id = auth.uid()));
-

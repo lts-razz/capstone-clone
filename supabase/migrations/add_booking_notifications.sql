@@ -43,7 +43,7 @@ begin
 end $$;
 
 update public.bookings
-set status = 'booked',
+set status = 'contract_signing',
     status_updated_at = coalesce(status_updated_at, updated_at, now()),
     updated_at = now()
 where status = 'confirmed';

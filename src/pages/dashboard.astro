@@ -28,7 +28,7 @@ const { data: profile } = await db
 
 const { data: bookings } = await db
   .from('bookings')
-  .select('id, full_name, phone, pax, start_date, end_date, start_datetime, end_datetime, event_type, status, total_price, venue_id, event_date, special_requests, created_at, updated_at, package_type, package_price, package_inclusions, selected_rooms, add_ons, extension_selections, corkage_selections, additionals, estimate_summary, minimum_payment_amount, remaining_balance_amount, reservation_created_at, reservation_expires_at, reservation_expired_at, cancellation_reason, cancellation_source')
+  .select('id, full_name, phone, pax, start_date, end_date, start_datetime, end_datetime, event_type, status, total_price, venue_id, event_date, special_requests, created_at, updated_at, package_type, package_price, package_inclusions, selected_rooms, add_ons, extension_selections, corkage_selections, additionals, estimate_summary, quotation_status, quotation_finalized_at, minimum_payment_amount, remaining_balance_amount, reservation_created_at, reservation_expires_at, reservation_expired_at, cancellation_reason, cancellation_source')
   .eq('user_id', user.id)
   .order('created_at', { ascending: false })
   .limit(20);
@@ -253,7 +253,7 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
           const venueName = venue?.name ?? 'Unknown Venue';
           const isCustomBooking = b.package_type === 'custom-booking';
           const customPricingFinalized = isCustomBooking
-            && (b.estimate_summary as any)?.pricingStatus === 'finalized'
+            && b.quotation_status === 'finalized'
             && Number(b.total_price) > 0
             && Number(b.minimum_payment_amount) > 0;
           const awaitingCustomQuotation = isCustomBooking && !customPricingFinalized
@@ -1226,7 +1226,7 @@ const smsNotificationsEnabled = profile?.sms_notifications_enabled ?? true;
   function userBookingHasFinalizedCustomPricing(booking: any) {
     const isCustomBooking = booking?.package_type === 'custom-booking' || booking?.additionals?.customBooking === true;
     return !isCustomBooking
-      || (booking?.estimate_summary?.pricingStatus === 'finalized'
+      || (booking?.quotation_status === 'finalized'
         && Number(booking?.total_price) > 0
         && Number(booking?.minimum_payment_amount) > 0);
   }
