@@ -13,6 +13,54 @@ const {
   customQuotationIsFinalized,
   canTransitionBookingTo,
 } = Astro.props;
+
+function formatDate(value: string | null | undefined, options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }) {
+  return value ? new Date(value).toLocaleDateString('en-PH', options) : '-';
+}
+
+function formatDateTime(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+}
+
+function bookingTypeLabel(booking: any) {
+  return booking.package_type === 'custom-booking' ? 'Custom booking' : 'Preset package';
+}
+
+function bookingTypeFilterValue(booking: any) {
+  return booking.package_type === 'custom-booking' ? 'custom' : 'preset';
+}
+
+function paymentLabel(payment: any) {
+  const status = payment?.payment_status ?? 'unpaid';
+  return status ? status[0].toUpperCase() + status.slice(1) : 'Unpaid';
+}
+
+function parseBookingEndMs(booking: any) {
+  if (booking.end_datetime) {
+    const parsed = Date.parse(booking.end_datetime);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  if (!booking.end_date) return null;
+  const parsed = Date.parse(`${booking.end_date}T23:59:59+08:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function bookingHasEnded(booking: any) {
+  const endMs = parseBookingEndMs(booking);
+  return endMs !== null && Date.now() >= endMs;
+}
+
+function getBookingNextAction(booking: any) {
+  if (booking.pendingRescheduleRequest) return 'Review Reschedule';
+  if (booking.status === 'pending' && booking.package_type === 'custom-booking' && !customQuotationIsFinalized(booking)) return 'Finalize Quotation';
+  if (booking.status === 'pending') return 'Await Payment';
+  if ((booking.status === 'booked' || booking.status === 'rescheduled') && bookingHasEnded(booking)) return 'Complete Event';
+  if (booking.status === 'cancelled' && booking.payment?.refund_status === 'pending') return 'Process Refund';
+  if (booking.status === 'booked' || booking.status === 'rescheduled') return 'Monitor Event';
+  if (booking.status === 'completed') return 'Completed';
+  if (booking.status === 'cancelled') return 'Cancelled';
+  return 'Review Booking';
+}
 ---
 
 <!-- TAB: BOOKINGS -->
@@ -38,6 +86,13 @@ const {
       ))}
     </div>
     <div class="admin-toolbar__controls flex flex-wrap gap-3 items-center">
+      <select id="bookingTypeFilter" class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none" aria-label="Filter bookings by type">
+        <option value="all">All types</option>
+        <option value="preset">Preset packages</option>
+        <option value="custom">Custom bookings</option>
+      </select>
+      <input id="bookingDateFrom" type="date" class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none" aria-label="Filter bookings from date" />
+      <input id="bookingDateTo" type="date" class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none" aria-label="Filter bookings to date" />
       <select id="bookingSort" class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none">
         <option value="newest">Newest first</option>
         <option value="oldest">Oldest first</option>
@@ -47,7 +102,7 @@ const {
       </select>
       <div class="relative">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="bookingSearch" type="text" placeholder="Search guest, venue, email, phone…"
+        <input id="bookingSearch" type="text" placeholder="Search customer, venue, email, phone..."
           class="pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 w-64"
           style="focus-ring-color:var(--butterscotch-primary);" />
       </div>
@@ -79,6 +134,7 @@ const {
             <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Reservation</th>
             <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Payment</th>
             <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Next Action</th>
             <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Booked On</th>
             <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Actions</th>
           </tr>
@@ -86,6 +142,12 @@ const {
         <tbody id="bookingsTableBody">
           {enrichedBookings.map((b) => {
               const reservation = reservationState(b);
+              const assignedVenues = Array.isArray(b.assignedVenueNames) && b.assignedVenueNames.length > 0
+                ? b.assignedVenueNames
+                : [b.venueName ?? '-'];
+              const nextAction = getBookingNextAction(b);
+              const hasRefundPending = b.payment?.refund_status === 'pending' && Number(b.payment?.refund_amount ?? 0) > 0;
+              const canComplete = canTransitionBookingTo(b.status, 'completed') && bookingHasEnded(b);
               const statusColors = {
                 pending:'wb-badge--earth',
                 booked:'wb-badge--success',
@@ -96,10 +158,12 @@ const {
               return (
                 <tr
                   data-status={b.status}
+                  data-booking-type={bookingTypeFilterValue(b)}
                   data-created={b.created_at}
                   data-event-date={b.event_date ?? b.start_date}
                   data-status-label={statusLabels[b.status] ?? b.status}
-                  data-search={`${b.full_name??''} ${b.venueName??''} ${b.customerEmail??''} ${b.customerPhone??b.phone??''} ${b.event_type??''}`}
+                  data-customer={`${b.full_name??''} ${b.customerEmail??''} ${b.customerPhone??b.phone??''}`}
+                  data-search={`${b.full_name??''} ${assignedVenues.join(' ')} ${b.customerEmail??''} ${b.customerPhone??b.phone??''} ${b.event_type??''} ${b.eventTypeName??''} ${b.packageName??''} ${paymentLabel(b.payment)} ${nextAction}`}
                   class={`booking-row border-t border-gray-50 hover:bg-amber-50 transition-colors ${b.status==='cancelled'?'booking-row--cancelled':''}`}
                 >
                   {/* Guest */}
@@ -111,22 +175,25 @@ const {
 
                   {/* Venue */}
                   <td class="px-4 py-3">
-                    <span class="admin-table-strong">{b.venueName??'—'}</span>
+                    <span class="admin-table-strong">{assignedVenues.join(', ')}</span>
                   </td>
 
                   {/* Package */}
-                  <td class="px-4 py-3 admin-table-muted">{b.packageName??b.event_type??'—'}</td>
+                  <td class="px-4 py-3 admin-table-muted">
+                    <span class="admin-table-strong">{b.packageName??b.event_type??'-'}</span>
+                    <p class="admin-table-meta mt-0.5">{bookingTypeLabel(b)}</p>
+                  </td>
 
                   {/* Event date */}
                   <td class="px-4 py-3 admin-table-strong">
-                    {b.event_date ? new Date(b.event_date).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—'}
+                    {formatDate(b.event_date)}
                   </td>
 
                   {/* Hold period */}
                   <td class="px-4 py-3">
                     <div class="admin-table-meta whitespace-nowrap">
                       {new Date(b.start_date).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}
-                      <span class="text-gray-300 mx-1">→</span>
+                      <span class="text-gray-300 mx-1">to</span>
                       {new Date(b.end_date).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}
                     </div>
                     {b.pendingRescheduleRequest && (
@@ -137,19 +204,19 @@ const {
                   </td>
 
                   {/* Pax */}
-                  <td class="px-4 py-3 admin-table-strong text-center">{b.pax??'—'}</td>
+                  <td class="px-4 py-3 admin-table-strong text-center">{b.pax??'-'}</td>
 
                   {/* Total */}
                   <td class="px-4 py-3 font-bold" style="color:var(--butterscotch-primary);">
-                    {b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'To be confirmed' : b.total_price?`₱${Number(b.total_price).toLocaleString()}`:'—'}
+                    {b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'To be confirmed' : b.total_price ? `PHP ${Number(b.total_price).toLocaleString()}` : '-'}
                   </td>
 
                   <td class={`px-4 py-3 min-w-[190px] ${reservation.warning ? 'reservation-warning-cell' : ''}`}>
                     <span class={`reservation-badge ${reservation.className}`}>{reservation.label}</span>
                     <div class="admin-table-meta mt-1.5">
                       Deadline {b.reservation_expires_at
-                        ? new Date(b.reservation_expires_at).toLocaleString('en-PH',{dateStyle:'medium',timeStyle:'short'})
-                        : '—'}
+                        ? formatDateTime(b.reservation_expires_at)
+                        : '-'}
                     </div>
                     <div
                       class={`reservation-countdown mt-1 text-xs font-bold ${reservation.warning ? 'text-amber-700' : 'text-gray-500'}`}
@@ -160,9 +227,14 @@ const {
 
                   <td class="px-4 py-3 whitespace-nowrap">
                     <span class={`payment-badge ${b.payment.payment_status === 'paid' ? 'payment-badge--paid' : b.payment.payment_status === 'partial' ? 'payment-badge--partial' : b.payment.payment_status === 'refunded' ? 'payment-badge--refunded' : 'payment-badge--unpaid'}`}>
-                      {b.payment.payment_status[0].toUpperCase() + b.payment.payment_status.slice(1)}
+                      {paymentLabel(b.payment)}
                     </span>
-                    <div class="admin-table-meta mt-1">Paid ₱{Number(b.payment.amount_paid).toLocaleString()}</div>
+                    <div class="admin-table-meta mt-1">Paid PHP {Number(b.payment.amount_paid).toLocaleString()}</div>
+                    {hasRefundPending && (
+                      <div class="admin-table-meta mt-1 font-semibold text-amber-700">
+                        Refund pending: PHP {Number(b.payment.refund_amount).toLocaleString()}
+                      </div>
+                    )}
                   </td>
 
                   {/* Status */}
@@ -179,9 +251,16 @@ const {
                     )}
                   </td>
 
+                  <td class="px-4 py-3">
+                    <span class="admin-table-strong">{nextAction}</span>
+                    {b.quotation_status === 'finalized' && (
+                      <p class="admin-table-meta mt-0.5">Quote finalized {formatDateTime(b.quotation_finalized_at)}</p>
+                    )}
+                  </td>
+
                   {/* Booked on */}
                   <td class="px-4 py-3 admin-table-meta whitespace-nowrap">
-                    {new Date(b.created_at).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}
+                    {formatDate(b.created_at)}
                     <div class="text-gray-300">{new Date(b.created_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'})}</div>
                   </td>
 
@@ -190,7 +269,7 @@ const {
                     <div class="admin-action-group flex gap-1.5 flex-wrap">
                       <button onclick={`openPaymentModal(${JSON.stringify(JSON.stringify(b))})`}
                         class="admin-action-btn admin-action-btn--primary px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-80"
-                        style="background:#1f6b43;">Payment</button>
+                        style="background:#1f6b43;">{b.package_type === 'custom-booking' && !customQuotationIsFinalized(b) ? 'Finalize Quote' : 'Payment'}</button>
                       {b.status !== 'pending' && canTransitionBookingTo(b.status, 'booked')&&(
                         <button onclick={`confirmBooking('${b.id}')`}
                           class="admin-action-btn admin-action-btn--success px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-80 hover:-translate-y-0.5"
@@ -216,7 +295,7 @@ const {
                           class="admin-action-btn admin-action-btn--danger px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-80"
                           style="background:#9a4a36;">Cancel</button>
                       )}
-                      {canTransitionBookingTo(b.status, 'completed')&&(
+                      {canComplete&&(
                         <button onclick={`setBookingCompleted('${b.id}')`}
                           class="admin-action-btn admin-action-btn--neutral px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-80"
                           style="background:#5e5c60;">Complete</button>
@@ -243,5 +322,3 @@ const {
     <p id="bookingsEmptyState" class="admin-empty-state hidden px-5 py-8 text-center text-sm text-gray-400">No bookings match the current filters.</p>
   </div>
 </section>
-
-

@@ -103,6 +103,24 @@ const { data: venueMap } = venueIds.length > 0
   : { data: [] };
 const venueById: Record<string, string> = {};
 (venueMap ?? []).forEach((v: any) => { venueById[v.id] = v.name; });
+const { data: bookingVenueAssignments, error: bookingVenueAssignmentsError } = bookingIds.length > 0
+  ? await adminClient
+      .from('booking_venue_assignments')
+      .select('booking_id, venue_id')
+      .in('booking_id', bookingIds)
+  : { data: [], error: null };
+if (bookingVenueAssignmentsError) console.error('[Admin] Could not load booking venue assignments:', bookingVenueAssignmentsError.message);
+const assignedVenueIdsByBookingId: Record<string, string[]> = {};
+(bookingVenueAssignments ?? []).forEach((assignment: any) => {
+  if (!assignment.booking_id || !assignment.venue_id) return;
+  (assignedVenueIdsByBookingId[assignment.booking_id] ??= []).push(assignment.venue_id);
+});
+const assignedVenueIds = [...new Set((bookingVenueAssignments ?? []).map((assignment: any) => assignment.venue_id).filter(Boolean))];
+const missingAssignedVenueIds = assignedVenueIds.filter((venueId) => !(venueId in venueById));
+const { data: assignedVenueMap } = missingAssignedVenueIds.length > 0
+  ? await adminClient.from('venues').select('id, name').in('id', missingAssignedVenueIds)
+  : { data: [] };
+(assignedVenueMap ?? []).forEach((v: any) => { venueById[v.id] = v.name; });
 
 const packageIds = [...new Set((bookings ?? []).map(b => b.package_id).filter((id): id is string => id !== null && id !== undefined))];
 const { data: pkgMap } = packageIds.length > 0
@@ -150,10 +168,16 @@ const enrichedBookings = (bookings ?? []).map(b => {
       payment_method: null,
       payment_notes: null,
       payment_recorded_at: null,
+      refund_status: 'not_required',
+      refund_amount: 0,
+      refund_processed_at: null,
+      refund_notes: null,
     },
     auditHistory: auditByBookingId[b.id] ?? [],
     pendingRescheduleRequest: pendingRescheduleByBookingId[b.id] ?? null,
     status: normalizeBookingStatus(b.status),
+    assignedVenueNames: [...new Set([b.venue_id, ...(assignedVenueIdsByBookingId[b.id] ?? [])].filter(Boolean))]
+      .map((venueId) => venueById[venueId] ?? 'Unknown venue'),
     venueName: venueById[b.venue_id] ?? '—',
     packageName: b.package_type === 'custom-booking'
       ? 'Custom Booking'
@@ -390,6 +414,10 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
         <span class="text-sm font-semibold text-gray-500">Current Status:</span>
         <span id="bd-status-badge" class="px-3 py-1 rounded-full text-sm font-bold"></span>
       </div>
+      <div id="bd-next-action-panel" class="hidden rounded-xl border px-4 py-3 text-sm" style="border-color:var(--wb-green-pale);background:var(--wb-green-soft);color:var(--wb-link);">
+        <span class="block text-xs font-bold uppercase tracking-wider">Next admin action</span>
+        <strong id="bd-next-action" class="mt-1 block"></strong>
+      </div>
 
       <!-- Guest info -->
       <div id="bd-reservation-panel" class="reservation-detail-panel">
@@ -440,6 +468,16 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
         </div>
       </div>
 
+      <div id="bd-reschedule-request-wrap" class="hidden">
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Pending Reschedule Request</p>
+        <div class="rounded-xl p-4 text-sm leading-6" style="background:var(--wb-green-soft);color:var(--wb-link);border:1px solid var(--wb-green-pale);">
+          <p><span class="font-semibold">Requested schedule:</span> <span id="bd-reschedule-request-schedule"></span></p>
+          <p><span class="font-semibold">Submitted:</span> <span id="bd-reschedule-request-created"></span></p>
+          <p class="mt-2"><span class="font-semibold">Customer note:</span></p>
+          <p id="bd-reschedule-request-note" class="whitespace-pre-wrap"></p>
+        </div>
+      </div>
+
       <div>
         <div class="mb-3">
           <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Estimate Summary</p>
@@ -467,6 +505,10 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
           <div><span class="text-gray-400">Method</span><p id="bd-payment-method" class="font-semibold mt-0.5"></p></div>
           <div><span class="text-gray-400">Recorded Date</span><p id="bd-payment-date" class="font-semibold mt-0.5"></p></div>
           <div class="col-span-2"><span class="text-gray-400">Notes</span><p id="bd-payment-notes" class="font-semibold mt-0.5 whitespace-pre-wrap"></p></div>
+          <div><span class="text-gray-400">Refund Status</span><p id="bd-refund-status" class="font-semibold mt-0.5"></p></div>
+          <div><span class="text-gray-400">Refund Amount</span><p id="bd-refund-amount" class="font-semibold mt-0.5"></p></div>
+          <div><span class="text-gray-400">Refund Processed</span><p id="bd-refund-processed" class="font-semibold mt-0.5"></p></div>
+          <div class="col-span-2"><span class="text-gray-400">Refund Notes</span><p id="bd-refund-notes" class="font-semibold mt-0.5 whitespace-pre-wrap"></p></div>
         </div>
       </div>
 
@@ -926,4 +968,3 @@ const reservationState = (booking: any) => getReservationDeadlineState(booking);
 <script>
   import '../../scripts/admin/adminWorkspace';
 </script>
-

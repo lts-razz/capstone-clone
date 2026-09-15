@@ -2,6 +2,7 @@ import { getReservationDeadlineState, type ReservationDeadlineStateKind } from '
 import { getTimeRangeDurationMinutes } from '../../lib/packageTimeOptions';
 
 const BOOKING_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending Payment',
   booked: 'Booked',
   rescheduled: 'Rescheduled',
   cancelled: 'Cancelled',
@@ -9,6 +10,7 @@ const BOOKING_STATUS_LABELS: Record<string, string> = {
 };
 
 const BOOKING_STATUS_CLASSES: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-700',
   booked: 'bg-green-100 text-green-700',
   rescheduled: 'bg-purple-100 text-purple-700',
   cancelled: 'bg-red-100 text-red-700',
@@ -90,12 +92,19 @@ let activeBookingFilter = 'all';
 
 function applyBookingTableControls() {
   const q = ((document.getElementById('bookingSearch') as HTMLInputElement | null)?.value ?? '').toLowerCase();
+  const typeFilter = (document.getElementById('bookingTypeFilter') as HTMLSelectElement | null)?.value ?? 'all';
+  const dateFrom = (document.getElementById('bookingDateFrom') as HTMLInputElement | null)?.value ?? '';
+  const dateTo = (document.getElementById('bookingDateTo') as HTMLInputElement | null)?.value ?? '';
   const rows = Array.from(document.querySelectorAll<HTMLElement>('.booking-row'));
   let visibleCount = 0;
   rows.forEach(r => {
     const matchesFilter = activeBookingFilter === 'all' || r.dataset.status === activeBookingFilter;
+    const matchesType = typeFilter === 'all' || r.dataset.bookingType === typeFilter;
+    const eventDate = r.dataset.eventDate ?? '';
+    const matchesFrom = !dateFrom || (!!eventDate && eventDate >= dateFrom);
+    const matchesTo = !dateTo || (!!eventDate && eventDate <= dateTo);
     const matchesSearch = (r.dataset.search ?? '').toLowerCase().includes(q);
-    const show = matchesFilter && matchesSearch;
+    const show = matchesFilter && matchesType && matchesFrom && matchesTo && matchesSearch;
     r.style.display = show ? '' : 'none';
     if (show) visibleCount++;
   });
@@ -108,6 +117,7 @@ function sortBookingRows(sortBy: string) {
   if (!tbody) return;
   const rows = Array.from(tbody.querySelectorAll<HTMLElement>('.booking-row'));
   const statusOrder: Record<string, number> = {
+    pending: 0,
     booked: 1,
     rescheduled: 2,
     cancelled: 3,
@@ -138,6 +148,9 @@ document.querySelectorAll<HTMLElement>('.filter-btn').forEach(function(btn) {
 document.querySelector<HTMLElement>('[data-filter="all"]')?.classList.add('active');
 
 document.getElementById('bookingSearch')?.addEventListener('input', applyBookingTableControls);
+['bookingTypeFilter', 'bookingDateFrom', 'bookingDateTo'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('change', applyBookingTableControls);
+});
 document.getElementById('bookingSort')?.addEventListener('change', function(e) {
   sortBookingRows((e.target as HTMLSelectElement).value);
 });
@@ -354,8 +367,8 @@ async function confirmBooking(id: string) {
 async function cancelBooking(id: string) {
   const cancellationReason = await showReasonConfirm({
     title: 'Cancel Booking',
-    message: 'Enter the cancellation reason before cancelling this booking. This cannot be undone.',
-    okLabel: 'Yes, Cancel',
+    message: 'Enter the cancellation reason. The next step will show the server-calculated refund outcome before cancellation.',
+    okLabel: 'Review Refund',
     okColor: '#9a4a36',
     reasonLabel: 'Cancellation reason',
     reasonPlaceholder: 'Client request, duplicate booking, payment issue...',
@@ -363,6 +376,25 @@ async function cancelBooking(id: string) {
     icon: '❌',
   });
   if (!cancellationReason) return;
+  const preview = await fetch('/api/bookings/CancelBookings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bookingId: id, cancellationReason, previewOnly: true }),
+  });
+  const previewPayload = await preview.json().catch(() => ({}));
+  if (!preview.ok) {
+    toast(previewPayload.error ?? previewPayload.message ?? 'Could not calculate cancellation outcome', false);
+    return;
+  }
+  const cancellation = previewPayload.cancellation ?? {};
+  const confirmed = await showConfirm({
+    title: 'Confirm Cancellation',
+    message: `${cancellation.message ?? 'Cancel this booking?'} Refund status: ${formatAdminPaymentStatus(cancellation.refundStatus ?? 'not_required')}. Refund amount: ${formatMoney(cancellation.refundAmount ?? 0)}.`,
+    okLabel: 'Yes, Cancel',
+    okColor: '#9a4a36',
+    icon: '!',
+  });
+  if (!confirmed) return;
   const r = await fetch('/api/bookings/CancelBookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: id, cancellationReason, confirmedSensitiveAction: true }) });
   const payload = await r.json().catch(() => ({}));
   if (r.ok) {
@@ -1530,6 +1562,56 @@ function formatEstimateAmount(value: unknown): string {
   return value === null || value === undefined || value === '' ? 'Not recorded' : formatMoney(value);
 }
 
+function isCustomBooking(booking: any): boolean {
+  return booking.package_type === 'custom-booking' || booking.additionals?.customBooking === true;
+}
+
+function customQuotationFinalized(booking: any): boolean {
+  return !isCustomBooking(booking)
+    || (booking.quotation_status === 'finalized'
+      && Number(booking.total_price) > 0
+      && Number(booking.minimum_payment_amount) > 0);
+}
+
+function formatAdminPaymentStatus(value: unknown): string {
+  const status = String(value ?? 'unpaid');
+  return readableBookingKey(status);
+}
+
+function formatAssignedVenueNames(booking: any): string {
+  if (Array.isArray(booking.assignedVenueNames) && booking.assignedVenueNames.length > 0) {
+    return booking.assignedVenueNames.join(', ');
+  }
+  return booking.venueName && booking.venueName !== '—' ? booking.venueName : 'No venue recorded';
+}
+
+function parseBookingEndMsForAction(booking: any): number | null {
+  if (booking.end_datetime) {
+    const parsed = Date.parse(booking.end_datetime);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  if (!booking.end_date) return null;
+  const parsed = Date.parse(`${booking.end_date}T23:59:59+08:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function bookingHasEndedForAction(booking: any): boolean {
+  const endMs = parseBookingEndMsForAction(booking);
+  return endMs !== null && Date.now() >= endMs;
+}
+
+function getBookingNextActionLabel(booking: any): string {
+  if (booking.pendingRescheduleRequest) return 'Review Reschedule';
+  if (booking.status === 'pending' && isCustomBooking(booking) && !customQuotationFinalized(booking)) return 'Finalize Quotation';
+  if (booking.status === 'pending') return 'Await Payment';
+  if ((booking.status === 'booked' || booking.status === 'rescheduled') && bookingHasEndedForAction(booking)) return 'Complete Event';
+  if (booking.status === 'cancelled' && booking.payment?.refund_status === 'pending' && Number(booking.payment?.refund_amount ?? 0) > 0) return 'Process Refund';
+  if (booking.status === 'booked' || booking.status === 'rescheduled') return 'Monitor Event';
+  if (booking.status === 'completed') return 'Completed';
+  if (booking.status === 'cancelled') return 'Cancelled';
+  return 'Review Booking';
+}
+
 function updatePaymentCalculations() {
   const total = Number((document.getElementById('paymentTotal') as HTMLInputElement).value || 0);
   const paid = Number((document.getElementById('paymentAmountPaid') as HTMLInputElement).value || 0);
@@ -1540,7 +1622,8 @@ function updatePaymentCalculations() {
 function openPaymentModal(jsonStr: string) {
   const booking = JSON.parse(jsonStr);
   const payment = booking.payment ?? {};
-  const isCustomBooking = booking.package_type === 'custom-booking' || booking.additionals?.customBooking === true;
+  const customBooking = isCustomBooking(booking);
+  const quoteFinalized = customQuotationFinalized(booking);
   const roughEstimate = booking.estimate_summary?.roughAdditionsTotal ?? booking.additionals?.roughAdditionsTotal;
   const reservation = getReservationDeadlineState(booking);
   const badge = document.getElementById('paymentReservationBadge')!;
@@ -1556,14 +1639,16 @@ function openPaymentModal(jsonStr: string) {
   document.getElementById('paymentReservationNotice')?.classList.toggle('reservation-warning-cell', reservation.warning);
   (document.getElementById('paymentBookingId') as HTMLInputElement).value = booking.id;
   setText('paymentGuest', booking.full_name ?? 'Booking payment');
-  setText('paymentModalTitle', isCustomBooking ? 'Finalize Custom Pricing / Payment' : 'Record Payment');
-  setText('paymentTotalLabel', isCustomBooking ? 'Final Payable Amount *' : 'Total Booking Amount *');
+  setText('paymentModalTitle', customBooking && !quoteFinalized ? 'Finalize Custom Quotation' : customBooking ? 'Edit Custom Quotation / Payment' : 'Record Payment');
+  setText('paymentTotalLabel', customBooking ? 'Final Payable Amount *' : 'Total Booking Amount *');
   setText(
     'customPricingEstimate',
-    `Submitted rough additions estimate: ${formatEstimateAmount(roughEstimate)}. This is a guide only, not the final payable total.`,
+    customBooking && !quoteFinalized
+      ? `Submitted rough additions estimate: ${formatEstimateAmount(roughEstimate)}. Saving the final payable amount starts the 48-hour payment window; it does not mark the booking as booked.`
+      : `Submitted rough additions estimate: ${formatEstimateAmount(roughEstimate)}. This is a guide only, not the final payable total.`,
   );
-  document.getElementById('customPricingNotice')?.classList.toggle('hidden', !isCustomBooking);
-  const displayedTotal = isCustomBooking && Number(booking.total_price) > 0
+  document.getElementById('customPricingNotice')?.classList.toggle('hidden', !customBooking);
+  const displayedTotal = customBooking && Number(booking.total_price) > 0
     ? booking.total_price
     : payment.total_booking_amount ?? booking.total_price ?? 0;
   (document.getElementById('paymentTotal') as HTMLInputElement).value = String(displayedTotal);
@@ -1576,7 +1661,7 @@ function openPaymentModal(jsonStr: string) {
     : new Date().toISOString().slice(0, 16);
   updatePaymentCalculations();
   const saveButton = document.getElementById('savePaymentButton');
-  if (saveButton) saveButton.textContent = isCustomBooking ? 'Save Final Price / Payment' : 'Save Payment';
+  if (saveButton) saveButton.textContent = customBooking && !quoteFinalized ? 'Finalize Quotation' : customBooking ? 'Save Quotation / Payment' : 'Save Payment';
   document.getElementById('paymentModal')?.classList.remove('hidden');
 }
 
@@ -1603,7 +1688,7 @@ async function submitPayment() {
   const result = await response.json();
   button.disabled = false;
   if (!response.ok) { toast(result.error ?? 'Could not save payment', false); return; }
-  toast('Payment information saved');
+  toast(result.warning ? `Payment saved, but ${result.warning}` : result.message ?? 'Payment information saved');
   closePaymentModal();
   window.location.reload();
 }
@@ -1616,11 +1701,15 @@ document.getElementById('paymentModal')?.addEventListener('click', function(even
 
 function openBookingDetail(jsonStr: string) {
   const b = JSON.parse(jsonStr);
-  const isCustomBooking = b.package_type === 'custom-booking' || b.additionals?.customBooking === true;
+  const customBooking = isCustomBooking(b);
+  const customPricingFinalized = customQuotationFinalized(b);
+  const nextAction = getBookingNextActionLabel(b);
 
   const badge = document.getElementById('bd-status-badge')!;
-  badge.textContent = statusLabel(b.status);
+  badge.textContent = customBooking && b.status === 'pending' && !customPricingFinalized ? 'Waiting for Quotation' : statusLabel(b.status);
   badge.className = 'px-3 py-1 rounded-full text-sm font-bold ' + (BOOKING_STATUS_CLASSES[b.status] ?? 'bg-gray-100 text-gray-600');
+  toggleEl('bd-next-action-panel', Boolean(nextAction));
+  setText('bd-next-action', nextAction);
 
   const fmt = function(d: string | null) {
     return d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
@@ -1651,9 +1740,9 @@ function openBookingDetail(jsonStr: string) {
   setText('bd-email-notification', emailReady);
   setText('bd-sms-notification', smsReady);
   setText('bd-reminder', b.one_week_notice_sent_at ? 'Sent on ' + fmtTs(b.one_week_notice_sent_at) : 'Not sent');
-  setText('bd-booking-type', isCustomBooking ? 'Custom booking' : 'Preset package');
-  setText('bd-venue', b.venueName && b.venueName !== '—' ? b.venueName : 'No venue recorded');
-  setText('bd-package', isCustomBooking ? 'Not applicable — custom booking' : b.packageName ?? 'Package not recorded');
+  setText('bd-booking-type', customBooking ? 'Custom booking' : 'Preset package');
+  setText('bd-venue', formatAssignedVenueNames(b));
+  setText('bd-package', customBooking ? 'Not applicable - custom booking' : b.packageName ?? 'Package not recorded');
   const hasCurrentDateTimes = b.start_datetime?.slice(0, 10) === b.start_date
     && (!b.end_datetime || b.end_datetime.slice(0, 10) === b.end_date);
   const eventSchedule = b.start_datetime && hasCurrentDateTimes
@@ -1676,42 +1765,42 @@ function openBookingDetail(jsonStr: string) {
   setText('bd-event-type', b.eventTypeName ?? b.event_type ?? 'No event type submitted');
 
   const estimate = b.estimate_summary && typeof b.estimate_summary === 'object' ? b.estimate_summary : {};
-  const customPricingFinalized = !isCustomBooking
-    || (b.quotation_status === 'finalized'
-      && Number(b.total_price) > 0
-      && Number(b.minimum_payment_amount) > 0);
-  setText('bd-package-price', isCustomBooking ? 'Not applicable' : formatEstimateAmount(b.package_price ?? estimate.packageBase));
+  setText('bd-package-price', customBooking ? 'Not applicable' : formatEstimateAmount(b.package_price ?? estimate.packageBase));
   setText('bd-estimate-rooms', formatEstimateAmount(estimate.rooms));
   setText('bd-estimate-addons', formatEstimateAmount(estimate.addOns));
   setText('bd-estimate-extensions', formatEstimateAmount(estimate.extensions));
   setText('bd-estimate-corkage', formatEstimateAmount(estimate.corkage));
-  setText('bd-price-label', isCustomBooking ? 'Rough additions estimate' : 'Estimated total');
+  setText('bd-price-label', customBooking ? 'Rough additions estimate' : 'Estimated total');
   setText(
     'bd-price',
-    isCustomBooking
+    customBooking
       ? formatEstimateAmount(estimate.roughAdditionsTotal)
       : formatEstimateAmount(b.total_price ?? estimate.total),
   );
-  setText('bd-minimum', isCustomBooking && !customPricingFinalized ? 'After staff quotation' : formatEstimateAmount(b.minimum_payment_amount ?? estimate.minimumPayment));
-  setText('bd-balance', isCustomBooking && !customPricingFinalized ? 'After staff quotation' : formatEstimateAmount(b.remaining_balance_amount ?? estimate.remainingBalance));
+  setText('bd-minimum', customBooking && !customPricingFinalized ? 'After staff quotation' : formatEstimateAmount(b.minimum_payment_amount ?? estimate.minimumPayment));
+  setText('bd-balance', customBooking && !customPricingFinalized ? 'After staff quotation' : formatEstimateAmount(b.remaining_balance_amount ?? estimate.remainingBalance));
   setText(
     'bd-estimate-note',
-    isCustomBooking
+    customBooking
       ? 'Rough estimate for selected priced additions only. The final booking total is confirmed by staff.'
       : 'Submitted estimate based on the selected package and extras. Final charges remain subject to staff review.',
   );
   setText(
     'bd-final-payable',
-    isCustomBooking && !customPricingFinalized
-      ? 'Not finalized — checkout locked'
-      : formatEstimateAmount(isCustomBooking ? b.total_price : b.payment?.total_booking_amount ?? b.total_price),
+    customBooking && !customPricingFinalized
+      ? 'Not finalized - checkout locked'
+      : formatEstimateAmount(customBooking ? b.total_price : b.payment?.total_booking_amount ?? b.total_price),
   );
-  setText('bd-payment-status', (b.payment?.payment_status ?? 'unpaid').replace(/^./, (letter: string) => letter.toUpperCase()));
+  setText('bd-payment-status', formatAdminPaymentStatus(b.payment?.payment_status));
   setText('bd-amount-paid', formatMoney(b.payment?.amount_paid));
   setText('bd-payment-balance', formatMoney(b.payment?.remaining_balance ?? b.total_price));
   setText('bd-payment-method', b.payment?.payment_method ?? 'No payment method recorded');
   setText('bd-payment-date', fmtTs(b.payment?.payment_recorded_at ?? null));
   setText('bd-payment-notes', b.payment?.payment_notes ?? '—');
+  setText('bd-refund-status', formatAdminPaymentStatus(b.payment?.refund_status ?? 'not_required'));
+  setText('bd-refund-amount', formatMoney(b.payment?.refund_amount));
+  setText('bd-refund-processed', fmtTs(b.payment?.refund_processed_at ?? null));
+  setText('bd-refund-notes', b.payment?.refund_notes ?? 'No refund notes recorded.');
   const reservation = getReservationDeadlineState(b);
   const reservationBadge = document.getElementById('bd-reservation-badge')!;
   reservationBadge.textContent = reservation.label;
@@ -1726,7 +1815,13 @@ function openBookingDetail(jsonStr: string) {
   if (showCancellationReason) {
     setText('bd-cancellation-reason', b.cancellation_reason ?? 'Reservation expired after 48 hours without payment');
   }
-  renderBookingItems('bd-inclusions', isCustomBooking ? null : b.package_inclusions, isCustomBooking ? 'No preset package inclusions.' : 'No package inclusions recorded.');
+  toggleEl('bd-reschedule-request-wrap', Boolean(b.pendingRescheduleRequest));
+  if (b.pendingRescheduleRequest) {
+    setText('bd-reschedule-request-schedule', formatRescheduleRequestSchedule(b.pendingRescheduleRequest));
+    setText('bd-reschedule-request-created', fmtTs(b.pendingRescheduleRequest.created_at ?? null));
+    setText('bd-reschedule-request-note', b.pendingRescheduleRequest.customer_note?.trim() || 'No customer note submitted.');
+  }
+  renderBookingItems('bd-inclusions', customBooking ? null : b.package_inclusions, customBooking ? 'No preset package inclusions.' : 'No package inclusions recorded.');
   renderBookingItems('bd-rooms', b.selected_rooms ?? b.additionals?.rooms, 'No rooms selected.');
   renderBookingItems(
     'bd-addons',
@@ -1797,7 +1892,12 @@ function openBookingDetail(jsonStr: string) {
 
   const actions = document.getElementById('bd-actions')!;
   actions.innerHTML = '';
-  addActionBtn(actions, isCustomBooking ? 'Set Final Price / Payment' : 'Record Payment', 'var(--wb-action)', function() { closeBookingDetail(); openPaymentModal(JSON.stringify(b)); });
+  addActionBtn(
+    actions,
+    customBooking && !customPricingFinalized ? 'Finalize Quotation' : customBooking ? 'Edit Quotation / Payment' : 'Record Payment',
+    'var(--wb-action)',
+    function() { closeBookingDetail(); openPaymentModal(JSON.stringify(b)); },
+  );
   if (b.status !== 'pending' && canTransitionBookingStatus(b.status, 'booked')) {
     addActionBtn(actions, '✓ Book', 'var(--wb-action)', function() { closeBookingDetail(); confirmBooking(b.id); });
   }
@@ -1811,7 +1911,7 @@ function openBookingDetail(jsonStr: string) {
   if (canTransitionBookingStatus(b.status, 'cancelled')) {
     addActionBtn(actions, '✕ Cancel', 'var(--wb-danger-action)', function() { closeBookingDetail(); cancelBooking(b.id); });
   }
-  if (canTransitionBookingStatus(b.status, 'completed')) {
+  if (canTransitionBookingStatus(b.status, 'completed') && bookingHasEndedForAction(b)) {
     addActionBtn(actions, 'Complete', 'var(--wb-action-neutral)', function() { closeBookingDetail(); setBookingCompleted(b.id); });
   }
   if (b.status === 'cancelled' && (window as any).__isAdmin) {
@@ -2473,10 +2573,13 @@ function admShowDayDetail(iso: string, bookings: any[], blockedDates: any[]) {
   const bookingsHtml = bookings.map(b => {
     const full = byId[b.id] ?? b;
     const s = STATUS_CELL[b.status] ?? STATUS_CELL.booked;
+    const completeButton = bookingHasEndedForAction(full)
+      ? `<button onclick="setBookingCompleted('${b.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-action-neutral);color:var(--wb-on-action-neutral);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Complete</button>`
+      : '';
     const actionBtns = canTransitionBookingStatus(b.status, 'rescheduled')
       ? `<button onclick="openReschedule('${b.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-action-warm);color:var(--wb-on-action-warm);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">↻ Reschedule</button>
          <button onclick="cancelBooking('${b.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-danger-action);color:var(--wb-on-danger);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">✕ Cancel</button>
-         <button onclick="setBookingCompleted('${b.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-action-neutral);color:var(--wb-on-action-neutral);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Complete</button>`
+         ${completeButton}`
       : canTransitionBookingStatus(b.status, 'booked') && b.status === 'rescheduled'
       ? `<button onclick="confirmBooking('${b.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-action);color:var(--wb-on-action);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">✓ Book</button>
          <button onclick="cancelBooking('${b.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-danger-action);color:var(--wb-on-danger);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">✕ Cancel</button>`
