@@ -1,20 +1,605 @@
 ---
 import Footer from '../components/Footer.astro';
 import PublicPageHero from '../components/PublicPageHero.astro';
+import {
+  galleryPhotoGroups,
+  resolveWoodberryPhotoSrc,
+  woodberryEventPhotos,
+  woodberryPhotos,
+  type WoodberryGalleryPhoto,
+} from '../data/woodberryPhotos';
 import Layout from '../layouts/Layout.astro';
+
+const photo = (src: string) => resolveWoodberryPhotoSrc(src, woodberryPhotos.fallback);
+const poolPhotos = galleryPhotoGroups.find((group) => group.name === 'Pool')?.photos ?? [];
+const pavilionPhotos = galleryPhotoGroups.find((group) => group.name === 'Pavilion')?.photos ?? [];
+const roomPhotos = galleryPhotoGroups.find((group) => group.name === 'Rooms')?.photos ?? [];
+
+const celebrationPhotos: WoodberryGalleryPhoto[] = [
+  woodberryEventPhotos.weddings[1],
+  woodberryEventPhotos.debut[0],
+  woodberryEventPhotos.childrenParty[0],
+  woodberryEventPhotos.childrenParty[3],
+  {
+    src: '/woodbery_pics/events/blue_lunch/blue_lunch_hall_1.jpg',
+    alt: 'Blue lunch event setup with guest tables in the pavilion',
+    caption: 'Hosted Dining',
+  },
+  woodberryEventPhotos.weddings[3],
+];
+
+const gatheringHighlights = [
+  'Poolside views for easy daytime moments',
+  'Open-air corners for relaxed conversations',
+  'Covered event areas that can be dressed for the occasion',
+  'A warm setting for family, friends, and guests to linger',
+];
+
+const roomPreviewPhotos = [
+  roomPhotos[0],
+  roomPhotos[4],
+  roomPhotos[1],
+].filter(Boolean);
+
+const dayPool = poolPhotos.find((image) => image.caption === 'Swimming Pool') ?? {
+  src: woodberryPhotos.amenitiesHero,
+  alt: 'Woodberry swimming pool in daytime',
+  caption: 'Daylight',
+};
+
+const nightPool = poolPhotos.find((image) => image.caption === 'Pool at Night') ?? {
+  src: woodberryPhotos.homeHero,
+  alt: 'Woodberry swimming pool with evening lights',
+  caption: 'Evening',
+};
+
+const emptyHall = pavilionPhotos.find((image) => image.caption === 'Open Event Hall') ?? {
+  src: '/woodbery_pics/property_photos/day/Empty%20Hall.jpg',
+  alt: 'Woodberry empty event hall ready for setup',
+  caption: 'Open Hall',
+};
+
+const dressedHall = {
+  src: '/woodbery_pics/events/blue_lunch/blue_lunch_hall_1.jpg',
+  alt: 'Woodberry event hall arranged with blue dining setup',
+  caption: 'Dressed for an Event',
+};
 ---
 
 <Layout
-  title="About"
-  description="Learn more about Woodberry Resorts and Events Place."
+  title="About Woodberry"
+  description="About Woodberry Resorts and Events Place, a place for stays, gatherings, and memorable celebrations."
 >
   <div class="wb-page-surface">
     <PublicPageHero
       headingId="about-title"
-      title="About"
-      description="About content for Woodberry Resorts and Events Place will be added later."
-      compact
-    />
+      title="About Woodberry"
+      description="A place for stays, gatherings, and memorable celebrations, shaped by poolside afternoons, dressed-up halls, shared meals, and quiet rooms to rest after the day."
+      image={woodberryPhotos.publicHero}
+      imageAlt="Woodberry pool and resort house in daytime"
+    >
+      <a class="public-page-hero__link public-page-hero__link--primary" href="/events_and_booking/events" slot="actions">
+        Start a Booking
+      </a>
+      <a class="public-page-hero__link public-page-hero__link--secondary" href="/events" slot="actions">
+        Explore Events
+      </a>
+    </PublicPageHero>
+
+    <section class="about-section about-section--gather" aria-labelledby="gather-title">
+      <div class="about-shell gather-layout">
+        <div class="section-copy">
+          <p class="section-eyebrow">A Place to Gather</p>
+          <h2 id="gather-title">Room for the day to unfold.</h2>
+          <p>
+            Woodberry brings together poolside scenery, landscaped and open spaces, covered
+            event areas, and easy places to settle in with guests. The setting feels relaxed
+            enough for casual conversations and flexible enough for celebrations with a little
+            more ceremony.
+          </p>
+        </div>
+
+        <div class="gather-card">
+          <img
+            src={photo('/woodbery_pics/property_photos/day/pool_2.jpg')}
+            alt="Woodberry poolside pavilion and open gathering area"
+            loading="lazy"
+            decoding="async"
+          />
+          <div class="gather-card__content">
+            {
+              gatheringHighlights.map((item) => (
+                <span>{item}</span>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="about-section about-section--gallery" aria-labelledby="celebrations-title">
+      <div class="about-shell">
+        <div class="section-heading">
+          <p class="section-eyebrow">Celebrations Take Different Forms</p>
+          <h2 id="celebrations-title">From formal receptions to colorful family parties.</h2>
+          <p>
+            The details change with every occasion: flowers and stage lights, birthday color,
+            debut styling, buffet tables, and dining setups that bring everyone together.
+          </p>
+        </div>
+
+        <div class="celebration-gallery">
+          {
+            celebrationPhotos.map((image, index) => (
+              <figure class:list={['photo-tile', { 'photo-tile--wide': index === 0 || index === 4 }]}>
+                <img
+                  src={photo(image.src)}
+                  alt={image.alt}
+                  loading="lazy"
+                  decoding="async"
+                />
+                <figcaption>{image.caption}</figcaption>
+              </figure>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="about-section about-section--day-night" aria-labelledby="day-night-title">
+      <div class="about-shell day-night-layout">
+        <div class="section-copy">
+          <p class="section-eyebrow">From Daylight to Evening</p>
+          <h2 id="day-night-title">A setting that shifts with the light.</h2>
+          <p>
+            In the daytime, the pool and open areas feel bright and easygoing. As evening
+            arrives, the same spaces become warmer and more intimate, giving gatherings a
+            softer mood without losing the familiar Woodberry calm.
+          </p>
+        </div>
+
+        <div class="paired-photos" aria-label="Daytime and evening Woodberry views">
+          {[dayPool, nightPool].map((image) => (
+            <figure>
+              <img
+                src={photo(image.src)}
+                alt={image.alt}
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption>{image.caption}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="about-section about-section--stay" aria-labelledby="stay-title">
+      <div class="about-shell stay-layout">
+        <div class="room-strip">
+          {
+            roomPreviewPhotos.map((image) => (
+              <figure>
+                <img
+                  src={photo(image.src)}
+                  alt={image.alt}
+                  loading="lazy"
+                  decoding="async"
+                />
+                <figcaption>{image.caption}</figcaption>
+              </figure>
+            ))
+          }
+        </div>
+
+        <div class="section-copy">
+          <p class="section-eyebrow">Stay a Little Longer</p>
+          <h2 id="stay-title">A quiet place to rest after the gathering.</h2>
+          <p>
+            For visits that stretch beyond a single event, Woodberry's rooms offer comfortable
+            places to pause, settle in, and wake up close to the celebration.
+          </p>
+          <a class="wb-btn wb-btn--outline" href="/accommodations">View Accommodations</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="about-section about-section--spaces" aria-labelledby="spaces-title">
+      <div class="about-shell">
+        <div class="section-heading">
+          <p class="section-eyebrow">Spaces That Adapt to the Occasion</p>
+          <h2 id="spaces-title">The same hall, ready for different kinds of days.</h2>
+          <p>
+            Some moments begin with an open space. Others arrive with tables, draping,
+            centerpieces, and a clear reason for everyone to gather.
+          </p>
+        </div>
+
+        <div class="comparison-grid">
+          {[emptyHall, dressedHall].map((image) => (
+            <figure>
+              <img
+                src={photo(image.src)}
+                alt={image.alt}
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption>{image.caption}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="about-cta" aria-labelledby="about-cta-title">
+      <div class="about-cta__media" aria-hidden="true">
+        <img
+          src={photo('/woodbery_pics/property_photos/night/Pool%20Stage%20Night.jpg')}
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+      <div class="about-cta__content">
+        <p class="section-eyebrow">Gather Here</p>
+        <h2 id="about-cta-title">Bring the people, the occasion, and the memories.</h2>
+        <p>
+          Whether the plan is a swim, a meal, a celebration, or a restful stay, Woodberry is
+          made for days people remember together.
+        </p>
+        <div class="about-cta__actions">
+          <a class="wb-btn wb-btn--primary" href="/events_and_booking/events">Book a Date</a>
+          <a class="wb-btn wb-btn--warm" href="/events">Browse Events</a>
+          <a class="wb-btn wb-btn--outline" href="/contact-us">Contact Us</a>
+        </div>
+      </div>
+    </section>
   </div>
   <Footer slot="footer" />
 </Layout>
+
+<style>
+  .about-section {
+    padding: clamp(3rem, 7vw, 5.75rem) 0;
+  }
+
+  .about-section--gallery,
+  .about-section--spaces {
+    background: var(--wb-surface-soft);
+  }
+
+  .about-shell {
+    width: min(100% - 2rem, 88rem);
+    margin: 0 auto;
+  }
+
+  .section-heading,
+  .section-copy {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .section-heading {
+    max-width: 49rem;
+    margin-bottom: clamp(1.5rem, 3vw, 2.3rem);
+  }
+
+  .section-copy {
+    align-content: center;
+  }
+
+  .section-eyebrow {
+    margin: 0;
+    color: var(--wb-green);
+    font-size: 0.72rem;
+    font-weight: 850;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  h2 {
+    margin: 0;
+    color: var(--wb-green-dark);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.85rem, 4vw, 3.15rem);
+    letter-spacing: 0;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .section-heading p:not(.section-eyebrow),
+  .section-copy p {
+    max-width: 42rem;
+    color: var(--wb-muted);
+    font-size: clamp(1rem, 1.4vw, 1.1rem);
+    line-height: 1.72;
+  }
+
+  .gather-layout,
+  .day-night-layout,
+  .stay-layout {
+    display: grid;
+    align-items: center;
+    gap: clamp(1.5rem, 4vw, 3.5rem);
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  }
+
+  .gather-card {
+    position: relative;
+    min-height: clamp(25rem, 44vw, 37rem);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 78%, transparent);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-green-dark);
+    box-shadow: var(--wb-shadow-lg);
+  }
+
+  .gather-card img,
+  .photo-tile img,
+  .paired-photos img,
+  .room-strip img,
+  .comparison-grid img,
+  .about-cta__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .gather-card::after {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, transparent 35%, rgba(8, 20, 6, 0.78)),
+      linear-gradient(90deg, rgba(8, 20, 6, 0.28), transparent 56%);
+    content: '';
+  }
+
+  .gather-card__content {
+    position: absolute;
+    z-index: 1;
+    right: clamp(1rem, 3vw, 1.5rem);
+    bottom: clamp(1rem, 3vw, 1.5rem);
+    left: clamp(1rem, 3vw, 1.5rem);
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gather-card__content span {
+    min-height: 3rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: var(--wb-radius-sm);
+    background: rgba(250, 247, 239, 0.14);
+    color: #fffdf8;
+    font-size: 0.86rem;
+    font-weight: 760;
+    line-height: 1.35;
+    padding: 0.75rem;
+    backdrop-filter: blur(10px);
+  }
+
+  .celebration-gallery {
+    display: grid;
+    gap: 0.9rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .photo-tile {
+    position: relative;
+    min-height: 18rem;
+    overflow: hidden;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-raised);
+    box-shadow: var(--wb-shadow-md);
+  }
+
+  .photo-tile--wide {
+    grid-column: span 2;
+  }
+
+  .photo-tile::after,
+  .paired-photos figure::after,
+  .room-strip figure::after,
+  .comparison-grid figure::after {
+    position: absolute;
+    inset: auto 0 0;
+    height: 48%;
+    background: linear-gradient(180deg, transparent, rgba(7, 17, 5, 0.78));
+    content: '';
+    pointer-events: none;
+  }
+
+  figcaption {
+    position: absolute;
+    z-index: 1;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .day-night-layout {
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  }
+
+  .paired-photos,
+  .comparison-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .paired-photos figure,
+  .comparison-grid figure,
+  .room-strip figure {
+    position: relative;
+    min-height: 24rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--wb-border) 72%, transparent);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-green-dark);
+    box-shadow: var(--wb-shadow-md);
+  }
+
+  .paired-photos figure:nth-child(2) {
+    margin-top: clamp(1.5rem, 5vw, 4rem);
+  }
+
+  .stay-layout {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  }
+
+  .stay-layout .wb-btn {
+    width: fit-content;
+    margin-top: 0.4rem;
+  }
+
+  .room-strip {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr);
+  }
+
+  .room-strip figure:first-child {
+    min-height: 31rem;
+    grid-row: span 2;
+  }
+
+  .room-strip figure:not(:first-child) {
+    min-height: 15rem;
+  }
+
+  .comparison-grid figure {
+    min-height: clamp(20rem, 34vw, 30rem);
+  }
+
+  .about-cta {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    color: #ffffff;
+    padding: clamp(3.5rem, 8vw, 6.5rem) 1rem;
+  }
+
+  .about-cta__media,
+  .about-cta::after {
+    position: absolute;
+    inset: 0;
+  }
+
+  .about-cta__media {
+    z-index: -2;
+    background: var(--wb-green-dark);
+  }
+
+  .about-cta::after {
+    z-index: -1;
+    background:
+      linear-gradient(90deg, rgba(7, 17, 5, 0.9), rgba(7, 17, 5, 0.64)),
+      linear-gradient(0deg, rgba(7, 17, 5, 0.55), transparent);
+    content: '';
+  }
+
+  .about-cta__content {
+    width: min(100%, 62rem);
+    margin: 0 auto;
+  }
+
+  .about-cta h2 {
+    max-width: 43rem;
+    color: #ffffff;
+  }
+
+  .about-cta p:not(.section-eyebrow) {
+    max-width: 39rem;
+    margin-top: 0.95rem;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: clamp(1rem, 1.6vw, 1.12rem);
+    line-height: 1.7;
+  }
+
+  .about-cta__actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  :global(html.dark) .about-section--gallery,
+  :global(html.dark) .about-section--spaces {
+    background: var(--wb-surface-soft);
+  }
+
+  :global(html.dark) .section-heading p:not(.section-eyebrow),
+  :global(html.dark) .section-copy p {
+    color: var(--wb-muted);
+  }
+
+  :global(html.dark) h2 {
+    color: var(--wb-green-dark);
+  }
+
+  @media (max-width: 980px) {
+    .gather-layout,
+    .day-night-layout,
+    .stay-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .stay-layout .section-copy {
+      order: -1;
+    }
+
+    .celebration-gallery {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .about-shell {
+      width: min(100% - 1.5rem, 88rem);
+    }
+
+    .gather-card {
+      min-height: 28rem;
+    }
+
+    .gather-card__content,
+    .celebration-gallery,
+    .paired-photos,
+    .comparison-grid,
+    .room-strip {
+      grid-template-columns: 1fr;
+    }
+
+    .photo-tile,
+    .photo-tile--wide,
+    .paired-photos figure,
+    .comparison-grid figure,
+    .room-strip figure,
+    .room-strip figure:first-child,
+    .room-strip figure:not(:first-child) {
+      min-height: 18rem;
+      grid-column: auto;
+      grid-row: auto;
+    }
+
+    .paired-photos figure:nth-child(2) {
+      margin-top: 0;
+    }
+
+    .about-cta__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
+</style>
