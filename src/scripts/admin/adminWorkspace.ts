@@ -2630,7 +2630,7 @@ async function createBlockedDate(event: Event) {
   } finally {
     if (submitButton) {
       submitButton.disabled = false;
-      submitButton.textContent = blockedDateId ? 'Save Changes' : 'Block Dates';
+      submitButton.textContent = (idInput?.value ?? '') ? 'Save Changes' : 'Block Dates';
     }
   }
 }
@@ -2855,6 +2855,119 @@ function admShowDayDetail(iso: string, bookings: any[], blockedDates: any[]) {
   content.innerHTML = blockedHtml + bookingsHtml;
 }
 
+function admShowDayDetailV2(iso: string, bookings: any[], blockedDates: any[]) {
+  const panel = document.getElementById('adm-day-detail')!;
+  const dateEl = document.getElementById('adm-detail-date')!;
+  const content = document.getElementById('adm-detail-content')!;
+
+  dateEl.textContent = new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  panel.classList.remove('hidden');
+
+  if (bookings.length === 0 && blockedDates.length === 0) {
+    content.innerHTML = '<p class="text-gray-400 py-4 text-center">No bookings or blocked dates on this date. It is available.</p>';
+    return;
+  }
+
+  const allBookings: any[] = (window as any).__allBookings ?? [];
+  const bookingById: Record<string, any> = {};
+  allBookings.forEach((booking: any) => { bookingById[booking.id] = booking; });
+
+  const activeBookings = bookings.filter((booking) => isActiveBookingStatus(booking.status));
+  const pendingBookings = bookings.filter((booking) => booking.status === 'pending');
+  const historyBookings = bookings.filter((booking) => !isBlockingBookingStatus(booking.status));
+  const orderedBookings = [...activeBookings, ...pendingBookings, ...historyBookings];
+
+  const blockedHtml = blockedDates.map((rawBlock: any) => {
+    const block = normalizeBlockedDate(rawBlock);
+    return `
+      <div style="padding:12px 16px;border-radius:12px;background:${BLOCKED_CELL.bg};outline:1.5px solid ${BLOCKED_CELL.ring};display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700;color:${BLOCKED_CELL.text};font-size:0.85rem;">Admin blocked</div>
+          <div style="color:var(--wb-warning-text);font-size:0.75rem;margin-top:2px;">${escapeHtml(venueNameById(block.venueId))}</div>
+          <div style="color:var(--wb-warning-text);font-size:0.72rem;margin-top:2px;">${escapeHtml(formatAdminDateRange(block.startDate, block.endDate))}</div>
+          <div style="color:var(--wb-warning-text);font-size:0.72rem;margin-top:4px;">${escapeHtml(block.reason)}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">
+          <button onclick="editBlockedDate('${escapeHtml(block.id)}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-surface-raised);color:var(--wb-link);font-size:0.72rem;font-weight:700;border:1px solid var(--wb-border);cursor:pointer;">Edit</button>
+          <button onclick="deactivateBlockedDate('${escapeHtml(block.id)}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-danger-action);color:var(--wb-on-danger);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Deactivate</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const bookingsHtml = orderedBookings.map((booking) => {
+    const full = bookingById[booking.id] ?? booking;
+    const statusColors = STATUS_CELL[booking.status] ?? STATUS_CELL.booked;
+    const namedVenue = venueNameById(booking.venue_id);
+    const venueLabel = namedVenue !== 'Venue' ? namedVenue : (full.venueName ?? '');
+    const completeButton = bookingHasEndedForAction(full)
+      ? `<button onclick="setBookingCompleted('${booking.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-action-neutral);color:var(--wb-on-action-neutral);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Complete</button>`
+      : '';
+    const actionBtns = canTransitionBookingStatus(booking.status, 'rescheduled')
+      ? `<button onclick="openReschedule('${booking.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-action-warm);color:var(--wb-on-action-warm);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Reschedule</button>
+         <button onclick="cancelBooking('${booking.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-danger-action);color:var(--wb-on-danger);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Cancel</button>
+         ${completeButton}`
+      : canTransitionBookingStatus(booking.status, 'booked') && booking.status === 'rescheduled'
+      ? `<button onclick="confirmBooking('${booking.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-action);color:var(--wb-on-action);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Book</button>
+         <button onclick="cancelBooking('${booking.id}')" style="padding:4px 10px;border-radius:6px;background:var(--wb-danger-action);color:var(--wb-on-danger);font-size:0.72rem;font-weight:700;border:none;cursor:pointer;">Cancel</button>`
+      : '';
+
+    return `<div style="padding:12px 16px;border-radius:12px;background:${statusColors.bg};outline:1.5px solid ${statusColors.ring};display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700;color:${statusColors.text};font-size:0.85rem;">${escapeHtml(full.full_name ?? full.venueName ?? 'Guest')}</div>
+        <div style="color:var(--wb-muted);font-size:0.75rem;margin-top:2px;">${escapeHtml(venueLabel)}${full.event_type ? ' - ' + escapeHtml(full.event_type) : ''}</div>
+        <div style="color:var(--wb-muted);font-size:0.72rem;margin-top:2px;">${escapeHtml(formatAdminDateRange(booking.start_date, booking.end_date))}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+        <span style="font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:9999px;background:${statusColors.bg};color:${statusColors.text};outline:1px solid ${statusColors.ring};">${escapeHtml(statusLabel(booking.status))}</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  content.innerHTML = blockedHtml + bookingsHtml;
+}
+
+function applyAvailabilityFilters() {
+  const { startDate, endDate } = getCalendarRange();
+  if (startDate && endDate && endDate < startDate) {
+    setAvailabilityMessage('Filter end date must be on or after the start date.');
+    toast('Filter end date must be on or after the start date.', false);
+    return;
+  }
+
+  const anchorDate = startDate || endDate;
+  if (anchorDate) {
+    const nextDate = new Date(anchorDate + 'T00:00:00');
+    admYear = nextDate.getFullYear();
+    admMonth = nextDate.getMonth();
+  }
+
+  setAvailabilityMessage();
+  clearAvailabilityCache();
+  document.getElementById('adm-day-detail')?.classList.add('hidden');
+  renderBlockedDateList();
+  admRenderCalendar();
+}
+
+function resetAvailabilityFilters() {
+  const venueFilter = document.getElementById('calendarVenueFilter') as HTMLSelectElement | null;
+  const startInput = document.getElementById('calendarRangeStart') as HTMLInputElement | null;
+  const endInput = document.getElementById('calendarRangeEnd') as HTMLInputElement | null;
+  if (venueFilter) venueFilter.value = '';
+  if (startInput) startInput.value = '';
+  if (endInput) endInput.value = '';
+  setAvailabilityMessage();
+  clearAvailabilityCache();
+  document.getElementById('adm-day-detail')?.classList.add('hidden');
+  renderBlockedDateList();
+  admRenderCalendar();
+}
+
 document.getElementById('adm-detail-close')?.addEventListener('click', () => {
   document.getElementById('adm-day-detail')?.classList.add('hidden');
 });
@@ -2869,7 +2982,12 @@ document.getElementById('adm-next-month')?.addEventListener('click', () => {
   document.getElementById('adm-day-detail')?.classList.add('hidden');
 });
 document.getElementById('blockedDateForm')?.addEventListener('submit', createBlockedDate);
+document.getElementById('cancelBlockedDateEdit')?.addEventListener('click', resetBlockedDateForm);
 document.getElementById('refreshBlockedDates')?.addEventListener('click', () => loadBlockedDates());
+document.getElementById('blockedStatusFilter')?.addEventListener('change', renderBlockedDateList);
+document.getElementById('applyAvailabilityFilters')?.addEventListener('click', applyAvailabilityFilters);
+document.getElementById('resetAvailabilityFilters')?.addEventListener('click', resetAvailabilityFilters);
+document.getElementById('calendarVenueFilter')?.addEventListener('change', applyAvailabilityFilters);
 loadBlockedDates();
 
 // Render calendar when the tab becomes active
