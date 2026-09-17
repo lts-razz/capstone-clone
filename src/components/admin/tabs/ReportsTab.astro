@@ -95,38 +95,51 @@
       </div>
       <p id="rpt-forecast-unavailable" class="text-sm text-gray-500 hidden">-</p>
       <div id="rpt-forecast-results" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Expected bookings</p>
           <p id="rpt-forecast-bookings" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+          <p class="text-xs text-gray-400 mt-1">Includes low/high range</p>
         </div>
-        <div>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Expected booking value</p>
           <p id="rpt-forecast-revenue" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+          <p class="text-xs text-gray-400 mt-1">Includes low/high range</p>
         </div>
-        <div>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Confidence</p>
           <p id="rpt-forecast-confidence" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
-        <div>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Cancellation estimate</p>
           <p id="rpt-forecast-cancellation" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
-        <div>
-          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Booking mix</p>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Package vs custom demand</p>
           <p id="rpt-forecast-mix" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
-        <div>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Average booking value</p>
           <p id="rpt-forecast-average-value" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
-        <div>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Likely top package</p>
           <p id="rpt-forecast-top-package" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
-        <div>
+        <div class="rounded-lg border border-gray-100 bg-white p-4">
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Likely busiest venue</p>
           <p id="rpt-forecast-busiest-venue" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
+      </div>
+      <div id="rpt-forecast-visualization" class="mt-5 border-t border-gray-100 pt-5 hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h4 class="text-sm font-bold uppercase tracking-wide text-gray-400">Historical vs Forecast</h4>
+          <div class="flex flex-wrap gap-3 text-xs text-gray-500">
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm" style="background:var(--butterscotch-primary);"></span>Historical actual</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm" style="background:var(--wb-action);"></span>Forecast</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-gray-200 border border-dashed border-gray-400"></span>Low/high range</span>
+          </div>
+        </div>
+        <div id="rpt-forecast-chart" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
       </div>
       <ul id="rpt-forecast-insights" class="mt-4 space-y-2 text-sm text-gray-600"></ul>
       <p id="rpt-forecast-backtest" class="report-period-note mt-4 hidden"></p>

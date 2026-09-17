@@ -2644,13 +2644,130 @@ function formatForecastNumberWithRange(value: unknown, range: any) {
   const base = formatForecastValue(value);
   if (base === '-') return base;
   const rangeText = formatForecastRange(range, (item) => String(Math.round(Number(item ?? 0))));
-  return rangeText === '-' ? base : `${base} (${rangeText})`;
+  return rangeText === '-' ? base : `${base} (low/high ${rangeText})`;
 }
 
 function formatForecastMoneyWithRange(value: unknown, range: any) {
   if (value === null || value === undefined) return '-';
   const rangeText = formatForecastRange(range, formatReportMoney);
-  return rangeText === '-' ? formatReportMoney(value) : `${formatReportMoney(value)} (${rangeText})`;
+  return rangeText === '-' ? formatReportMoney(value) : `${formatReportMoney(value)} (low/high ${rangeText})`;
+}
+
+function formatForecastMonthLabel(month: string) {
+  return /^\d{4}-\d{2}$/.test(month)
+    ? new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-PH', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : month;
+}
+
+function forecastPercent(value: unknown, max: number) {
+  const numeric = Math.max(Number(value ?? 0), 0);
+  if (!numeric || !max) return 0;
+  return Math.max(2, Math.min(100, Math.round((numeric / max) * 100)));
+}
+
+function renderForecastMetricChart(options: {
+  title: string;
+  unitLabel: string;
+  historical: Array<{ month: string; value: number }>;
+  forecast: { month: string; value: number; low: number | null; high: number | null };
+  formatter: (value: unknown) => string;
+}) {
+  const maxValue = Math.max(
+    1,
+    ...options.historical.map((item) => Number(item.value ?? 0)),
+    Number(options.forecast.high ?? options.forecast.value ?? 0),
+  );
+  const rows = [
+    ...options.historical.map((item) => ({ ...item, type: 'actual' as const, low: null, high: null })),
+    { ...options.forecast, type: 'forecast' as const },
+  ];
+
+  const rowHtml = rows.map((item) => {
+    const valuePct = forecastPercent(item.value, maxValue);
+    const lowPct = item.low === null || item.low === undefined ? null : forecastPercent(item.low, maxValue);
+    const highPct = item.high === null || item.high === undefined ? null : forecastPercent(item.high, maxValue);
+    const rangeWidth = lowPct === null || highPct === null ? 0 : Math.max(2, highPct - lowPct);
+    const isForecast = item.type === 'forecast';
+    const valueLabel = isForecast ? `Forecast ${options.formatter(item.value)}` : `Actual ${options.formatter(item.value)}`;
+    const rangeLabel = isForecast && item.low !== null && item.low !== undefined && item.high !== null && item.high !== undefined
+      ? `<span class="text-gray-400">Range ${options.formatter(item.low)} - ${options.formatter(item.high)}</span>`
+      : '';
+    const barStyle = isForecast
+      ? 'background:var(--wb-action);'
+      : 'background:var(--butterscotch-primary);';
+    const rangeStyle = isForecast && lowPct !== null && highPct !== null
+      ? `<div class="absolute top-1/2 -translate-y-1/2 h-4 rounded-full bg-gray-200 border border-dashed border-gray-400" style="left:${lowPct}%;width:${rangeWidth}%;"></div>`
+      : '';
+
+    return `
+      <div>
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <span class="text-xs font-bold text-gray-500">${escapeHtml(formatForecastMonthLabel(item.month))}</span>
+          <span class="text-xs text-gray-500">${valueLabel}${rangeLabel ? ' - ' + rangeLabel : ''}</span>
+        </div>
+        <div class="relative h-7 rounded-full bg-white border border-gray-100 overflow-hidden">
+          ${rangeStyle}
+          <div class="relative h-full rounded-full" style="width:${valuePct}%;${barStyle}"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="rounded-lg border border-gray-100 bg-white p-4">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h5 class="text-sm font-black" style="color:var(--jet-primary);">${escapeHtml(options.title)}</h5>
+        <span class="text-xs font-semibold text-gray-400">${escapeHtml(options.unitLabel)}</span>
+      </div>
+      <div class="space-y-3">${rowHtml}</div>
+    </div>`;
+}
+
+function renderForecastVisualization(forecast: any) {
+  const visualization = document.getElementById('rpt-forecast-visualization');
+  const chart = document.getElementById('rpt-forecast-chart');
+  if (!visualization || !chart) return;
+
+  const dataset = Array.isArray(forecast?.monthlyDataset) ? forecast.monthlyDataset : [];
+  if (!forecast?.available || !dataset.length) {
+    visualization.classList.add('hidden');
+    chart.innerHTML = '';
+    return;
+  }
+
+  const history = dataset.slice(-6);
+  const bookingChart = renderForecastMetricChart({
+    title: 'Bookings',
+    unitLabel: 'secured/completed count',
+    historical: history.map((month: any) => ({
+      month: String(month.month),
+      value: Number(month.securedCompletedBookings ?? 0),
+    })),
+    forecast: {
+      month: String(forecast.targetMonth ?? 'Forecast'),
+      value: Number(forecast.expectedBookings ?? 0),
+      low: forecast.bookingRange?.low ?? null,
+      high: forecast.bookingRange?.high ?? null,
+    },
+    formatter: (value) => String(Math.round(Number(value ?? 0))),
+  });
+  const revenueChart = renderForecastMetricChart({
+    title: 'Revenue',
+    unitLabel: 'booking value',
+    historical: history.map((month: any) => ({
+      month: String(month.month),
+      value: Number(month.securedCompletedValue ?? 0),
+    })),
+    forecast: {
+      month: String(forecast.targetMonth ?? 'Forecast'),
+      value: Number(forecast.expectedRevenue ?? 0),
+      low: forecast.revenueRange?.low ?? null,
+      high: forecast.revenueRange?.high ?? null,
+    },
+    formatter: formatReportMoney,
+  });
+
+  chart.innerHTML = bookingChart + revenueChart;
+  visualization.classList.remove('hidden');
 }
 
 generateReport = async function() {
@@ -2723,6 +2840,7 @@ generateReport = async function() {
         forecastMethod?.classList.add('hidden');
         forecastBacktest?.classList.add('hidden');
         if (forecastInsights) forecastInsights.innerHTML = '';
+        renderForecastVisualization(null);
       } else {
         const confidence = forecast.confidence;
         const cancellation = forecast.cancellationEstimate;
@@ -2760,6 +2878,7 @@ generateReport = async function() {
         forecastUnavailable?.classList.add('hidden');
         forecastResults?.classList.remove('hidden');
         forecastMethod?.classList.remove('hidden');
+        renderForecastVisualization(forecast);
       }
     } else {
       setText('rpt-forecast-period', '-');
@@ -2770,6 +2889,7 @@ generateReport = async function() {
       forecastMethod?.classList.add('hidden');
       forecastBacktest?.classList.add('hidden');
       if (forecastInsights) forecastInsights.innerHTML = '';
+      renderForecastVisualization(null);
     }
 
     const breakdown = document.getElementById('rpt-breakdown-body')!;
