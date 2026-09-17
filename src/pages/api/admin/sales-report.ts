@@ -48,7 +48,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .order("created_at", { ascending: true }),
     db
       .from("bookings")
-      .select("id, status, created_at, total_price, package_type")
+      .select("id, status, created_at, total_price, package_id, package_type, venue_id")
       .lt("created_at", forecastTargetStart)
       .order("created_at", { ascending: true }),
   ]);
@@ -71,8 +71,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       status: normalizeBookingStatus(booking.status),
     }));
   const forecastBookingIds = validForecastBookings.map((booking) => booking.id);
-  const packageIds = [...new Set(validBookings.map((booking) => booking.package_id).filter((id): id is string => Boolean(id)))];
-  const venueIds = [...new Set(validBookings.map((booking) => booking.venue_id).filter((id): id is string => Boolean(id)))];
+  const allBookingsForNames = [...validBookings, ...validForecastBookings];
+  const packageIds = [...new Set(allBookingsForNames.map((booking) => booking.package_id).filter((id): id is string => Boolean(id)))];
+  const venueIds = [...new Set(allBookingsForNames.map((booking) => booking.venue_id).filter((id): id is string => Boolean(id)))];
+  const allBookingIdsForAssignments = [...new Set([...bookingIds, ...forecastBookingIds])];
   const [{ data: payments, error: paymentsError }, { data: forecastPayments, error: forecastPaymentsError }, { data: packages, error: packagesError }, { data: venueAssignments, error: venueAssignmentsError }, { data: venues, error: venuesError }] = await Promise.all([
     bookingIds.length
       ? db.from("booking_payments").select("booking_id, total_booking_amount, amount_paid, payment_status").in("booking_id", bookingIds)
@@ -83,8 +85,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     packageIds.length
       ? db.from("packages").select("id, name").in("id", packageIds)
       : Promise.resolve({ data: [], error: null }),
-    bookingIds.length
-      ? db.from("booking_venue_assignments").select("booking_id, venue_id").in("booking_id", bookingIds)
+    allBookingIdsForAssignments.length
+      ? db.from("booking_venue_assignments").select("booking_id, venue_id").in("booking_id", allBookingIdsForAssignments)
       : Promise.resolve({ data: [], error: null }),
     venueIds.length
       ? db.from("venues").select("id, name").in("id", venueIds)
@@ -128,6 +130,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     payment_status: normalizeBookingPaymentStatus(item.payment_status),
   }));
   const paymentByBooking = Object.fromEntries(normalizedPayments.map((item) => [item.booking_id, item]));
+  const forecastBookingsWithVenues = validForecastBookings.map((booking) => ({
+    ...booking,
+    venue_ids: [...new Set([booking.venue_id, ...(venueIdsByBookingId.get(booking.id) ?? [])].filter((id): id is string => Boolean(id)))],
+  }));
   const reportBookings = validBookings.map((booking) => {
     const bookingVenueIds = [...new Set([booking.venue_id, ...(venueIdsByBookingId.get(booking.id) ?? [])].filter((id): id is string => Boolean(id)))];
     const venueLabels = bookingVenueIds.length
@@ -146,7 +152,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   return ok({
     report: calculateSalesReport(reportBookings, normalizedPayments, range, packageNames, venueNames),
-    forecast: calculateIntelligentSalesForecast(validForecastBookings, normalizedForecastPayments, forecastTargetMonth),
+    forecast: calculateIntelligentSalesForecast(forecastBookingsWithVenues, normalizedForecastPayments, forecastTargetMonth, {
+      packageNames,
+      venueNames,
+    }),
     bookings: reportBookings,
   });
 };

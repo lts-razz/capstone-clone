@@ -88,13 +88,13 @@
     <section class="border border-gray-100 rounded-xl p-5 bg-gray-50 mb-8">
       <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400">Baseline Forecast</h3>
+          <h3 class="text-sm font-bold uppercase tracking-wide text-gray-400">Predictive Forecast</h3>
           <p id="rpt-forecast-period" class="text-lg font-black mt-1" style="color:var(--jet-primary);">-</p>
         </div>
         <p id="rpt-forecast-trend" class="px-3 py-1 rounded-full text-xs font-bold bg-white border border-gray-100 text-gray-600">-</p>
       </div>
       <p id="rpt-forecast-unavailable" class="text-sm text-gray-500 hidden">-</p>
-      <div id="rpt-forecast-results" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div id="rpt-forecast-results" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div>
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Expected bookings</p>
           <p id="rpt-forecast-bookings" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
@@ -103,7 +103,33 @@
           <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Expected booking value</p>
           <p id="rpt-forecast-revenue" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
         </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Confidence</p>
+          <p id="rpt-forecast-confidence" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Cancellation estimate</p>
+          <p id="rpt-forecast-cancellation" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Booking mix</p>
+          <p id="rpt-forecast-mix" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Average booking value</p>
+          <p id="rpt-forecast-average-value" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Likely top package</p>
+          <p id="rpt-forecast-top-package" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Likely busiest venue</p>
+          <p id="rpt-forecast-busiest-venue" class="text-2xl font-black" style="color:var(--jet-primary);">-</p>
+        </div>
       </div>
+      <ul id="rpt-forecast-insights" class="mt-4 space-y-2 text-sm text-gray-600"></ul>
+      <p id="rpt-forecast-backtest" class="report-period-note mt-4 hidden"></p>
       <p id="rpt-forecast-method" class="report-period-note mt-4 hidden"></p>
     </section>
 

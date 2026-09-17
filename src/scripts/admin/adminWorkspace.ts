@@ -2630,6 +2630,29 @@ function formatReportMoney(value: unknown) {
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value ?? 0));
 }
 
+function formatForecastValue(value: unknown, fallback = '-') {
+  return value === null || value === undefined || value === '' ? fallback : String(value);
+}
+
+function formatForecastRange(range: any, formatter: (value: unknown) => string) {
+  return range && range.low !== null && range.low !== undefined && range.high !== null && range.high !== undefined
+    ? `${formatter(range.low)} - ${formatter(range.high)}`
+    : '-';
+}
+
+function formatForecastNumberWithRange(value: unknown, range: any) {
+  const base = formatForecastValue(value);
+  if (base === '-') return base;
+  const rangeText = formatForecastRange(range, (item) => String(Math.round(Number(item ?? 0))));
+  return rangeText === '-' ? base : `${base} (${rangeText})`;
+}
+
+function formatForecastMoneyWithRange(value: unknown, range: any) {
+  if (value === null || value === undefined) return '-';
+  const rangeText = formatForecastRange(range, formatReportMoney);
+  return rangeText === '-' ? formatReportMoney(value) : `${formatReportMoney(value)} (${rangeText})`;
+}
+
 generateReport = async function() {
   const anchor = _reportMode === 'weekly'
     ? (document.getElementById('rpt-week-input') as HTMLInputElement).value
@@ -2677,6 +2700,8 @@ generateReport = async function() {
     const forecastResults = document.getElementById('rpt-forecast-results');
     const forecastMethod = document.getElementById('rpt-forecast-method');
     const forecastTrend = document.getElementById('rpt-forecast-trend');
+    const forecastInsights = document.getElementById('rpt-forecast-insights');
+    const forecastBacktest = document.getElementById('rpt-forecast-backtest');
     if (forecast) {
       const forecastDate = new Date(`${forecast.targetMonth}-01T00:00:00Z`);
       const trend = String(forecast.trend?.direction ?? 'stable');
@@ -2696,10 +2721,42 @@ generateReport = async function() {
         forecastUnavailable?.classList.remove('hidden');
         forecastResults?.classList.add('hidden');
         forecastMethod?.classList.add('hidden');
+        forecastBacktest?.classList.add('hidden');
+        if (forecastInsights) forecastInsights.innerHTML = '';
       } else {
-        setText('rpt-forecast-bookings', String(forecast.expectedBookings ?? 0));
-        setText('rpt-forecast-revenue', formatReportMoney(forecast.expectedRevenue));
-        setText('rpt-forecast-method', `Created-at baseline from ${forecast.monthsUsed?.join(', ') || 'available history'}: weighted recent demand plus simple linear trend.`);
+        const confidence = forecast.confidence;
+        const cancellation = forecast.cancellationEstimate;
+        const mixAvailable = forecast.expectedPackageBookings !== null && forecast.expectedPackageBookings !== undefined
+          && forecast.expectedCustomBookings !== null && forecast.expectedCustomBookings !== undefined;
+        setText('rpt-forecast-bookings', formatForecastNumberWithRange(forecast.expectedBookings, forecast.bookingRange));
+        setText('rpt-forecast-revenue', formatForecastMoneyWithRange(forecast.expectedRevenue, forecast.revenueRange));
+        setText('rpt-forecast-confidence', confidence ? `${confidence.label} (${confidence.score}/100)` : '-');
+        setText('rpt-forecast-cancellation', cancellation ? `${Number(cancellation.rate).toLocaleString()}% / ${cancellation.expectedCancelledBookings} bookings` : '-');
+        setText('rpt-forecast-mix', mixAvailable ? `${forecast.expectedPackageBookings} package / ${forecast.expectedCustomBookings} custom` : '-');
+        setText('rpt-forecast-average-value', forecast.expectedAverageBookingValue === null || forecast.expectedAverageBookingValue === undefined ? '-' : formatReportMoney(forecast.expectedAverageBookingValue));
+        setText('rpt-forecast-top-package', forecast.likelyTopPackage ?? '-');
+        setText('rpt-forecast-busiest-venue', forecast.likelyBusiestVenue ?? '-');
+        if (forecastInsights) {
+          const insights = Array.isArray(forecast.insights) ? forecast.insights : [];
+          forecastInsights.innerHTML = insights.length
+            ? insights.map((insight: string) => `<li class="pl-3 border-l-2 border-gray-200">${escapeHtml(insight)}</li>`).join('')
+            : '';
+        }
+        if (forecast.backtest?.available) {
+          const revenueAccuracy = forecast.backtest.revenueMae === null || forecast.backtest.revenueMae === undefined
+            ? ''
+            : ` Revenue MAE: ${formatReportMoney(forecast.backtest.revenueMae)}.`;
+          setText('rpt-forecast-backtest', `Rolling backtest across ${forecast.backtest.evaluationCount} prior month${forecast.backtest.evaluationCount === 1 ? '' : 's'}. Booking MAE: ${forecast.backtest.bookingMae}.${revenueAccuracy}`);
+          forecastBacktest?.classList.remove('hidden');
+        } else {
+          setText('rpt-forecast-backtest', 'Backtest unavailable until more historical months exist.');
+          forecastBacktest?.classList.remove('hidden');
+        }
+        const weights = forecast.model?.weights;
+        const weightText = weights
+          ? ` Weights: recent ${Math.round(Number(weights.recentDemand) * 100)}%, trend ${Math.round(Number(weights.linearTrend) * 100)}%, average ${Math.round(Number(weights.historicalAverage) * 100)}%, seasonality ${Math.round(Number(weights.seasonality) * 100)}%.`
+          : '';
+        setText('rpt-forecast-method', `Explainable hybrid model from ${forecast.monthsUsed?.join(', ') || 'available history'} using created-at history, cancellation adjustment, and booking mix.${weightText}`);
         forecastUnavailable?.classList.add('hidden');
         forecastResults?.classList.remove('hidden');
         forecastMethod?.classList.remove('hidden');
@@ -2711,6 +2768,8 @@ generateReport = async function() {
       forecastUnavailable?.classList.remove('hidden');
       forecastResults?.classList.add('hidden');
       forecastMethod?.classList.add('hidden');
+      forecastBacktest?.classList.add('hidden');
+      if (forecastInsights) forecastInsights.innerHTML = '';
     }
 
     const breakdown = document.getElementById('rpt-breakdown-body')!;
