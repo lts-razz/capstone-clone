@@ -21,6 +21,7 @@ const createSchema = detailsSchema.extend({
 const updateSchema = detailsSchema.extend({
   action: z.literal("update"),
   staffId: z.string().uuid("Invalid staff account"),
+  email: z.string().trim().email("Enter a valid email address"),
 });
 const statusSchema = z.object({
   action: z.enum(["activate", "deactivate"]),
@@ -97,7 +98,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return created({ message: "Staff account created" });
   }
 
-  const { data: employee } = await supabaseAdmin.from("employees").select("id")
+  const { data: employee } = await supabaseAdmin.from("employees").select("id, email, first_name, last_name")
     .eq("id", parsed.data.staffId).maybeSingle();
   if (!employee) return error("Staff member not found", 404);
   if (parsed.data.action === "deactivate" && parsed.data.staffId === guard.user.id) {
@@ -105,15 +106,50 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
 
   if (parsed.data.action === "update") {
+    const authUpdate: Parameters<typeof supabaseAdmin.auth.admin.updateUserById>[1] = {
+      email: parsed.data.email,
+      email_confirm: true,
+      user_metadata: { first_name: parsed.data.firstName, last_name: parsed.data.lastName },
+    };
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(parsed.data.staffId, authUpdate);
+    if (authError) return error(authError.message, 400);
+
     const { error: updateError } = await supabaseAdmin.from("employees").update({
+      email: parsed.data.email,
       first_name: parsed.data.firstName, last_name: parsed.data.lastName,
       phone: parsed.data.phone || null, position: parsed.data.position,
     }).eq("id", parsed.data.staffId);
-    if (updateError) return error(updateError.message, 500);
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(parsed.data.staffId, {
-      user_metadata: { first_name: parsed.data.firstName, last_name: parsed.data.lastName },
-    });
-    if (authError) console.error("[Staff management] Auth metadata update failed:", authError.message);
+    if (updateError) {
+      await supabaseAdmin.auth.admin.updateUserById(parsed.data.staffId, {
+        email: employee.email ?? undefined,
+        email_confirm: true,
+        user_metadata: { first_name: employee.first_name, last_name: employee.last_name },
+      }).catch(() => null);
+      return error(updateError.message, 500);
+    }
+
+    const { error: adminProfileUpdateError } = await supabaseAdmin
+      .from("admins")
+      .update({
+        email: parsed.data.email,
+        first_name: parsed.data.firstName,
+        last_name: parsed.data.lastName,
+      })
+      .eq("id", parsed.data.staffId);
+    if (adminProfileUpdateError) {
+      await supabaseAdmin.from("employees").update({
+        email: employee.email,
+        first_name: employee.first_name,
+        last_name: employee.last_name,
+      }).eq("id", parsed.data.staffId);
+      await supabaseAdmin.auth.admin.updateUserById(parsed.data.staffId, {
+        email: employee.email ?? undefined,
+        email_confirm: true,
+        user_metadata: { first_name: employee.first_name, last_name: employee.last_name },
+      }).catch(() => null);
+      return error(adminProfileUpdateError.message, 500);
+    }
+
     return ok({ message: "Staff details updated" });
   }
 

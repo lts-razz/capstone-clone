@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { supabase } from "../../../lib/supabase";
+import { createRequestSupabaseClient } from "../../../lib/supabase";
 import { clearSessionCookies, getSafeInternalRedirect, isEmailVerified, setSessionCookies } from "../../../lib/auth";
 import { getDashboardPathForRole, getUserRole } from "../../../lib/adminGuard";
 import { signInSchema } from "../../../validation/user";
@@ -19,7 +19,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     return redirect(`/signin?error=${encodeURIComponent(msg)}${redirectQuery}`);
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
+  const authClient = createRequestSupabaseClient();
+  const { data, error } = await authClient.auth.signInWithPassword(parsed.data);
   if (error || !data.session) {
     if (error?.message.toLowerCase().includes("email not confirmed")) {
       clearSessionCookies(cookies);
@@ -30,7 +31,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   }
 
   if (!data.user || !isEmailVerified(data.user)) {
-    await supabase.auth.signOut();
+    await authClient.auth.signOut();
     clearSessionCookies(cookies);
     return redirect(`/signin?unverified=1&email=${encodeURIComponent(parsed.data.email)}${redirectQuery}`);
   }
@@ -38,7 +39,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   setSessionCookies(cookies, data.session.access_token, data.session.refresh_token);
   const roleInfo = await getUserRole(cookies);
   if (roleInfo.role === "none") {
-    await supabase.auth.signOut();
+    await authClient.auth.signOut();
     clearSessionCookies(cookies);
     return redirect("/signin?error=This+account+is+inactive+or+has+no+assigned+role");
   }

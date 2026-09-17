@@ -3,7 +3,7 @@ create extension if not exists "pgcrypto";
 create table if not exists public.booking_reschedule_requests (
   id uuid primary key default gen_random_uuid(),
   booking_id uuid not null references public.bookings(id) on delete cascade,
-  user_id uuid not null references public.customers(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete restrict,
   requested_start_date date not null,
   requested_end_date date not null,
   requested_event_date date null,

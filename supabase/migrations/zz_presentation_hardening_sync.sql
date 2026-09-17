@@ -1,3 +1,5 @@
+-- Final presentation hardening sync for fresh and previously migrated databases.
+
 do $$
 declare
   status_attnum smallint;
@@ -21,30 +23,17 @@ begin
   end loop;
 end $$;
 
-update public.bookings b
+update public.bookings
 set status = 'booked',
     status_updated_at = coalesce(status_updated_at, updated_at, now()),
     updated_at = now()
-where status = 'confirmed'
-  and exists (
-    select 1
-    from public.booking_payments payment
-    where payment.booking_id = b.id
-      and payment.payment_status in ('partial', 'paid')
-      and payment.amount_paid >= greatest(
-        coalesce(payment.minimum_payment_amount, b.minimum_payment_amount, b.total_price * 0.5, 0),
-        0.01
-      )
-  );
+where status = 'confirmed';
 
 update public.bookings
-set status = case
-      when status = 'confirmed' then 'booked'
-      else 'pending'
-    end,
+set status = 'pending',
     status_updated_at = coalesce(status_updated_at, updated_at, now()),
     updated_at = now()
-where status in ('contract_signing', 'confirmed');
+where status = 'contract_signing';
 
 alter table public.bookings
   alter column status set default 'pending';
@@ -52,3 +41,12 @@ alter table public.bookings
 alter table public.bookings
   add constraint bookings_status_check
   check (status in ('pending', 'booked', 'rescheduled', 'cancelled', 'completed'));
+
+alter table public.booking_reschedule_requests
+  drop constraint if exists booking_reschedule_requests_user_id_fkey;
+
+alter table public.booking_reschedule_requests
+  add constraint booking_reschedule_requests_user_id_fkey
+  foreign key (user_id)
+  references auth.users(id)
+  on delete restrict;

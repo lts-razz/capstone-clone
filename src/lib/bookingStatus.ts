@@ -17,10 +17,11 @@ export const NOTIFIABLE_BOOKING_STATUSES = [
 
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 export type NotifiableBookingStatus = (typeof NOTIFIABLE_BOOKING_STATUSES)[number];
-export type LegacyBookingStatus = "confirmed";
+export type LegacyBookingStatus = "confirmed" | "contract_signing";
 
 const LEGACY_BOOKING_STATUS_MAP: Record<LegacyBookingStatus, BookingStatus> = {
   confirmed: "booked",
+  contract_signing: "pending",
 };
 
 export const bookingStatusSchema = z.enum(BOOKING_STATUSES);
@@ -52,7 +53,7 @@ export function isRecognizedBookingStatus(
 export function normalizeBookingStatus(status: string | null | undefined): BookingStatus {
   if (isBookingStatus(status)) return status;
   if (isLegacyBookingStatus(status)) return LEGACY_BOOKING_STATUS_MAP[status];
-  return "booked";
+  return "pending";
 }
 
 export function getBookingStatusDatabaseValues(status: BookingStatus): readonly BookingStatus[] {

@@ -1,7 +1,7 @@
 // auth.ts — server-side session helpers (cookies)
 import type { AstroCookies } from "astro";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
+import { createRequestSupabaseClient } from "./supabase";
 
 const COOKIE_OPTS = {
   path: "/",
@@ -35,15 +35,20 @@ export async function getUser(cookies: AstroCookies) {
   if (!access || !refresh) return null;
 
   try {
-    const { data, error } = await supabase.auth.setSession({
+    const client = createRequestSupabaseClient();
+    const { data, error } = await client.auth.setSession({
       access_token: access,
       refresh_token: refresh,
     });
 
-    if (error || !data.user) {
+    if (error || !data.user || !data.session) {
       // Token is invalid or from a different project — clear cookies to stop loops
       clearSessionCookies(cookies);
       return null;
+    }
+
+    if (data.session.access_token !== access || data.session.refresh_token !== refresh) {
+      setSessionCookies(cookies, data.session.access_token, data.session.refresh_token);
     }
 
     return data.user;
@@ -54,6 +59,17 @@ export async function getUser(cookies: AstroCookies) {
 }
 
 export const requireAuth = getUser;
+
+export async function signOutSession(cookies: AstroCookies) {
+  const access = cookies.get("sb-access-token")?.value;
+  const refresh = cookies.get("sb-refresh-token")?.value;
+  if (access && refresh) {
+    const client = createRequestSupabaseClient();
+    await client.auth.setSession({ access_token: access, refresh_token: refresh }).catch(() => null);
+    await client.auth.signOut().catch(() => null);
+  }
+  clearSessionCookies(cookies);
+}
 
 export function isEmailVerified(user: User): boolean {
   return Boolean(user.email_confirmed_at);

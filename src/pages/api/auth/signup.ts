@@ -1,6 +1,6 @@
 // POST /api/auth/signup — register a new account and require email verification
 import type { APIRoute } from "astro";
-import { supabase } from "../../../lib/supabase";
+import { createRequestSupabaseClient } from "../../../lib/supabase";
 import { signUpSchema } from "../../../validation/user";
 import { created, error } from "../../../lib/response";
 import { parseBody } from "../../../lib/parseBody";
@@ -19,7 +19,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { email, password, firstName, lastName } = parsed.data;
 
-  const { data: signUpData, error: authError } = await supabase.auth.signUp({
+  const authClient = createRequestSupabaseClient();
+  const { data: signUpData, error: authError } = await authClient.auth.signUp({
     email,
     password,
     options: { data: { first_name: firstName ?? null, last_name: lastName ?? null } },
@@ -38,7 +39,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       signUpData.session.refresh_token,
     );
   } else if (signUpData.session) {
-    await supabase.auth.signOut();
+    await authClient.auth.signOut();
   }
 
   return created({

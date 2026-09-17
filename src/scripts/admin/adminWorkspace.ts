@@ -1662,8 +1662,8 @@ function openStaffModal(staff?: any) {
   (document.getElementById('staffLastName') as HTMLInputElement).value = staff?.last_name ?? '';
   const email = document.getElementById('staffEmail') as HTMLInputElement;
   email.value = staff?.email ?? '';
-  email.disabled = editing;
-  email.required = !editing;
+  email.disabled = false;
+  email.required = true;
   (document.getElementById('staffPhone') as HTMLInputElement).value = staff?.phone ?? '';
   (document.getElementById('staffPosition') as HTMLInputElement).value = staff?.position ?? 'Staff';
   const password = document.getElementById('staffPassword') as HTMLInputElement;

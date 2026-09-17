@@ -208,7 +208,7 @@ export type Database = {
             foreignKeyName: "booking_reschedule_requests_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "customers";
+            referencedRelation: "users";
             referencedColumns: ["id"];
           },
         ];

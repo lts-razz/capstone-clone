@@ -52,7 +52,7 @@ const initialAdminTab = isAdmin ? 'dashboard' : 'bookings';
 
 const { data: bookings, error: bookingsError } = await adminClient
   .from('bookings')
-  .select('id, full_name, phone, address, pax, event_date, start_date, end_date, start_datetime, end_datetime, event_type, status, total_price, created_at, updated_at, confirmed_at, cancelled_at, rescheduled_at, one_week_notice_sent_at, special_requests, venue_id, user_id, package_id, package_type, package_price, package_inclusions, rooms_count, selected_rooms, add_ons, extension_selections, corkage_selections, additionals, caterer, use_woodberry_caterer, estimate_summary, quotation_status, quotation_finalized_at, minimum_payment_amount, remaining_balance_amount, terms_accepted_at, reservation_created_at, reservation_expires_at, reservation_expired_at, cancellation_reason, cancellation_source')
+  .select('id, full_name, email, phone, address, pax, event_date, start_date, end_date, start_datetime, end_datetime, event_type, status, total_price, created_at, updated_at, confirmed_at, cancelled_at, rescheduled_at, one_week_notice_sent_at, special_requests, venue_id, user_id, package_id, package_type, package_price, package_inclusions, rooms_count, selected_rooms, add_ons, extension_selections, corkage_selections, additionals, caterer, use_woodberry_caterer, estimate_summary, quotation_status, quotation_finalized_at, minimum_payment_amount, remaining_balance_amount, terms_accepted_at, reservation_created_at, reservation_expires_at, reservation_expired_at, cancellation_reason, cancellation_source')
   .order('created_at', { ascending: false })
   .limit(200);
 
@@ -185,7 +185,7 @@ const enrichedBookings = (bookings ?? []).map(b => {
     eventTypeName: b.event_type ? (eventTypeLabels[b.event_type] ?? b.event_type) : null,
     userName: userInfo,
     customer,
-    customerEmail: customer?.email ?? userInfo?.email ?? null,
+    customerEmail: b.email ?? customer?.email ?? userInfo?.email ?? null,
     customerPhone: b.phone ?? customer?.phone ?? null,
   };
 });

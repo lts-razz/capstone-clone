@@ -21,12 +21,22 @@ export const supabaseAdmin = SUPABASE_SERVICE_ROLE_KEY
     })
   : null;
 
+export function createRequestSupabaseClient() {
+  return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+}
+
 /**
  * Build an authenticated Supabase client from cookie tokens.
  * Use this in Astro API routes that need the current user's session.
  */
-export function createServerClient(accessToken: string, refreshToken: string) {
-  const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY);
-  client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+export async function createServerClient(accessToken: string, refreshToken: string) {
+  const client = createRequestSupabaseClient();
+  await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
   return client;
 }

@@ -1,14 +1,12 @@
 // POST /api/auth/signout — clear cookies and redirect to /signin
 import type { APIRoute } from "astro";
-import { supabase } from "../../../lib/supabase";
-import { clearSessionCookies } from "../../../lib/auth";
+import { signOutSession } from "../../../lib/auth";
 
 export const prerender = false;
 
 // POST is correct — GET signout is a CSRF logout vulnerability
 export const POST: APIRoute = async ({ cookies, redirect }) => {
-  await supabase.auth.signOut().catch(() => {});
-  clearSessionCookies(cookies);
+  await signOutSession(cookies);
   return redirect("/signin");
 };
 
